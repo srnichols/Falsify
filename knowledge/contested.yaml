@@ -213,3 +213,92 @@ entries:
         falsifiability_status: scientific
         evidence_pointers: ["no proof of separation exists yet", "some problems once believed hard have yielded to clever algorithms"]
     engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.cosmology.hubble_tension
+    question: "Why do local and early-universe measurements of the Hubble constant disagree?"
+    domain: cosmology
+    note: >-
+      A live scientific disagreement with clear empirical stakes: either one or
+      more measurement pipelines hides an unresolved systematic, or the standard
+      cosmological model is incomplete.
+    positions:
+      - label: "unrecognized systematics"
+        claim: >-
+          The tension is caused by calibration, selection, modeling, or analysis
+          systematics in one or more measurement ladders rather than by new
+          cosmological physics.
+        falsifiable: true
+        falsified_if: >-
+          Independent methods with distinct systematics converge on the same
+          discrepant values after known biases are removed.
+        falsifiability_status: scientific
+        evidence_pointers: ["Cepheid and supernova ladder recalibration", "CMB likelihood choices", "strong-lensing and standard-siren cross-checks"]
+      - label: "new physics beyond standard LCDM"
+        claim: >-
+          The tension reflects real cosmology: additional early- or late-time
+          physics alters the inferred expansion history beyond standard LCDM.
+        falsifiable: true
+        falsified_if: >-
+          The discrepancy disappears under improved measurements without needing
+          model extensions, or all viable extensions fail independent tests.
+        falsifiability_status: scientific
+        evidence_pointers: ["early dark energy proposals", "modified neutrino or relativistic-species content", "late-time expansion modifications"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.materials.high_tc_superconductivity
+    question: "What microscopic mechanism produces high-temperature superconductivity in unconventional superconductors?"
+    domain: materials-science/condensed-matter
+    note: >-
+      Superconductivity itself is established; the unresolved issue is the
+      pairing mechanism in cuprates and related unconventional materials.
+    positions:
+      - label: "spin-fluctuation-mediated pairing"
+        claim: >-
+          Electron pairing is primarily mediated by magnetic spin fluctuations
+          rather than conventional phonon coupling.
+        falsifiable: true
+        falsified_if: >-
+          Reproducible spectroscopy and phase-sensitive probes show pairing
+          strength and symmetry inconsistent with a spin-fluctuation mechanism.
+        falsifiability_status: scientific
+        evidence_pointers: ["d-wave pairing symmetry", "magnetic resonance modes", "phase-sensitive Josephson experiments"]
+      - label: "phonon or mixed-coupling mechanisms"
+        claim: >-
+          Lattice vibrations, or a mixed interaction with strong phonon
+          involvement, play the dominant role in pairing.
+        falsifiable: true
+        falsified_if: >-
+          Isotope effects, vibrational spectroscopy, and pairing scales are
+          shown incompatible with any phonon-dominant or mixed-coupling account.
+        falsifiability_status: scientific
+        evidence_pointers: ["isotope-effect measurements", "ARPES and tunneling spectra", "electron-phonon coupling estimates"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.medicine.alzheimers_pathogenesis
+    question: "What is the primary driver of Alzheimer's disease pathogenesis?"
+    domain: medicine/neuroscience
+    note: >-
+      The disease is established; the open issue is which mechanism sits highest
+      in the causal chain and therefore best targets intervention.
+    positions:
+      - label: "amyloid-first"
+        claim: >-
+          Misprocessing and aggregation of amyloid-beta initiates the disease,
+          with tau pathology, neuroinflammation, and synaptic loss downstream.
+        falsifiable: true
+        falsified_if: >-
+          Reproducible intervention and longitudinal data show amyloid burden can
+          be prevented or removed without altering disease initiation or course.
+        falsifiability_status: scientific
+        evidence_pointers: ["familial APP and presenilin mutations", "amyloid PET imaging", "anti-amyloid intervention studies"]
+      - label: "tau / neuroinflammation / network-first"
+        claim: >-
+          Tau spread, inflammatory signaling, vascular injury, or network failure
+          is primary, while amyloid is secondary or necessary but not dominant.
+        falsifiable: true
+        falsified_if: >-
+          Reproducible data show tau, inflammation, and degeneration do not
+          precede or independently predict decline once amyloid is controlled.
+        falsifiability_status: scientific
+        evidence_pointers: ["tau pathology tracks cognition more closely", "microglial-genetics signals", "vascular and metabolic risk correlations"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"

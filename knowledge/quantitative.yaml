@@ -160,3 +160,12 @@ entries:
       selection.
     triggers: ["adaptive story told", "rapid evolution claim", "allele frequency changed", "fitness advantage inferred"]
     failure_guarded: "telling an adaptation story without showing that the observed change exceeds what drift, migration, or linkage could plausibly produce"
+
+  - id: quant.dose_response
+    principle: "Dose-response and therapeutic window"
+    statement: >-
+      The magnitude and kind of a biological effect usually depend on dose,
+      timing, route, and exposure history; absence of a response at one dose or
+      toxicity at another does not by itself generalize across the whole range.
+    triggers: ["drug or toxin claim", "supplement safety claim", "hormesis claim", "more is better / less is safer"]
+    failure_guarded: "making binary safe-or-harmful claims without establishing the dose range, exposure route, and response curve"

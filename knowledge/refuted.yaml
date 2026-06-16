@@ -279,3 +279,58 @@ entries:
       Extraordinary claims need robust, independent replication before public
       announcement. A dramatic press conference is not evidence.
     sources: ["Fleischmann and Pons 1989", "DOE reviews", "failed replication studies"]
+
+  - id: refuted.medicine.humoral_theory
+    claim: >-
+      Health and disease are governed by the balance of four bodily humors
+      (blood, phlegm, yellow bile, black bile), so treatment should restore the
+      proper mixture through purging, bleeding, and related interventions.
+    domain: medicine/physiology
+    type: refuted-theory
+    era: "antiquity–19th century"
+    falsified_by: >-
+      The rise of anatomy, physiology, pathology, microbiology, and controlled
+      clinical observation showed diseases have specific mechanisms rather than
+      reflecting a generalized humor imbalance. Bloodletting and purging often
+      harmed rather than healed.
+    superseded_by: "Modern physiology, pathology, and germ theory."
+    lesson: >-
+      A theory that classifies everything but predicts little can survive for
+      centuries. Mechanistic specificity and outcome data eventually kill it.
+    sources: ["Galenic medicine", "19th-century pathological anatomy", "clinical outcome critiques of bloodletting"]
+
+  - id: refuted.medicine.ulcer_stress_only
+    claim: >-
+      Peptic ulcers are caused only by stress, acid, and lifestyle factors, not
+      by infectious agents.
+    domain: medicine/gastroenterology
+    type: refuted-theory
+    era: "20th century mainstream view until 1980s"
+    falsified_by: >-
+      The discovery of Helicobacter pylori in ulcer patients, deliberate
+      self-experimentation, biopsy evidence, and successful antibiotic treatment
+      showed that many peptic ulcers are caused by bacterial infection.
+    superseded_by: "H. pylori infectious etiology for many peptic ulcers."
+    lesson: >-
+      Dominant clinical stories can persist until a causal agent is isolated and
+      intervention changes outcomes. Therapeutic success is often the decisive
+      test.
+    sources: ["Marshall and Warren 1983", "H. pylori eradication trials", "Nobel Prize 2005 context"]
+
+  - id: refuted.medicine.radical_mastectomy_superiority
+    claim: >-
+      Ever more extensive surgical removal for breast cancer is necessarily
+      superior, so radical mastectomy should outperform more conservative
+      surgery in survival.
+    domain: medicine/oncology
+    type: refuted-treatment-dogma
+    era: "late 19th century–late 20th century"
+    falsified_by: >-
+      Randomized clinical trials showed that less extensive surgery, often
+      combined with radiation and systemic therapy, could match radical
+      mastectomy in survival for many patients while reducing morbidity.
+    superseded_by: "Stage- and biology-guided breast-conserving and multimodal treatment."
+    lesson: >-
+      'More aggressive' is not automatically more effective. Surgery, like any
+      intervention, must answer to randomized outcome data.
+    sources: ["Halsted doctrine", "NSABP trials", "modern breast oncology"]

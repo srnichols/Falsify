@@ -703,3 +703,123 @@ entries:
       predictability. Forecast skill is limited by chaos, model resolution,
       and uncertainty in initial conditions.
     sources: ["Bjerknes and the Bergen School", "modern dynamical meteorology"]
+
+  - id: established.engineering.negative_feedback_control
+    statement: >-
+      Negative feedback can stabilize a system, reduce sensitivity to parameter
+      variation, and improve disturbance rejection when loop gain, delay, and
+      phase margins remain within stable bounds.
+    domain: engineering/control-systems
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible controlled systems designed within stated stability margins
+      fail to exhibit the predicted reduction in error and sensitivity, with no
+      unmodeled nonlinearities or delays explaining the result.
+    status: well-supported
+    confirmations: ["governors and servomechanisms", "Bode and Nyquist stability analysis", "ubiquity in electronics, aerospace, and physiology"]
+    domain_of_validity: >-
+      Feedback is not automatically stabilizing: excessive gain, lag, saturation,
+      and nonlinearities can destabilize a loop. The principle is about
+      correctly designed negative feedback in its modeled regime.
+    sources: ["Maxwell 1868", "Nyquist 1932", "Bode 1945"]
+
+  - id: established.materials.fracture_fatigue
+    statement: >-
+      Cracks concentrate stress, and repeated cyclic loading can nucleate and
+      grow cracks until failure occurs at loads below a material's single-cycle
+      strength; fracture and fatigue behavior follow reproducible relationships
+      involving crack size, stress intensity, and loading history.
+    domain: materials-science/fracture-mechanics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible crack-growth and failure data in stated regimes fail to track
+      stress-intensity or fatigue-life relations with no alternative mechanism
+      accounting for the discrepancy.
+    status: well-supported
+    confirmations: ["Griffith crack theory", "Paris-law crack-growth curves", "fatigue S-N data across engineering alloys"]
+    domain_of_validity: >-
+      Relations depend on material class, environment, loading mode, and crack
+      geometry; plasticity, creep, corrosion, and very small cracks can require
+      more detailed models.
+    sources: ["Griffith 1921", "Irwin", "Paris and Erdogan 1963"]
+
+  - id: established.physics.semiconductor_junctions
+    statement: >-
+      Semiconductor behavior is governed by band structure and mobile charge
+      carriers; p-n junctions create depletion regions and built-in potentials
+      that enable rectification, while transistor action controls current or
+      voltage through carrier injection and field modulation.
+    domain: physics/semiconductors
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible semiconductor devices fail to show the predicted junction,
+      carrier-transport, and transistor behaviors under stated doping and bias
+      conditions, with no fabrication defect or contact effect explaining it.
+    status: well-supported
+    confirmations: ["diode I-V curves", "transistor switching and amplification", "band-gap measurements", "integrated-circuit operation"]
+    domain_of_validity: >-
+      The framework covers standard semiconductor regimes; extreme nanoscale,
+      high-field, quantum-coherent, or strongly disordered devices can require
+      more specialized transport models.
+    sources: ["Shockley", "Bardeen and Brattain", "solid-state electronics"]
+
+  - id: established.physics.fourier_heat_conduction
+    statement: >-
+      Heat flows from higher to lower temperature, and in many materials the
+      conductive heat flux is proportional to the temperature gradient, as given
+      by Fourier's law.
+    domain: physics/heat-transfer
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible conductive heat flow in materials within the diffusive regime
+      fails to scale with temperature gradient and thermal conductivity, with no
+      nonlocal or radiative effect explaining the deviation.
+    status: well-supported
+    confirmations: ["steady-state heat-flow experiments", "engineering thermal design", "derivation and use in diffusion equations"]
+    domain_of_validity: >-
+      A continuum diffusive approximation. It can break down in ballistic,
+      ultrafast, nanoscale, phase-changing, or strongly anisotropic regimes.
+    sources: ["Fourier 1822", "classical heat-transfer theory"]
+
+  - id: established.biology.homeostasis
+    statement: >-
+      Living organisms maintain key internal variables such as temperature, pH,
+      osmolarity, glucose, and ion balance within bounded ranges through
+      coordinated sensing, signaling, and feedback regulation.
+    domain: biology/physiology
+    type: principle
+    falsifiable: true
+    falsified_if: >-
+      Reproducible physiological studies show stable organisms do not regulate
+      internal variables against perturbation, or that the observed regulation
+      occurs without coordinated feedback mechanisms.
+    status: well-supported
+    confirmations: ["thermoregulation", "glucose-insulin regulation", "acid-base balance", "osmoregulation"]
+    domain_of_validity: >-
+      Homeostasis is dynamic, not static; regulated set points can shift with
+      circadian phase, development, stress, disease, and acclimatization.
+    sources: ["Claude Bernard", "Walter Cannon"]
+
+  - id: established.biology.immune_memory
+    statement: >-
+      Adaptive immune responses generate memory B and T cells and long-lived
+      plasma cells that enable faster, stronger, and more specific responses on
+      re-exposure to the same or a related pathogen or antigen.
+    domain: biology/immunology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible immune studies show no enhanced secondary response after
+      antigen exposure, or no durable cellular or humoral memory persists where
+      the model predicts it should.
+    status: well-supported
+    confirmations: ["vaccination", "booster responses", "memory-cell tracing", "affinity maturation and clonal selection"]
+    domain_of_validity: >-
+      Memory quality varies by pathogen, antigen, tissue compartment, and host;
+      waning immunity, immune escape, and immunosenescence modify durability
+      without overturning the principle.
+    sources: ["Burnet clonal selection", "modern cellular immunology"]
