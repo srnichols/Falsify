@@ -161,11 +161,34 @@ claim_score =
 Modeled on Plan Forge's three-tier capture, renamed to stay distinct from the
 knowledge tiers:
 
-| Memory tier | Lifetime | Holds | Notebook analogy |
-|---|---|---|---|
-| **Working** | Current inquiry/session | Live hypotheses, dead ends, the current loop. | Scratch pad |
-| **Notebook** | Durable / per-project | Decisions, gotchas, **mistakes kept visible** (single-line cross-out, dated — straight from the essay). | The bound lab notebook |
-| **Corpus** | Cross-session / semantic | Facts that *survived their tests*, searchable. | The accumulated pile of facts |
+| Memory tier | Lifetime | Holds | Backend | Notebook analogy |
+|---|---|---|---|---|
+| **Working** | Current inquiry/session | Live hypotheses, dead ends, the current loop. | In-process (RAM) | Scratch pad |
+| **Notebook** | Durable / per-project | Decisions, gotchas, **mistakes kept visible** (single-line cross-out, dated — straight from the essay). | Local `.falsify/*.jsonl` | The bound lab notebook |
+| **Corpus** | Cross-session / semantic | Facts that *survived their tests*, searchable. | **OpenBrain** (Postgres + pgvector) | The accumulated pile of facts |
+
+### Corpus backend — OpenBrain
+
+The Corpus tier is backed by the **already-running OpenBrain instance** at
+`https://brain.planforge.software` (health-checked live: `{"status":"healthy",
+"service":"open-brain-mcp"}`). It exposes both REST and MCP.
+
+- **Save:** `POST /memories` with `{ content, project: "falsify", source,
+  metadata: { type, topics } }`.
+- **Recall:** `POST /memories/search` with `{ query, project: "falsify", limit,
+  threshold }` → returns records ranked by cosine `similarity`.
+- **Scope:** everything Falsify writes uses `project: "falsify"` so it never mixes
+  with other tenants of the brain.
+- **Auth:** the public deployment is expected to require an `x-brain-key` header for
+  writes — store it as `FALSIFY_BRAIN_KEY` (env var, never committed). Reads may be
+  open; confirm at integration time.
+- **Falsify-specific metadata:** every Corpus record also carries
+  `{ tier: bedrock|established|contested|quantitative, falsifiable: bool,
+  falsified_if, survived_test: bool }` so a recalled fact never re-enters at a higher
+  certainty than it earned.
+- **Graceful degradation:** if the brain is unreachable, writes buffer to a local
+  queue (`.falsify/brain-queue.jsonl`) and drain later — a network blip never loses a
+  memory or blocks the cycle. (Pattern borrowed from Plan Forge's Anvil/DLQ doorway.)
 
 ### Memory commitments
 
@@ -196,8 +219,11 @@ picks — because the whole point is to surface disagreement, not bury it.
       claim? (Heuristics + model judgment + a checklist.)
 - [ ] **Consensus detection:** how to detect a "settled science" appeal in a
       question or a source, and trigger the challenge response.
-- [ ] **Tech stack:** UI (chat? notebook?), model providers, local vs. hosted,
-      rules-engine implementation (declarative config vs. code).
+- [x] **Tech stack:** ~~UI, providers, local vs hosted, rules-engine impl.~~
+      **Decided** — Node + TypeScript, MCP-core + web UI, OpenBrain backend, built
+      with Plan Forge. See §9.
+- [ ] **Brain auth:** confirm whether `brain.planforge.software` needs `x-brain-key`
+      for reads as well as writes; obtain the key as `FALSIFY_BRAIN_KEY`.
 - [ ] **Tier tagging:** manual curation vs. model-assisted classification of which
       tier a claim belongs to.
 - [ ] **Output format:** the exact "hypothesis + falsification condition" card the
@@ -215,7 +241,82 @@ picks — because the whole point is to surface disagreement, not bury it.
 
 ---
 
-## 9. Glossary
+## 9. Stack & Architecture Decisions
+
+> Status: **decided** (2026-06-15). Numbers/details may still be tuned.
+
+### Decision 1 — Language: **Node + TypeScript**
+
+Chosen over .NET because the surrounding ecosystem is Node/ESM:
+- OpenBrain (the memory backend) is Node/TS (Hono + MCP SDK).
+- Plan Forge (used to build this) is Node/ESM.
+- The MCP SDK (`@modelcontextprotocol/sdk`) is first-class in Node and natively
+  consumed by Copilot / Claude / Cursor.
+
+Picking .NET would mean re-implementing MCP plumbing and memory clients that already
+exist in TypeScript. Single stack = less impedance.
+
+### Decision 2 — Shape: **MCP-core first, Web UI second (build both)**
+
+The cycle state machine + rules engine are the reusable core. They are exposed
+through **two transports**, mirroring OpenBrain's REST + MCP dual surface:
+
+```mermaid
+flowchart TD
+    subgraph Core["Falsify Core (TypeScript)"]
+        CYCLE[Cycle state machine] --> RULES[Rules engine<br/>Bedrock / Established / Contested / Quantitative]
+    end
+    Core -->|MCP tools| MCP[MCP server<br/>falsify_hypothesize, falsify_review, ...]
+    Core -->|REST| WEB[Web UI<br/>chat / notebook view]
+    Core -->|save & recall| BRAIN[(OpenBrain<br/>brain.planforge.software)]
+    MCP --> Agents[Copilot / Claude / Cursor]
+    WEB --> User[You, in a browser]
+```
+
+- **Phase A — MCP server.** Ship the core as an MCP server so Falsify's discipline is
+  usable *inside Copilot* immediately, no UI required. Candidate tools:
+  `falsify_intake` (falsifiable?), `falsify_hypothesize`, `falsify_experiment`,
+  `falsify_analyze`, `falsify_review` (the No branch), `falsify_recall`.
+- **Phase B — Web UI.** A thin chat/notebook front-end that is *just another consumer*
+  of the same core. Surfaces the hypothesis-card output and the visible-mistakes
+  notebook.
+- The core never imports a transport, so neither MCP nor HTTP locks us in.
+
+### Decision 3 — Memory backend: **OpenBrain (live, hosted)**
+
+Use `https://brain.planforge.software` as the Corpus tier (see §5). Local files for
+the Notebook tier; RAM for Working.
+
+### Decision 4 — Build with **Plan Forge**
+
+Plan, harden, and execute Falsify using the Plan Forge shop you already run.
+
+---
+
+## 10. Build Plan (using Plan Forge)
+
+High-level sequence — refined once we start:
+
+1. **Onboard the repo.** From the Plan Forge checkout:
+   `./setup.ps1 -Preset typescript -ProjectPath "E:\GitHub\Falsify" -ProjectName "Falsify"`.
+   Produces `.forge.json`, `.github/copilot-instructions.md`, `AGENTS.md`, and a
+   roadmap stub.
+2. **Smelt the idea (Crucible).** Run a Crucible interview (`full` mode) to turn this
+   DESIGN.md into a hardened plan with a Scope Contract, execution slices, and
+   validation gates.
+3. **Harden + execute slices.** Likely first slices:
+   - Slice 1 — Core types + the Cycle state machine (no transport).
+   - Slice 2 — Rules engine (four tiers + the cross-cutting math validator + the
+     weighted `claim_score`).
+   - Slice 3 — OpenBrain client (save/recall + local queue fallback).
+   - Slice 4 — MCP server exposing the `falsify_*` tools.
+   - Slice 5 — Web UI (hypothesis card + notebook view).
+4. **Wire OpenBrain federation.** Point `.forge.json` memory at
+   `brain.planforge.software`, `project: "falsify"`.
+
+---
+
+## 11. Glossary
 
 - **Cycle of Scientific Enterprise** — the loop (Theory → Hypothesis → Experiment →
   Analysis → Yes/No → Review) this tool enforces.
