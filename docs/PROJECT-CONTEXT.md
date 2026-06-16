@@ -114,6 +114,7 @@ only serve as the engine's exhibit of what a successful falsification looks like
 - [x] DESIGN.md §1–§11 + glossary
 - [x] 4 knowledge seed YAMLs (bedrock / established / contested / quantitative)
 - [x] **Knowledge expansion** — 51 entries across 5 tiers (bedrock 13, established 13, contested 5, quantitative 13) + new **refuted.yaml graveyard tier** (7: aether, phlogiston, caloric, spontaneous generation, geocentrism, miasma, vacuum-abhorrence)
+- [x] **Seed-sync tool** (`src/knowledge/seedSync.ts` + `npm run seed-sync`, `--dry-run`) — mirrors `knowledge/*.yaml` → OpenBrain with the metadata contract; offline-safe. Code done + tested (60 tests). **Live push to shared OpenBrain not yet run** — awaiting go-ahead.
 - [x] Two-store storage design documented
 - [x] Brain key resolved as env-var reuse; `.env.example` added
 - [x] `docs/` handoff created
@@ -184,3 +185,11 @@ only serve as the engine's exhibit of what a successful falsification looks like
   Deliberately NO math-proof tier: proofs are deductive, not empirically falsifiable, so a
   proof shelf would contradict the mission — math appears only as reasoning *lenses*.
   Schema + loader extended for the refuted tier (weight now `nonnegative`). **51 tests pass.**
+- **2026-06-15 (seed-sync)** — Built the seed-sync tool: pure `buildSeedMemories()` converts
+  the loaded corpus into `BrainMemory[]` with `metadata: { tier, source_id, falsifiable,
+  falsified_if }` + tier-appropriate extras (contested → `falsifiable:'per-position'` +
+  positions; quantitative → `'not-applicable'`; refuted → `falsifiable:true` + `falsified_by`/
+  `lesson`; fact → the boolean + `falsified_if`). `syncSeed()` pushes via OpenBrainClient and
+  reports a summary; transport failures queue locally and never throw. CLI `npm run seed-sync`
+  (`--dry-run` builds + reports with no network). Dry-run verified 51 memories. **60 tests pass.**
+  LIVE push to shared OpenBrain deferred pending user go-ahead (write to shared infra).

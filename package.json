@@ -22,7 +22,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "dev": "vitest",
-    "lint": "eslint src tests"
+    "lint": "eslint src tests",
+    "seed-sync": "node dist/src/cli/seedSync.js"
   },
   "dependencies": {
     "yaml": "^2.5.1",

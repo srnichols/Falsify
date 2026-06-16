@@ -267,9 +267,13 @@ picks — because the whole point is to surface disagreement, not bury it.
 - [x] **Brain auth:** ~~confirm key requirement.~~ **Resolved** — reuse existing
       `OPENBRAIN_KEY` env var (64-char hex, User scope); never committed. Same key
       works for both the public and Tailscale endpoints.
-- [ ] **Seed-sync tool:** build the script that pushes `knowledge/*.yaml` into
-      OpenBrain (`project: "falsify"`). Likely a Plan Forge build slice.
-- [ ] **Knowledge expansion:** grow the starter seed sets per tier via PR.
+- [x] **Seed-sync tool:** `src/knowledge/seedSync.ts` + CLI (`npm run seed-sync`,
+      `--dry-run` supported) pushes `knowledge/*.yaml` into OpenBrain
+      (`project: "falsify"`) with `metadata: { tier, source_id, falsifiable,
+      falsified_if }` plus tier-appropriate extras. Pure `buildSeedMemories` is
+      unit-tested offline; transport failures queue locally, never throw.
+- [x] **Knowledge expansion:** corpus grown 19 → 51 entries across 5 tiers
+      (added the refuted/graveyard tier). Continue growing via PR.
 - [ ] **Tier tagging:** manual curation vs. model-assisted classification of which
       tier a claim belongs to.
 - [ ] **Output format:** the exact "hypothesis + falsification condition" card the
