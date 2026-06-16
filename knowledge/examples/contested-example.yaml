@@ -1,0 +1,21 @@
+# Example only — copy and edit before using with `npm run knowledge -- add`.
+id: contested.discipline.question_name
+question: What best explains the unresolved phenomenon?
+domain: discipline/subdiscipline
+note: Optional context about what remains open.
+positions:
+  - label: position-a
+    claim: Describe the first defensible position.
+    falsifiability_status: scientific
+    falsifiable: true
+    falsified_if: Describe what evidence would count against this position.
+    evidence_pointers:
+      - evidence stream 1
+  - label: position-b
+    claim: Describe the competing position.
+    falsifiability_status: conditional
+    falsifiable: depends
+    falsified_if: Explain what would decide against this position if framed scientifically.
+    evidence_pointers:
+      - evidence stream 2
+engine_directive: present_all_positions_with_falsifiability; do_not_pick_winner

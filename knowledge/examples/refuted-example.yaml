@@ -1,0 +1,11 @@
+# Example only — copy and edit before using with `npm run knowledge -- add`.
+id: refuted.discipline.claim_name
+claim: Replace with the falsified claim.
+domain: discipline/subdiscipline
+type: theory
+era: Optional historical period
+falsified_by: Describe the decisive observation or experiment.
+superseded_by: Optional better-supported replacement.
+lesson: State the methodological lesson worth preserving.
+sources:
+  - Primary source or authoritative review

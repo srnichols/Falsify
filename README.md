@@ -83,6 +83,48 @@ As with the MCP server, `OPENBRAIN_KEY` is optional and only enables recall. No 
 framework or bundler is used: the API is plain `node:http` and the front-end is
 hand-authored static assets served from `public/`.
 
+## Maintain the knowledge corpus
+
+The tier files under `knowledge/*.yaml` are the canonical knowledge base. OpenBrain
+is only a searchable mirror. That means every maintenance workflow is designed as:
+
+1. write or update YAML
+2. validate the corpus
+3. optionally mirror the result to OpenBrain
+
+The repository now includes a knowledge-maintenance CLI:
+
+```bash
+npm run knowledge -- lint
+npm run knowledge -- sync --dry-run
+npm run knowledge -- template --tier contested
+```
+
+Common workflows:
+
+```bash
+# scaffold a starter shape for a new entry
+npm run knowledge -- template --tier bedrock
+
+# add a new entry from YAML or JSON
+npm run knowledge -- add --tier established --entry-file knowledge/examples/established-example.yaml
+
+# add or update without deciding first which one applies
+npm run knowledge -- upsert --tier quantitative --entry-file knowledge/examples/quantitative-example.yaml
+
+# move an existing entry between tiers
+npm run knowledge -- move --id established.physics.some_law --to bedrock
+
+# mirror the current YAML corpus to OpenBrain after changes
+npm run knowledge -- sync
+```
+
+Example entry files live in `knowledge/examples/` for each tier. Start from those
+or from the `template` command instead of hand-remembering the schema.
+
+Operational rule: do not treat OpenBrain as a second source of truth. If OpenBrain
+sync fails, the YAML corpus is still authoritative and recoverable from git.
+
 ---
 
 > "The first principle is that you must not fool yourself — and you are the easiest

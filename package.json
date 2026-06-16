@@ -11,7 +11,8 @@
   "types": "dist/index.d.ts",
   "bin": {
     "falsify-mcp": "dist/src/mcp/server.js",
-    "falsify-web": "dist/src/web/server.js"
+    "falsify-web": "dist/src/web/server.js",
+    "falsify-knowledge": "dist/src/cli/knowledge.js"
   },
   "exports": {
     ".": {
@@ -28,7 +29,8 @@
     "dev": "vitest",
     "lint": "eslint src tests",
     "web": "node dist/src/web/server.js",
-    "seed-sync": "node dist/src/cli/seedSync.js"
+    "seed-sync": "node dist/src/cli/seedSync.js",
+    "knowledge": "node dist/src/cli/knowledge.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

@@ -1,0 +1,15 @@
+# Example only — copy and edit before using with `npm run knowledge -- add`.
+id: bedrock.discipline.topic_name
+statement: >-
+  Replace with a falsifiable statement of a foundational law or regularity.
+domain: discipline/subdiscipline
+type: law
+falsifiable: true
+falsified_if: >-
+  Describe the observation that would prove this wrong.
+status: unrefuted
+confidence: high
+domain_of_validity: >-
+  State any bounded assumptions, approximation regimes, or scale limits.
+sources:
+  - Primary source or authoritative review

@@ -1,0 +1,15 @@
+# Example only — copy and edit before using with `npm run knowledge -- add`.
+id: established.discipline.topic_name
+statement: >-
+  Replace with a well-supported theory, law, or empirical regularity.
+domain: discipline/subdiscipline
+type: theory
+falsifiable: true
+falsified_if: >-
+  Describe the observation that would overturn this claim.
+status: unrefuted
+confidence: high
+domain_of_validity: >-
+  State any bounded assumptions, approximations, or calibration limits.
+sources:
+  - Primary source or authoritative review

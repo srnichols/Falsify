@@ -1,0 +1,9 @@
+# Example only — copy and edit before using with `npm run knowledge -- add`.
+id: quant.principle_name
+principle: Replace with the quantitative principle name.
+statement: >-
+  Describe the quantitative lens and when it should shape interpretation.
+formula: Optional formula
+triggers:
+  - situation where the lens should activate
+failure_guarded: Describe the reasoning failure this lens catches.
