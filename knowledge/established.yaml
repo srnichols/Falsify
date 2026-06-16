@@ -386,6 +386,51 @@ entries:
       detailed models.
     sources: ["classical circuit theory", "lumped-element transient analysis", "laboratory RL experiments"]
 
+  - id: established.physics.ac_reactance_impedance
+    statement: >-
+      In sinusoidal steady-state AC circuits, capacitors and inductors oppose
+      current with frequency-dependent reactance, and the combined opposition of
+      resistance and reactance is captured by impedance, determining amplitude
+      and phase relations between voltage and current.
+    domain: physics/electromagnetism
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible sinusoidal steady-state measurements of linear circuit
+      elements fail to show the predicted frequency-dependent magnitude and
+      phase behavior, with no parasitic effects, nonlinearity, or measurement
+      artifact explaining the discrepancy.
+    status: well-supported
+    confirmations: ["frequency-response measurements", "phasor analysis", "AC circuit experiments with resistors, capacitors, and inductors"]
+    domain_of_validity: >-
+      Applies to linear lumped circuits in sinusoidal steady state. Nonlinear,
+      strongly time-varying, distributed, switching, or high-radiation regimes
+      require fuller time-domain or field-theoretic treatment.
+    sources: ["phasor circuit theory", "Heaviside operational methods", "classical AC analysis"]
+
+  - id: established.physics.resonance_in_lc_rlc_circuits
+    statement: >-
+      Circuits containing inductive and capacitive energy storage can exhibit
+      resonance: near a characteristic frequency, energy oscillates between
+      electric and magnetic storage, producing a pronounced frequency response
+      whose shape depends on damping and coupling.
+    domain: physics/electromagnetism
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible LC or RLC circuits with known component values fail to show
+      the predicted resonant-frequency behavior and damping dependence, with no
+      parasitic element, nonlinearity, or measurement artifact explaining the
+      discrepancy.
+    status: well-supported
+    confirmations: ["RLC frequency-response curves", "radio tuning circuits", "quality-factor measurements"]
+    domain_of_validity: >-
+      Applies to linear resonant circuits with identifiable lumped elements.
+      Strong nonlinearities, distributed transmission-line effects, radiation,
+      or component tolerances can shift or broaden resonance without negating
+      the principle.
+    sources: ["Thomson resonance relation", "classical circuit theory", "radio-frequency engineering"]
+
   - id: established.physics.hookes_law
     statement: >-
       The force needed to extend or compress an elastic body is proportional to
@@ -766,6 +811,89 @@ entries:
       losses or energy inputs that require fuller fluid-dynamics treatment.
     sources: ["Bernoulli 1738", "Euler equations"]
 
+  - id: established.physics.hydrostatic_pressure
+    statement: >-
+      In a static fluid under gravity, pressure increases with depth according
+      to the fluid density and gravitational acceleration, so pressure
+      differences reflect the weight of the overlying fluid column.
+    domain: physics/fluid-statics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible measurements in static fluids under stated gravitational
+      conditions fail to show the predicted depth-dependent pressure relation,
+      with no density stratification, acceleration, or measurement artifact
+      explaining the discrepancy.
+    status: well-supported
+    confirmations: ["manometer measurements", "barometric and liquid-column experiments", "engineering hydrostatics"]
+    domain_of_validity: >-
+      Applies to fluids near static equilibrium in a gravitational field.
+      Strong acceleration, significant compressibility, density gradients, or
+      relativistic conditions require fuller treatment.
+    sources: ["hydrostatics", "Pascal", "Euler fluid statics"]
+
+  - id: established.physics.pascals_law
+    statement: >-
+      A pressure change applied to a confined fluid is transmitted throughout
+      the fluid and to the container walls, enabling hydraulic force
+      multiplication when acting over different areas.
+    domain: physics/fluid-statics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible confined-fluid systems fail to transmit imposed pressure
+      changes as predicted in static conditions, with no leakage, compressible
+      transient, or structural deformation explaining the discrepancy.
+    status: well-supported
+    confirmations: ["hydraulic press demonstrations", "manometer and piston experiments", "hydraulic brake and lift operation"]
+    domain_of_validity: >-
+      Applies to confined fluids in near-static conditions. Dynamic flow,
+      compressibility, cavitation, leakage, and flexible walls can introduce
+      deviations that require fuller fluid-mechanics treatment.
+    sources: ["Pascal 1647-1648", "hydraulic systems", "fluid statics"]
+
+  - id: established.physics.archimedes_buoyancy
+    statement: >-
+      An immersed body experiences an upward buoyant force equal to the weight
+      of the fluid it displaces, determining floating, sinking, and apparent
+      weight in fluids.
+    domain: physics/fluid-statics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible immersion experiments under stated conditions fail to match
+      buoyant force to displaced-fluid weight, with no surface-tension,
+      compressibility, or measurement artifact explaining the discrepancy.
+    status: well-supported
+    confirmations: ["displacement experiments", "floating-body tests", "density and apparent-weight measurements"]
+    domain_of_validity: >-
+      Applies in static or quasi-static fluid conditions. Surface tension,
+      strong density gradients, rapid acceleration, and multiphase flows can
+      require fuller analysis without overturning the buoyancy principle.
+    sources: ["Archimedes", "hydrostatics", "classical fluid mechanics"]
+
+  - id: established.physics.continuity_equation_fluids
+    statement: >-
+      Conservation of mass in fluid flow implies a continuity relation: for
+      steady incompressible flow the volume flow rate remains constant along a
+      stream tube, so narrowing a channel increases flow speed.
+    domain: physics/fluid-dynamics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible steady incompressible flows are shown to violate the
+      predicted conservation of flow rate along a stream tube, with no leakage,
+      accumulation, compressibility, or measurement artifact explaining the
+      discrepancy.
+    status: well-supported
+    confirmations: ["pipe-flow measurements", "Venturi and nozzle experiments", "derivation from mass conservation"]
+    domain_of_validity: >-
+      Applies directly to steady incompressible flow and generalizes to the full
+      differential mass-conservation equation for broader regimes.
+      Compressible, unsteady, multiphase, or leaking systems require the fuller
+      continuity form rather than the simplest constant-flow-rate statement.
+    sources: ["mass conservation", "Eulerian fluid mechanics", "classical hydrodynamics"]
+
   - id: established.astronomy.stellar_nucleosynthesis
     statement: >-
       The chemical elements heavier than primordial hydrogen, helium, and trace
@@ -862,6 +990,29 @@ entries:
       decoherence, or dissipative effects can suppress or alter interference
       without falsifying the principle.
     sources: ["Young 1801", "Fresnel", "superposition principle"]
+
+  - id: established.physics.diffraction_limit
+    statement: >-
+      Finite apertures impose a diffraction limit on optical resolution: even
+      perfect aberration-free imaging systems blur point sources into patterns
+      whose size is set by wavelength and aperture geometry, limiting the
+      smallest resolvable detail.
+    domain: physics/optics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible imaging through finite apertures in the linear wave-optics
+      regime systematically exceeds the predicted diffraction-limited resolving
+      behavior with no near-field, computational, nonlinear, or measurement
+      explanation.
+    status: well-supported
+    confirmations: ["Airy disk measurements", "microscope and telescope resolution tests", "agreement with Fourier optics"]
+    domain_of_validity: >-
+      Applies to linear far-field or paraxial imaging in conventional optics.
+      Near-field methods, structured illumination, nonlinear microscopy, and
+      computational super-resolution can surpass simple classical criteria by
+      exploiting additional information or regimes.
+    sources: ["Airy 1835", "Abbe 1873", "Fourier optics"]
 
   - id: established.physics.snells_law
     statement: >-
