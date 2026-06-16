@@ -61,7 +61,7 @@ entries:
     statement: >-
       Earth's lithosphere is divided into plates that move over the
       asthenosphere, explaining earthquakes, volcanism, and mountain building.
-    domain: geology
+    domain: geology/tectonics
     type: theory
     falsifiable: true
     falsified_if: >-
@@ -88,7 +88,7 @@ entries:
     statement: >-
       The observable universe expanded from a hot, dense early state ~13.8
       billion years ago.
-    domain: cosmology
+    domain: astronomy/cosmology
     type: theory
     falsifiable: true
     falsified_if: >-
@@ -104,7 +104,7 @@ entries:
       Populations evolve over generations through differential reproduction of
       heritable variation; natural selection, together with mutation, drift, and
       gene flow, accounts for adaptation and common descent.
-    domain: biology
+    domain: biology/evolution
     type: theory
     falsifiable: true
     falsified_if: >-
@@ -124,7 +124,7 @@ entries:
     statement: >-
       All living organisms are composed of one or more cells, the cell is the
       basic unit of life, and all cells arise from pre-existing cells.
-    domain: biology
+    domain: biology/cell-biology
     type: theory
     falsifiable: true
     falsified_if: >-
@@ -156,7 +156,7 @@ entries:
     statement: >-
       Matter is composed of discrete atoms that combine in fixed whole-number
       ratios to form compounds.
-    domain: chemistry
+    domain: chemistry/atomic
     type: theory
     falsifiable: true
     falsified_if: >-
@@ -260,7 +260,7 @@ entries:
       Planets move in ellipses with the Sun at one focus; a planet sweeps equal
       areas in equal times; and the square of a planet's orbital period is
       proportional to the cube of its semi-major axis.
-    domain: astronomy
+    domain: astronomy/celestial-mechanics
     type: theory
     falsifiable: true
     falsified_if: >-
@@ -280,7 +280,7 @@ entries:
       The geological processes observed operating today (erosion, deposition,
       volcanism, plate motion) are the same processes that shaped Earth's past;
       the present is the key to the past.
-    domain: geology
+    domain: geology/historical-geology
     type: theory
     falsifiable: true
     falsified_if: >-
@@ -823,3 +823,22 @@ entries:
       waning immunity, immune escape, and immunosenescence modify durability
       without overturning the principle.
     sources: ["Burnet clonal selection", "modern cellular immunology"]
+
+  - id: established.demography.demographic_transition
+    statement: >-
+      As societies industrialize and living conditions improve, mortality tends
+      to fall before fertility does, producing temporary population growth,
+      followed by declining fertility and slower long-run growth or stabilization.
+    domain: social-science/demography
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Large-scale demographic histories are reproducibly shown not to exhibit the
+      predicted mortality-then-fertility transition pattern where the model's
+      preconditions are met.
+    status: well-supported
+    confirmations: ["historical demographic transitions across Europe, East Asia, and Latin America", "links to urbanization, female education, and child survival"]
+    domain_of_validity: >-
+      A broad empirical pattern, not a rigid schedule. Timing and pathways vary
+      with institutions, culture, migration, public health, and policy.
+    sources: ["Notestein 1945", "historical demography"]

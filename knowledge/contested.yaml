@@ -82,7 +82,7 @@ entries:
 
   - id: contested.cosmology.dark_matter_vs_mond
     question: "Why do galaxies rotate faster than visible mass predicts?"
-    domain: cosmology
+    domain: astronomy/cosmology
     positions:
       - label: "particle dark matter"
         claim: "Unseen non-baryonic matter supplies the missing gravity."
@@ -216,7 +216,7 @@ entries:
 
   - id: contested.cosmology.hubble_tension
     question: "Why do local and early-universe measurements of the Hubble constant disagree?"
-    domain: cosmology
+    domain: astronomy/cosmology
     note: >-
       A live scientific disagreement with clear empirical stakes: either one or
       more measurement pipelines hides an unresolved systematic, or the standard
@@ -301,4 +301,69 @@ entries:
           precede or independently predict decline once amyloid is controlled.
         falsifiability_status: scientific
         evidence_pointers: ["tau pathology tracks cognition more closely", "microglial-genetics signals", "vascular and metabolic risk correlations"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.economics.minimum_wage_employment
+    question: "What is the causal effect of minimum-wage increases on employment in low-wage labor markets?"
+    domain: economics/labor
+    note: >-
+      A good empirical economics dispute: both sides are scientifically testable,
+      and the disagreement turns on elasticities, labor-market structure, and
+      identification strategy rather than on unfalsifiable ideology.
+    positions:
+      - label: "competitive-market reduction"
+        claim: >-
+          Raising the minimum wage above the market-clearing wage reduces demand
+          for low-wage labor and therefore lowers employment or hours in the
+          affected segment.
+        falsifiable: true
+        falsified_if: >-
+          Well-identified policy changes repeatedly show no employment or hours
+          decline in affected groups where the increase is large enough that the
+          competitive model predicts one.
+        falsifiability_status: scientific
+        evidence_pointers: ["difference-in-differences studies", "teen and restaurant employment panels", "elasticity estimates in competitive models"]
+      - label: "monopsony / small-or-zero effect"
+        claim: >-
+          In some labor markets employers have wage-setting power, so moderate
+          minimum-wage increases can raise pay with little employment loss and
+          in some cases improve job matching or retention.
+        falsifiable: true
+        falsified_if: >-
+          Well-identified policy changes consistently show employment losses of
+          the size predicted by competitive models across monopsony-like markets.
+        falsifiability_status: scientific
+        evidence_pointers: ["Card-Krueger style natural experiments", "search-friction and monopsony models", "heterogeneity across regions and sectors"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.education.class_size_effects
+    question: "How large and durable are the learning benefits of reducing class size?"
+    domain: social-science/education
+    note: >-
+      The existence of some class-size effects is plausible, but the magnitude,
+      persistence, and cost-effectiveness are actively debated and empirically
+      testable.
+    positions:
+      - label: "substantial early-grade benefit"
+        claim: >-
+          Smaller classes, especially in early grades and disadvantaged settings,
+          produce meaningful and lasting gains in learning and later outcomes.
+        falsifiable: true
+        falsified_if: >-
+          Randomized and quasi-experimental studies repeatedly fail to detect
+          durable gains in the targeted settings where the effect is predicted.
+        falsifiability_status: scientific
+        evidence_pointers: ["Project STAR", "long-term follow-up studies", "teacher attention and classroom-management mechanisms"]
+      - label: "small or context-limited effect"
+        claim: >-
+          Average class-size reductions have small, inconsistent, or short-lived
+          benefits relative to their cost, with teacher quality and curriculum
+          often mattering more.
+        falsifiable: true
+        falsified_if: >-
+          Randomized and quasi-experimental evidence consistently finds large,
+          cost-effective gains across varied settings after implementation issues
+          are accounted for.
+        falsifiability_status: scientific
+        evidence_pointers: ["meta-analyses with heterogeneous effects", "cost-effectiveness comparisons", "teacher-quality comparisons"]
     engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"

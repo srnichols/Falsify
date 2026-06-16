@@ -169,3 +169,48 @@ entries:
       toxicity at another does not by itself generalize across the whole range.
     triggers: ["drug or toxin claim", "supplement safety claim", "hormesis claim", "more is better / less is safer"]
     failure_guarded: "making binary safe-or-harmful claims without establishing the dose range, exposure route, and response curve"
+
+  - id: quant.publication_bias
+    principle: "Publication bias and file-drawer effects"
+    statement: >-
+      Literature built only from published positive findings overstates effect
+      sizes and confidence because null, negative, and inconclusive results are
+      less likely to appear in print.
+    triggers: ["small-study literature", "only positive studies cited", "meta-analysis", "surprisingly clean evidence base"]
+    failure_guarded: "treating the published record as an unbiased sample of all studies when missing null results could explain the apparent effect"
+
+  - id: quant.measurement_error
+    principle: "Measurement error and misclassification"
+    statement: >-
+      Data are only as good as the measurement process: noisy instruments,
+      subjective coding, recall bias, and category misclassification can dilute,
+      inflate, or even reverse an apparent association.
+    triggers: ["survey data", "proxy variable used", "self-report", "classification threshold", "instrument reliability"]
+    failure_guarded: "drawing strong conclusions without checking whether the observed pattern survives plausible measurement noise or coding error"
+
+  - id: quant.omitted_variable_bias
+    principle: "Omitted-variable bias"
+    statement: >-
+      When an important cause is left out of an analysis and is correlated with
+      the included variable, the estimated effect can absorb the missing cause
+      and become misleading.
+    triggers: ["observational regression", "one variable highlighted as causal", "policy comparison", "cross-sectional study"]
+    failure_guarded: "crediting one observed variable with a causal effect that may actually belong to an unmeasured confounder"
+
+  - id: quant.external_validity
+    principle: "External validity and transportability"
+    statement: >-
+      A result established in one population, institution, or time period may
+      not transport unchanged to another; mechanisms, incentives, baseline risk,
+      and implementation all matter.
+    triggers: ["policy scaling", "results from one country/site generalized", "pilot study", "lab-to-field extrapolation"]
+    failure_guarded: "assuming that because an effect is real somewhere, it is equally large and actionable everywhere"
+
+  - id: quant.replication_robustness
+    principle: "Replication and robustness"
+    statement: >-
+      A finding becomes more trustworthy when it survives independent
+      replication, alternate specifications, new samples, and adversarial
+      re-analysis rather than relying on a single analytic path.
+    triggers: ["single landmark study", "fragile specification", "reanalysis dispute", "extraordinary claim"]
+    failure_guarded: "treating one statistically significant result as settled without testing whether it survives new data and alternative analyses"

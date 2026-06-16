@@ -77,7 +77,7 @@ entries:
     claim: >-
       Living organisms arise spontaneously from non-living matter (maggots from
       rotting meat, microbes from broth).
-    domain: biology
+    domain: biology/origins
     type: refuted-hypothesis
     era: "antiquity–19th century"
     falsified_by: >-
@@ -94,7 +94,7 @@ entries:
     claim: >-
       The Earth is the motionless center of the universe; the Sun, planets, and
       stars revolve around it.
-    domain: astronomy
+    domain: astronomy/cosmology
     type: refuted-model
     era: "antiquity–17th century"
     falsified_by: >-
@@ -150,7 +150,7 @@ entries:
       Traits acquired through use or disuse during an organism's lifetime are
       directly inherited by its offspring (e.g. a giraffe stretching its neck
       passes a longer neck to its young).
-    domain: biology
+    domain: biology/evolution
     type: refuted-theory
     era: "1809–early 20th century"
     falsified_by: >-
@@ -170,7 +170,7 @@ entries:
       The universe has no beginning and no end; it looks the same at all times,
       with matter continuously created to keep density constant as it expands
       (the perfect cosmological principle).
-    domain: cosmology
+    domain: astronomy/cosmology
     type: refuted-theory
     era: "1948–1965"
     falsified_by: >-
@@ -334,3 +334,40 @@ entries:
       'More aggressive' is not automatically more effective. Surgery, like any
       intervention, must answer to randomized outcome data.
     sources: ["Halsted doctrine", "NSABP trials", "modern breast oncology"]
+
+  - id: refuted.medicine.vaccines_autism
+    claim: >-
+      Routine childhood vaccination, especially the MMR vaccine, causes autism
+      spectrum disorder.
+    domain: medicine/epidemiology
+    type: refuted-claim
+    era: "1998–present fringe persistence"
+    falsified_by: >-
+      Large cohort, case-control, and population studies across multiple
+      countries found no increase in autism risk among vaccinated children, and
+      the original paper promoting the claim was retracted for serious ethical
+      and methodological failures.
+    superseded_by: "The vaccine-autism causal claim is unsupported; autism prevalence changes are better explained by diagnostic expansion and ascertainment changes."
+    lesson: >-
+      A dramatic clinical claim can survive socially long after it has failed
+      scientifically. Retraction, replication failure, and convergent population
+      evidence all matter more than anecdote.
+    sources: ["Wakefield et al. 1998 (retracted)", "large Scandinavian and UK cohort studies", "Institute of Medicine reviews"]
+
+  - id: refuted.education.learning_styles
+    claim: >-
+      Students learn best when instruction is matched to their preferred
+      learning style (such as visual, auditory, or kinesthetic), and style
+      matching reliably improves educational outcomes.
+    domain: social-science/education
+    type: refuted-claim
+    era: "late 20th century–present popular persistence"
+    falsified_by: >-
+      Controlled tests of the meshing hypothesis repeatedly failed to show the
+      predicted crossover interaction in which students with different styles
+      learn better from correspondingly matched instructional modes.
+    superseded_by: "Evidence-based instruction based on content, retrieval, spacing, and cognitive load rather than style matching."
+    lesson: >-
+      Intuitive personalization stories are not enough; the specific prediction
+      must appear in controlled comparisons. Here it repeatedly did not.
+    sources: ["Pashler et al. 2008", "later reviews of the meshing hypothesis"]
