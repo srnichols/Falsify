@@ -113,13 +113,25 @@ state contracts.
 - [x] Two-store storage design documented
 - [x] Brain key resolved as env-var reuse; `.env.example` added
 - [x] `docs/` handoff created
-- [ ] Plan Forge onboarding (`setup.ps1`)
-- [ ] Crucible interview → hardened slices
+- [x] Plan Forge onboarding (`setup.ps1`, typescript preset) — validation 29/29 PASS
+- [ ] Crucible interview → hardened slices (IN PROGRESS)
 - [ ] Seed-sync script (push `knowledge/*.yaml` → OpenBrain)
 - [ ] Slice 1: Core types + Cycle state machine
 - [ ] Knowledge seed expansion (more entries per tier, via PR)
 
+### Plan Forge layout (added by onboarding)
+- `docs/plans/` — plan pipeline (`AI-Plan-Hardening-Runbook*.md`, `DEPLOYMENT-ROADMAP.md`).
+  Hardened phase plans live here. Authoritative plan format = the runbook.
+- `.github/{prompts,agents,skills,instructions}/` — pipeline prompts (`step0`–`step6`),
+  reviewer agents, skills, stack instructions.
+- `pforge.ps1` — CLI. Useful: `status`, `new-phase <name>`, `run-plan <plan>`, `diff <plan>`,
+  `analyze <plan>`, `crucible status`, `mcp-call <tool>`.
+- `.vscode/mcp.json` — plan-forge MCP server (git-ignored; only in the window opened to this folder).
+  Interactive Crucible = `forge_crucible_submit` via that server, OR drive the `step*` prompts.
+- Runtime dirs `pforge-mcp/ pforge-master/ pforge-sdk/` are vendored (node_modules ignored).
+
 ## Session Log
 - **2026-06-15** — Resolved brain key as env-var reuse (not copied). Created 4 tiered
   knowledge seed YAMLs + two-store storage design in DESIGN.md. Added `.env.example`.
-  Created this `docs/` handoff. Next: Plan Forge onboarding + Crucible interview.
+  Created this `docs/` handoff. Ran Plan Forge onboarding (typescript preset, 874 files,
+  validation 29/29 PASS). Next: Crucible hardening interview → first phase plan in `docs/plans/`.
