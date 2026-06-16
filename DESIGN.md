@@ -161,12 +161,13 @@ The tiered knowledge is stored with a **truth-in-git / index-in-the-brain** spli
 
 | Role | Where | Why |
 |---|---|---|
-| **Source of truth** | `knowledge/*.yaml` in this repo — one file per tier (`bedrock`, `established`, `contested`, `quantitative`). | Diff-able, PR-reviewable, never drifts. The git history *is* a falsification audit trail of what we admit to each tier and why. |
-| **Semantic index** | OpenBrain (`project: "falsify"`, tier in metadata). | Fast fuzzy recall during the cycle; also accumulates new survived-test facts. |
+| **Source of truth** | `knowledge/*.yaml` in this repo — one file per tier (`bedrock`, `established`, `contested`, `quantitative`, `refuted`). | Diff-able, PR-reviewable, never drifts. The git history *is* a falsification audit trail of what we admit to each tier and why. |
+| **Semantic index** | OpenBrain (`project: "falsify"`, tier folded into content). | Fast fuzzy recall during the cycle; also accumulates new survived-test facts. |
 
-- A **seed-sync step** reads the YAML and pushes each entry into OpenBrain as a
-  memory with `metadata: { tier, falsifiable, falsified_if, source_id }`. The YAML
-  is canonical; OpenBrain is a searchable copy, never hand-edited.
+- A **seed-sync step** reads the YAML and pushes each entry into OpenBrain (via the
+  `capture_thought` MCP tool) as a memory whose structured metadata
+  (`tier, falsifiable, falsified_if, source_id, …`) is folded into the searchable
+  content. The YAML is canonical; OpenBrain is a searchable copy, never hand-edited.
 - **Why not store the laws only in OpenBrain?** A vector store is mutable and
   returns approximate matches — wrong for an *authoritative* Bedrock tier. Bedrock
   must be exact and auditable, so it lives in version control.
@@ -207,27 +208,48 @@ knowledge tiers:
 
 The Corpus tier is backed by the **already-running OpenBrain instance** at
 `https://brain.planforge.software` (health-checked live: `{"status":"healthy",
-"service":"open-brain-mcp"}`). It exposes both REST and MCP.
+"service":"open-brain-mcp"}`).
 
-- **Save:** `POST /memories` with `{ content, project: "falsify", source,
-  metadata: { type, topics } }`.
-- **Recall:** `POST /memories/search` with `{ query, project: "falsify", limit,
-  threshold }` → returns records ranked by cosine `similarity`.
+> **Transport reality (verified live).** OpenBrain runs *two* listeners: a REST
+> API (`POST /memories`, with a structured `metadata` field) on an internal port,
+> and an **MCP-over-SSE** server on the public 443 port. The custom domain
+> `brain.planforge.software` only fronts the **MCP** listener — the REST port is
+> not publicly reachable (it times out). So Falsify writes to the hosted brain
+> **via MCP**, not REST. The `/health` path is the only REST-style path the public
+> host answers; everything else returns 404. See
+> [`src/memory/openbrainMcpClient.ts`](src/memory/openbrainMcpClient.ts).
+
+- **Connect:** open an SSE session to `GET /sse` with the `x-brain-key` header,
+  receive a `sessionId`, then issue JSON-RPC `tools/call` requests to
+  `POST /messages?sessionId=…`.
+- **Save:** call the **`capture_thought`** tool with `{ content, project:
+  "falsify", source }`. The tool accepts only those fields (no `metadata`), so
+  Falsify **folds its structured metadata into the `content` text** as a readable
+  `— Falsify knowledge seed —` block; the embedder still indexes it for recall.
+- **Recall:** call the **`search_thoughts`** tool with `{ query, project:
+  "falsify", limit }` → returns records ranked by cosine similarity.
+- **Rate limiting:** the public host (Cloudflare) throttles rapid sequential
+  `POST /messages` calls with HTTP 429. The client throttles (≈400 ms between
+  captures) and retries transient 429/5xx with exponential backoff.
 - **Scope:** everything Falsify writes uses `project: "falsify"` so it never mixes
   with other tenants of the brain.
 - **Auth:** reuses the **existing `OPENBRAIN_KEY` environment variable** already set
   on the dev machine (64-char hex, User scope) — the same key Plan Forge uses. The
-  secret is **never committed**; Falsify reads it from `process.env` at runtime, just
-  like Plan Forge does (`x-brain-key` header).
+  secret is **never committed**; Falsify reads it from `process.env` at runtime and
+  sends it only in the `x-brain-key` header — never in a URL, error, log, or queue
+  file.
 - **Endpoints (both authorized by the same key):**
-  - Public REST/MCP: `https://brain.planforge.software` (portable; used by deployed
-    Falsify and for REST `POST /memories`).
+  - Public MCP-SSE: `https://brain.planforge.software/sse` (portable; used by
+    deployed Falsify and the seed-sync tool).
   - Private MCP-SSE: `https://openbrain.tailfb4202.ts.net/sse` (from `OPENBRAIN_URL`;
     Tailscale-only, used for local dev).
-- **Falsify-specific metadata:** every Corpus record also carries
-  `{ tier: bedrock|established|contested|quantitative, falsifiable: bool,
-  falsified_if, survived_test: bool }` so a recalled fact never re-enters at a higher
-  certainty than it earned.
+- **Offline fallback:** any save that can't reach the brain is written to an
+  on-disk FIFO queue (`.falsify/queue/`) and replayed on the next successful save
+  ([`src/memory/offlineQueue.ts`](src/memory/offlineQueue.ts)).
+- **Falsify-specific metadata (folded into content):** every Corpus record carries
+  `{ tier: bedrock|established|contested|quantitative|refuted, falsifiable,
+  falsified_if, … }` so a recalled fact never re-enters at a higher certainty than
+  it earned.
 - **Graceful degradation:** if the brain is unreachable, writes buffer to a local
   queue (`.falsify/brain-queue.jsonl`) and drain later — a network blip never loses a
   memory or blocks the cycle. (Pattern borrowed from Plan Forge's Anvil/DLQ doorway.)
@@ -269,9 +291,17 @@ picks — because the whole point is to surface disagreement, not bury it.
       works for both the public and Tailscale endpoints.
 - [x] **Seed-sync tool:** `src/knowledge/seedSync.ts` + CLI (`npm run seed-sync`,
       `--dry-run` supported) pushes `knowledge/*.yaml` into OpenBrain
-      (`project: "falsify"`) with `metadata: { tier, source_id, falsifiable,
-      falsified_if }` plus tier-appropriate extras. Pure `buildSeedMemories` is
-      unit-tested offline; transport failures queue locally, never throw.
+      (`project: "falsify"`) with `{ tier, source_id, falsifiable, falsified_if }`
+      plus tier-appropriate extras folded into the searchable content. Pure
+      `buildSeedMemories` is unit-tested offline; transport failures queue locally,
+      never throw. **Live-verified:** 51/51 memories seeded to the hosted brain over
+      MCP (exactly 51 thoughts confirmed via `thought_stats`).
+- [x] **Brain transport:** ~~REST `POST /memories`.~~ **Corrected** — the public host
+      only exposes OpenBrain's **MCP-SSE** transport, so seeding goes through the
+      `capture_thought` tool ([`src/memory/openbrainMcpClient.ts`](src/memory/openbrainMcpClient.ts))
+      with throttle + 429/5xx backoff. The REST client
+      ([`src/memory/openbrainClient.ts`](src/memory/openbrainClient.ts)) is retained
+      for a local/devbox brain that exposes the REST port.
 - [x] **Knowledge expansion:** corpus grown 19 → 51 entries across 5 tiers
       (added the refuted/graveyard tier). Continue growing via PR.
 - [ ] **Tier tagging:** manual curation vs. model-assisted classification of which

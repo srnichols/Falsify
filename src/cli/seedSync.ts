@@ -12,7 +12,7 @@
 import { loadConfig } from '../config.js';
 import { loadAllKnowledge } from '../knowledge/loader.js';
 import { buildSeedMemories, syncSeed } from '../knowledge/seedSync.js';
-import { OpenBrainClient } from '../memory/openbrainClient.js';
+import { OpenBrainMcpClient } from '../memory/openbrainMcpClient.js';
 
 async function main(): Promise<void> {
   const dryRun = process.argv.includes('--dry-run');
@@ -31,19 +31,25 @@ async function main(): Promise<void> {
   }
 
   const config = loadConfig();
-  const client = new OpenBrainClient(config);
-  console.log(`[seed-sync] pushing corpus to project "${config.project}" …`);
+  // A modest throttle keeps the 51 sequential captures under the brain's edge
+  // rate limit; transient 429/5xx are also retried with backoff by the client.
+  const client = new OpenBrainMcpClient(config, { throttleMs: 400 });
+  console.log(`[seed-sync] pushing corpus to project "${config.project}" via MCP …`);
 
-  const summary = await syncSeed(client, knowledge);
-  console.log(
-    `[seed-sync] done: ${summary.saved}/${summary.total} saved, ${summary.queued} queued offline.`,
-  );
-  if (summary.queued > 0) {
+  try {
+    const summary = await syncSeed(client, knowledge);
     console.log(
-      '[seed-sync] some memories were queued locally (brain unreachable). ' +
-        'They will drain on the next successful save.',
+      `[seed-sync] done: ${summary.saved}/${summary.total} saved, ${summary.queued} queued offline.`,
     );
-    process.exitCode = 1;
+    if (summary.queued > 0) {
+      console.log(
+        '[seed-sync] some memories were queued locally (brain unreachable). ' +
+          'They will drain on the next successful save.',
+      );
+      process.exitCode = 1;
+    }
+  } finally {
+    await client.close();
   }
 }
 

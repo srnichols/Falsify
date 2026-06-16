@@ -21,7 +21,7 @@ import type {
   RefutedEntry,
 } from '../domain/types.js';
 import type { KnowledgeFile } from './loader.js';
-import type { BrainMemory, OpenBrainClient } from '../memory/openbrainClient.js';
+import type { BrainMemory, MemoryWriter } from '../memory/openbrainClient.js';
 
 /** Source label stamped on every seeded memory, for later provenance filtering. */
 export const SEED_SOURCE = 'falsify-knowledge-seed';
@@ -163,12 +163,13 @@ export interface SeedSyncSummary {
 }
 
 /**
- * Push every seed memory into OpenBrain via the client. A memory that cannot be
- * sent (brain offline) is queued by the client and reported as `queued` — the
- * run never throws on a transport failure, so a partial sync degrades cleanly.
+ * Push every seed memory into OpenBrain via any {@link MemoryWriter}. A memory
+ * that cannot be sent (brain offline) is queued by the writer and reported as
+ * `queued` — the run never throws on a transport failure, so a partial sync
+ * degrades cleanly.
  */
 export async function syncSeed(
-  client: OpenBrainClient,
+  client: MemoryWriter,
   knowledge: Record<Tier, KnowledgeFile>,
 ): Promise<SeedSyncSummary> {
   const memories = buildSeedMemories(knowledge);

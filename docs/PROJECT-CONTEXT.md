@@ -76,15 +76,25 @@ only serve as the engine's exhibit of what a successful falsification looks like
 ## Integrations
 
 ### OpenBrain (Corpus memory)
+- **Transport:** the public host `brain.planforge.software` exposes only OpenBrain's
+  **MCP-over-SSE** server (its REST API runs on a separate, non-public port). Falsify
+  writes via the **`capture_thought`** MCP tool and recalls via **`search_thoughts`**
+  (`src/memory/openbrainMcpClient.ts`). The REST client (`src/memory/openbrainClient.ts`)
+  is kept for a local/devbox brain that exposes the REST port.
 - **Auth:** `x-brain-key` header. **Do NOT hardcode or commit the key.** Falsify *reuses*
   the machine-level env vars that Plan Forge already sets:
   - `OPENBRAIN_KEY` — 64-char hex MCP access key (User-scope env var, secret).
   - `OPENBRAIN_URL` — `https://openbrain.tailfb4202.ts.net/sse` (private Tailscale MCP-SSE).
-  - `OPENBRAIN_REST_BASE` — `https://brain.planforge.software` (public REST; same key works).
+  - `OPENBRAIN_REST_BASE` — `https://brain.planforge.software` (public host; the MCP client
+    derives `/sse` from it, same key works).
 - **Project scope:** `FALSIFY_BRAIN_PROJECT=falsify` on every read/write.
 - **Health check:** `GET https://brain.planforge.software/health` → `{"status":"healthy",...}`.
-- REST endpoints: `POST /memories`, `POST /memories/search`, `POST /memories/list`,
-  `GET /stats`.
+- **MCP tools used:** `capture_thought` (save — fields `content, project, source`; no
+  metadata field, so structured metadata is folded into `content`), `search_thoughts`
+  (recall). Other tools available: `list_thoughts`, `thought_stats`, `update_thought`,
+  `delete_thought`, `capture_thoughts`.
+- **Rate limiting:** Cloudflare throttles rapid sequential captures (HTTP 429); the client
+  throttles + retries with backoff.
 - See `.env.example` for the full contract (no secrets in it).
 
 ### Plan Forge (build tool)
@@ -114,7 +124,7 @@ only serve as the engine's exhibit of what a successful falsification looks like
 - [x] DESIGN.md §1–§11 + glossary
 - [x] 4 knowledge seed YAMLs (bedrock / established / contested / quantitative)
 - [x] **Knowledge expansion** — 51 entries across 5 tiers (bedrock 13, established 13, contested 5, quantitative 13) + new **refuted.yaml graveyard tier** (7: aether, phlogiston, caloric, spontaneous generation, geocentrism, miasma, vacuum-abhorrence)
-- [x] **Seed-sync tool** (`src/knowledge/seedSync.ts` + `npm run seed-sync`, `--dry-run`) — mirrors `knowledge/*.yaml` → OpenBrain with the metadata contract; offline-safe. Code done + tested (60 tests). **Live push to shared OpenBrain not yet run** — awaiting go-ahead.
+- [x] **Seed-sync tool** (`src/knowledge/seedSync.ts` + `npm run seed-sync`, `--dry-run`) — mirrors `knowledge/*.yaml` → OpenBrain via the `capture_thought` MCP tool; offline-safe. **Live push complete:** 51/51 memories seeded to the hosted brain (`project: falsify`), exactly 51 thoughts confirmed via `thought_stats`.
 - [x] Two-store storage design documented
 - [x] Brain key resolved as env-var reuse; `.env.example` added
 - [x] `docs/` handoff created
@@ -126,7 +136,7 @@ only serve as the engine's exhibit of what a successful falsification looks like
   - [x] Slice 3: Cycle state machine (`Intake→Hypothesis→Experiment→Analysis→Review→Theory`)
   - [x] Slice 4: knowledge loader + rules engine (`claim_score` — consensus structurally barred from flipping verdicts, proven by test)
   - [x] Slice 5: OpenBrain client + typed config (offline `.falsify/queue` fallback, drain-on-recovery, key never leaks)
-- [ ] Seed-sync script (push `knowledge/*.yaml` → OpenBrain with tier metadata)
+- [x] Seed-sync script (push `knowledge/*.yaml` → OpenBrain) — **live-verified over MCP (51/51)**
 - [ ] Phase 2: MCP server (`falsify_*` tools)
 - [ ] Phase 3: Web UI (hypothesis card + notebook view)
 - [ ] Knowledge seed expansion (more entries per tier, via PR)
@@ -141,7 +151,10 @@ only serve as the engine's exhibit of what a successful falsification looks like
 | `rules/claimScore.ts` | **Consensus-minimization core.** `compareClaims()` returns `decidedBy: evidence \| consensus-tiebreak \| tie`; consensus only consulted on exact non-consensus tie. |
 | `rules/quantitative.ts` | Cross-cutting validator lens (trigger-substring match → guarded flags). |
 | `config.ts` | `loadConfig()` from env; `ConfigError` references field names, never the key value. |
-| `memory/openbrainClient.ts` | `save`/`recall` via `fetch`; offline queue + FIFO drain; `BrainHttpError` carries status only. |
+| `memory/openbrainClient.ts` | REST `save`/`recall` via `fetch` (for a local/devbox brain); offline queue + FIFO drain; `BrainHttpError` carries status only. Defines the shared `MemoryWriter` interface. |
+| `memory/openbrainMcpClient.ts` | **Hosted-brain client.** `save` via the `capture_thought` MCP tool over SSE, `recall` via `search_thoughts`; folds structured metadata into content; throttle + 429/5xx backoff; same offline queue. Key only ever in the `x-brain-key` header. |
+| `memory/offlineQueue.ts` | Transport-agnostic on-disk FIFO queue (`.falsify/queue/`); replays through a caller-supplied `send`, stops at first failure. |
+| `cli/seedSync.ts` | `npm run seed-sync` runner (`--dry-run` builds + reports offline; live mode pushes via the MCP client with a 400 ms throttle). |
 
 ### Commands
 - `npm run build` (tsc) · `npm test` (vitest run) · `npm run dev` (watch) · `npm run lint` (eslint src tests)
@@ -193,3 +206,19 @@ only serve as the engine's exhibit of what a successful falsification looks like
   reports a summary; transport failures queue locally and never throw. CLI `npm run seed-sync`
   (`--dry-run` builds + reports with no network). Dry-run verified 51 memories. **60 tests pass.**
   LIVE push to shared OpenBrain deferred pending user go-ahead (write to shared infra).
+- **2026-06-15/16 (live seed over MCP)** — Ran the live push and discovered the REST assumption
+  was wrong: `brain.planforge.software` fronts only OpenBrain's **MCP-SSE** server (REST runs on a
+  separate, non-public port — confirmed by reading the OpenBrain source at `E:\GitHub\OpenBrain`
+  and probing the live host: only `/health` answers, everything else 404s). Built an
+  **MCP-transport client** (`src/memory/openbrainMcpClient.ts`) using `@modelcontextprotocol/sdk`
+  (0 vulns): connects to `/sse` with `x-brain-key`, calls the `capture_thought` / `search_thoughts`
+  tools. Since `capture_thought` has no metadata field, structured metadata is **folded into the
+  content** as a `— Falsify knowledge seed —` block (`foldMetadataIntoContent`). Extracted a shared
+  `OfflineQueue` (`src/memory/offlineQueue.ts`) and a `MemoryWriter` interface so `syncSeed` is
+  transport-agnostic; the REST client is retained for a local/devbox brain. Two transport bugs found
+  & fixed: (1) header merge via object-spread dropped the SDK's `content-type` → HTTP 400; fixed with
+  `new Headers()`. (2) Cloudflare rate-limits rapid captures → HTTP 429; added a 400 ms throttle +
+  exponential-backoff retry on transient 429/5xx. **Live result: 51/51 saved, exactly 51 thoughts in
+  `project: falsify`** (verified via `thought_stats`; earlier duplicate/probe rows purged with a
+  resilient `scripts/purge-project.mjs`). **73 tests pass, lint clean, 0 vulns.** Next: Phase 2 (MCP
+  server exposing `falsify_*` tools).

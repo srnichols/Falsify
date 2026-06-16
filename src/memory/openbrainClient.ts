@@ -45,6 +45,15 @@ export interface SaveResult {
   drained: number;
 }
 
+/**
+ * The write surface every memory backend exposes, regardless of transport
+ * (REST or MCP). {@link syncSeed} depends only on this, so the seeding logic is
+ * agnostic to how memories actually reach the brain.
+ */
+export interface MemoryWriter {
+  save(memory: BrainMemory): Promise<SaveResult>;
+}
+
 export interface OpenBrainClientOptions {
   /** Directory for the offline queue. Defaults to `.falsify/queue`. */
   queueDir?: string;
