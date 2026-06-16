@@ -8,16 +8,14 @@
  */
 
 import type { QuantEntry } from '../domain/types.js';
-import type { RecallQuery } from '../memory/openbrainClient.js';
+import type { MemoryReader } from '../memory/openbrainClient.js';
 
 /**
- * The narrow read surface `falsify_recall` depends on. Its signature matches
- * `OpenBrainMcpClient.recall`, so the live client satisfies it directly and a
- * fake satisfies it in tests.
+ * Re-exported from the core memory module so existing MCP-side imports keep
+ * working. The interface itself now lives transport-neutrally next to
+ * `MemoryWriter`, so the web transport can share the same recall surface.
  */
-export interface MemoryReader {
-  recall(query: RecallQuery): Promise<unknown[]>;
-}
+export type { MemoryReader };
 
 /** Resources injected into the server at construction time. All optional. */
 export interface FalsifyServerDeps {

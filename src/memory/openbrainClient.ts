@@ -54,6 +54,16 @@ export interface MemoryWriter {
   save(memory: BrainMemory): Promise<SaveResult>;
 }
 
+/**
+ * The narrow read surface the Corpus tier exposes (DESIGN.md §5). Its signature
+ * matches `OpenBrainMcpClient.recall`, so the live client satisfies it directly
+ * and a fake satisfies it in tests — letting every transport (MCP, web) share
+ * one graceful, offline-safe recall path without a real network call.
+ */
+export interface MemoryReader {
+  recall(query: RecallQuery): Promise<unknown[]>;
+}
+
 export interface OpenBrainClientOptions {
   /** Directory for the offline queue. Defaults to `.falsify/queue`. */
   queueDir?: string;

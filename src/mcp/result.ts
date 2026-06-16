@@ -9,9 +9,9 @@
  */
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { legalEvents, transition, CycleTransitionError } from '../cycle/stateMachine.js';
-import type { CycleEvent } from '../cycle/stateMachine.js';
+import { legalEvents } from '../cycle/stateMachine.js';
 import type { CycleState } from '../domain/types.js';
+import type { OpResult } from '../cycle/operations.js';
 
 /** A successful result carrying an arbitrary JSON payload. */
 export function ok(payload: Record<string, unknown>): CallToolResult {
@@ -39,26 +39,13 @@ export function withState(payload: Record<string, unknown>, state: CycleState): 
 }
 
 /**
- * Apply a cycle event, converting an illegal transition into a structured failure
- * instead of a thrown error. Returns either the next state or a ready-to-return
- * `CallToolResult` describing the rejection.
+ * Map a transport-neutral {@link OpResult} (from the core operations layer) onto
+ * the MCP `CallToolResult` shape. This is the whole job of an MCP tool now: hand
+ * the args to a core operation and map the result, so the discipline lives in
+ * exactly one place and no transport can drift from it.
  */
-export function advance(
-  state: CycleState,
-  event: CycleEvent,
-): { next: CycleState } | { error: CallToolResult } {
-  try {
-    return { next: transition(state, event) };
-  } catch (err) {
-    if (err instanceof CycleTransitionError) {
-      return {
-        error: fail(
-          err.message,
-          'cycle:illegal-transition',
-          `From state '${state}' the legal events are: ${legalEvents(state).join(', ') || '(none — terminal)'}.`,
-        ),
-      };
-    }
-    throw err;
-  }
+export function toCallToolResult(result: OpResult): CallToolResult {
+  return result.kind === 'ok'
+    ? ok(result.payload)
+    : fail(result.error, result.rule, result.guidance);
 }
