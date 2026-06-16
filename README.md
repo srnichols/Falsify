@@ -53,6 +53,10 @@ VS Code (`.vscode/mcp.json`) or any MCP host:
 }
 ```
 
+This workspace already includes a local MCP registration at
+`.vscode/mcp.json`. If you also use other MCP servers in this repo, keep all of
+them under the same top-level `servers` object rather than replacing the file.
+
 `OPENBRAIN_KEY` is optional and only enables `falsify_recall` (semantic recall from
 the OpenBrain corpus); the reasoning tools work without it. The key is read from the
 environment and is never stored in the repo.
