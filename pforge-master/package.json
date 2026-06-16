@@ -1,0 +1,25 @@
+{
+  "name": "@pforge/pforge-master",
+  "version": "3.8.1",
+  "main": "server.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "start:mcp": "node server.mjs --mcp-stdio",
+    "start:http": "node server.mjs --http",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ws": "^8.20.0"
+  },
+  "license": "MIT",
+  "author": "srnichols",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/srnichols/plan-forge"
+  }
+}

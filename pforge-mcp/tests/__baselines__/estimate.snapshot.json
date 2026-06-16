@@ -1,0 +1,10 @@
+{
+  "model": "claude-sonnet-4.5",
+  "quorumEligible": false,
+  "hasEstimatedCostUSD": true,
+  "hasBaseCostUSD": true,
+  "hasOverheadUSD": true,
+  "hasComplexityScore": true,
+  "hasRationale": true,
+  "estimatedCostUSDPositive": true
+}

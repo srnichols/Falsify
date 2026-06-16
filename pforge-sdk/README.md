@@ -1,0 +1,950 @@
+# pforge-sdk
+
+**Version**: `0.11.0` · **License**: MIT · **Engines**: Node ≥ 20
+
+Programmatic SDK for Plan Forge — load MCP tool metadata, build Hallmark provenance envelopes, and validate Lattice code-chunk records from your own Node.js code. Zero runtime dependencies.
+
+> **Companion to the MCP server.** The SDK does NOT spawn or host the MCP server itself — for that, see `pforge-mcp/server.mjs`. The SDK is for code that wants to *read* Plan Forge metadata or *produce* Plan Forge-compatible artifacts (provenance stamps, chunk records, etc.).
+
+---
+
+## Installation
+
+```bash
+npm install pforge-sdk
+```
+
+Or, working inside the Plan Forge monorepo:
+
+```bash
+npm install file:./pforge-sdk
+```
+
+---
+
+## What ships
+
+| Sub-path | Module | What it gives you |
+|---|---|---|
+| `pforge-sdk` | `src/index.mjs` | Re-exports everything below |
+| `pforge-sdk/tools` | `src/tools.mjs` | Tool registry helpers (load + filter MCP tools) |
+| `pforge-sdk/hallmark` | `src/hallmark.mjs` | `buildProvenance` / `validateProvenance` / `mergeProvenance` + `hallmark/v1` schema |
+| `pforge-sdk/chunker` | `src/chunker.mjs` | `validateChunk` + `CHUNK_KINDS` for Lattice code-graph records |
+| `pforge-sdk/client` | `src/client.mjs` | `PForgeClient` — typed REST client for the Plan Forge MCP server |
+| `pforge-sdk/anvil` | `src/anvil.mjs` | Anvil cache-key helpers — `computeAnvilKey`, path helpers |
+| `pforge-sdk/lattice-query` | `src/lattice-query.mjs` | Lattice query builder — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk` |
+| `pforge-sdk/notifications/adapter-contract` | `src/notifications/adapter-contract.mjs` | Notification adapter contract — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
+| `pforge-sdk/run-reader` | `src/run-reader.mjs` | Run artifact reader — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `readEvents`, `parseEventLine`, `eventsLogPath`, path helpers |
+| `pforge-sdk/plan-reader` | `src/plan-reader.mjs` | Plan file reader — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, path helpers |
+| `pforge-sdk/thought-reader` | `src/thought-reader.mjs` | Thought store reader — `readThoughts`, `readAllThoughts`, `listThoughtSources`, `parseThoughtLine`, path helpers |
+| `pforge-sdk/digest-reader` | `src/digest-reader.mjs` | Digest reader — `listDigests`, `readDigest`, `readLatestDigest`, `overallSeverity`, `getSectionsByMinSeverity`, path helpers |
+| `pforge-sdk/session-reader` | `src/session-reader.mjs` | Forge-Master session reader — `listSessions`, `readSession`, `readAllSessionTurns`, `parseSessionLine`, `getLane`, `summarizeSession`, path helpers |
+| `pforge-sdk/bug-reader` | `src/bug-reader.mjs` | Bug registry reader — `listBugs`, `readBug`, `summarizeBugs`, `parseBugId`, `bugFilePath`, `bugsDir`, `BUGS_DIR_RELATIVE`, `BUG_STATUSES`, `BUG_SEVERITIES` |
+| `pforge-sdk/bug-reader` | `src/bug-reader.mjs` | Bug registry reader — `listBugs`, `readBug`, `parseBugId`, `summarizeBugs`, path helpers |
+
+> **Note**: `pforge-sdk/client` is new in `0.4.0`. It requires a running Plan Forge MCP server (`pforge-mcp/server.mjs`) to be useful. Zero runtime dependencies — uses the global `fetch` (Node ≥ 18).
+> **Note**: `pforge-sdk/anvil` and `pforge-sdk/lattice-query` are new in `0.5.0`. Both are pure and dependency-free.
+> **Note**: `pforge-sdk/notifications/adapter-contract` is new in `0.5.0`. Defines the shape every notification adapter must implement — pure validation, no runtime base class.
+> **Note**: `pforge-sdk/run-reader` is new in `0.6.0`. Provides offline access to `.forge/runs/` artifacts without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/plan-reader` is new in `0.7.0`. Provides offline access to plan files in `docs/plans/` without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/thought-reader` is new in `0.8.0`. Provides offline access to `.forge/*.jsonl` thought stores (OpenBrain queue, archive, DLQ, LiveGuard memories) without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/digest-reader` is new in `0.9.0`. Provides offline access to `.forge/digests/*.json` daily digest files without requiring a running MCP server. Includes analysis helpers (`overallSeverity`, `getSectionsByMinSeverity`) that work on in-memory digest objects. Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/session-reader` is new in `0.10.0`. Provides offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files without requiring a running MCP server. Includes analysis helpers (`getLane`, `summarizeSession`) that work on in-memory turn arrays. Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/run-reader` gained `readEvents`, `eventsLogPath`, and `EVENTS_LOG_FILE` in `0.11.0` — offline access to a run's `events.log` with optional tail (`max`).
+> **Note**: `pforge-sdk/bug-reader` is new in `0.11.0`. Provides offline access to `.forge/bugs/*.json` bug registry files without requiring a running MCP server. Includes filtering (`listBugs` with `status`, `severity`, `scanner`, `since`, `until`) and analysis helpers (`summarizeBugs`). Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/bug-reader` is new in `0.11.0`. Provides offline access to `.forge/bugs/*.json` tempering bug registry files without requiring a running MCP server. Includes analysis helpers (`parseBugId`, `summarizeBugs`) and filter support in `listBugs` (status, severity, scanner, since, until). Zero dependencies beyond `node:fs` / `node:path`.
+
+---
+
+## `pforge-sdk/tools` — Tool registry
+
+The tools module loads `pforge-mcp/tools.json` (the canonical registry of all MCP tools) and exposes helpers for filtering by risk, intent, or name.
+
+```js
+import {
+  tools,
+  getTool,
+  getToolsByRisk,
+  getToolsByIntent,
+} from 'pforge-sdk/tools';
+
+// All tools
+console.log(tools.length); // → count depends on installed version
+
+// Find a single tool
+const runPlan = getTool('forge_run_plan');
+
+// Safe-to-auto-approve tools (no writes, no external calls)
+const readOnly = getToolsByRisk('read-only');
+
+// All tools whose intent includes "memory"
+const memTools = getToolsByIntent('memory');
+```
+
+### Tool record shape
+
+Each entry in `tools` is a JSON object with at least:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | Stable tool name (e.g. `forge_run_plan`) |
+| `description` | `string` | One-paragraph description used by the MCP host |
+| `intent` | `string \| string[]` | Discovery keywords (`execute`, `read`, `crucible`, `memory`, …) |
+| `riskLevel` | `'read-only' \| 'write' \| 'execute'` | Auto-approve hint |
+| `cost` | `'low' \| 'medium' \| 'high'` | Rough token cost |
+| `inputSchema` | `object` | JSON Schema for the tool's input |
+
+The full registry is regenerated from `pforge-mcp/capabilities.mjs` every time the MCP server boots — `tools.json` is the source of truth the SDK reads from.
+
+---
+
+## `pforge-sdk/notifications/adapter-contract` — Notification adapter contract
+
+Defines the shape every Plan Forge notification adapter must implement. No runtime base class — pure validation via `validateAdapterShape`. Import this when writing a custom adapter or host that dispatches notifications.
+
+```js
+import {
+  validateAdapterShape,
+  ERR_NOT_IMPLEMENTED,
+} from 'pforge-sdk/notifications/adapter-contract';
+
+// Validate a custom adapter before registering it
+const myAdapter = {
+  name: 'slack',
+  send: async ({ formattedMessage, config }) => {
+    const res = await fetch(config.webhookUrl, {
+      method: 'POST',
+      body: JSON.stringify({ text: formattedMessage }),
+    });
+    return { ok: res.ok, statusCode: res.status };
+  },
+  validate: (config) => {
+    if (!config.webhookUrl) return { ok: false, reason: 'webhookUrl required' };
+    return { ok: true };
+  },
+};
+
+const check = validateAdapterShape(myAdapter);
+if (!check.valid) {
+  throw new Error(`Adapter missing: ${check.missing.join(', ')}`);
+}
+```
+
+### `AdapterSendArgs` shape
+
+| Field | Type | Description |
+|---|---|---|
+| `event` | `object` | Hub event (`type`, `data`, `timestamp`, …) |
+| `route` | `string` | Adapter name that matched the route |
+| `formattedMessage` | `string` | Human-readable message text |
+| `correlationId` | `string` | Trace ID for this delivery |
+| `config` | `object` | Resolved adapter config (env vars expanded) |
+
+### `AdapterSendResult` shape
+
+| Field | Type | Description |
+|---|---|---|
+| `ok` | `boolean` | `true` if delivery succeeded |
+| `statusCode` | `number?` | HTTP status code (for HTTP-based adapters) |
+| `deliveryMs` | `number?` | Round-trip time in ms |
+| `errorCode` | `string?` | Machine-readable error (`TIMEOUT`, `HTTP_500`, `NETWORK_ERROR`, …) |
+| `error` | `string?` | Human-readable error message |
+
+### `validateAdapterShape(adapter)`
+
+| Returns | Type | Description |
+|---|---|---|
+| `valid` | `boolean` | `true` if adapter has `name` (string), `send` (function), `validate` (function) |
+| `missing` | `string[]` | Names of missing or wrong-typed members |
+
+### `ERR_NOT_IMPLEMENTED`
+
+String constant `"ERR_NOT_IMPLEMENTED"` — use as the `errorCode` value in `AdapterSendResult` when a send path is a stub.
+
+---
+
+## `pforge-sdk/client` — REST Client
+
+`PForgeClient` is a zero-dependency typed REST client for the Plan Forge MCP server. It wraps every major `/api/*` endpoint family and exposes a generic `tool()` dispatcher for calling any `forge_*` tool over HTTP.
+
+```js
+import { PForgeClient, createClient } from 'pforge-sdk/client';
+
+// Connect to the default server (http://localhost:3100)
+const client = new PForgeClient();
+
+// Or pass options
+const client = createClient({
+  baseUrl:   'http://my-server:3100',
+  timeoutMs: 10_000,
+  apiKey:    process.env.PFORGE_API_KEY,   // → Authorization: Bearer <key>
+});
+```
+
+### Discovery
+
+```js
+const { version }  = await client.version();       // GET /api/version
+const status       = await client.status();         // GET /api/status
+const capabilities = await client.capabilities();   // GET /api/capabilities
+const manifest     = await client.discover();       // GET /.well-known/plan-forge.json
+```
+
+### Plan Runs
+
+```js
+const runs    = await client.runs.list();
+const latest  = await client.runs.latest();
+const run3    = await client.runs.get(3);
+const started = await client.runs.trigger({ plan: 'docs/plans/Phase-55-PLAN.md', mode: 'auto' });
+const aborted = await client.runs.abort();
+const events  = await client.runs.replay(3, 'slice-2');
+```
+
+### Cost & Search
+
+```js
+const cost     = await client.cost();                               // GET /api/cost
+const results  = await client.search('drift');                      // GET /api/search?q=drift
+const paged    = await client.search({ q: 'gate', limit: 10 });
+const timeline = await client.timeline({ cursor: 'abc', limit: 25 });
+```
+
+### Memory
+
+```js
+const report = await client.memory.report();
+const hits   = await client.memory.search({ q: 'OTEL', limit: 5 });
+await client.memory.capture({ content: 'orchestrator now exports slice-gate helpers' });
+```
+
+### LiveGuard
+
+```js
+const drift    = await client.liveguard.drift();
+const history  = await client.liveguard.driftHistory();
+const incidents = await client.liveguard.incidents();
+const health   = await client.liveguard.healthTrend();
+```
+
+### Crucible (Idea Smelting)
+
+```js
+const smelts  = await client.crucible.list();
+const smelt   = await client.crucible.submit({ idea: 'Add typed client to pforge-sdk' });
+const preview = await client.crucible.preview();
+```
+
+### Generic MCP Tool Dispatcher
+
+Call any `forge_*` tool by name. The input must match that tool's `inputSchema`.
+
+```js
+// Equivalent to calling the forge_run_plan MCP tool
+const result = await client.tool('forge_run_plan', {
+  plan: 'docs/plans/Phase-55-PLAN.md',
+  mode: 'auto',
+});
+
+// Read-only tools work too
+const caps = await client.tool('forge_capabilities');
+```
+
+### Error handling
+
+Non-2xx responses and network failures both throw `PForgeClientError`:
+
+```js
+import { PForgeClientError } from 'pforge-sdk/client';
+
+try {
+  await client.runs.trigger({ plan: 'missing.md' });
+} catch (err) {
+  if (err instanceof PForgeClientError) {
+    console.error(err.statusCode); // e.g. 404
+    console.error(err.body);       // parsed response body
+  }
+}
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `statusCode` | `number` | HTTP status code (0 = network-level failure) |
+| `body` | `unknown` | Parsed JSON body, or raw text if not JSON |
+| `message` | `string` | Human-readable summary |
+
+---
+
+## `pforge-sdk/hallmark` — Provenance envelopes
+
+The Hallmark contract attaches structured audit metadata to any tool output, decision, memory capture, or plan artifact. It is the cross-layer provenance stamp used throughout the v3.x memory architecture (L1/L2/L3) and is what makes Anvil's dedup-by-hash work.
+
+```js
+import {
+  buildProvenance,
+  validateProvenance,
+  mergeProvenance,
+} from 'pforge-sdk/hallmark';
+
+const prov = buildProvenance({
+  toolName: 'forge_sweep',
+  sourceFile: 'src/index.mjs',
+  byteRange: [0, 512],
+  contentHash: 'sha256:abc…',
+});
+
+const result = validateProvenance(prov);
+// → { ok: true } | { ok: false, errors: [...] }
+
+const enriched = mergeProvenance({ topics: ['security'] }, prov);
+// → { topics: [...], provenance: { schemaVersion: 'hallmark/v1', ... } }
+```
+
+### Schema: `hallmark/v1`
+
+Every envelope must satisfy `schemas/hallmark-provenance.v1.json`:
+
+| Field | Type | Required | Notes |
+|---|---|:-:|---|
+| `schemaVersion` | `string` | ✅ | Always `"hallmark/v1"` |
+| `toolName` | `string` | ✅ | Producer tool |
+| `capturedAt` | `string` | ✅ | ISO 8601 UTC, ends in `Z` |
+| `sourceFile` | `string` | — | Relative path |
+| `byteRange` | `[number, number]` | — | `[start, end)` byte offsets |
+| `contentHash` | `string` | — | `sha256:<64 hex>` of the content |
+| `codeHash` | `string` | — | `sha256:<64 hex>` of the producing code |
+| `toolVersion` | `string` | — | Tool version |
+
+`additionalProperties: false` — unknown keys are rejected. `buildProvenance` always fills `schemaVersion` and `capturedAt`; caller-supplied values for those keys are ignored.
+
+---
+
+## `pforge-sdk/chunker` — Lattice chunk records
+
+The chunker module defines the contract that both the pure-JS chunker (`chunker-pureJs.mjs`) and the optional tree-sitter chunker (`pforge-mcp/lattice-chunker-treesitter.mjs`) must satisfy. Use it when you want to *produce* Lattice-compatible chunk records from your own indexer.
+
+```js
+import { validateChunk, CHUNK_KINDS } from 'pforge-sdk/chunker';
+
+const record = {
+  filePath: 'src/foo.mjs',
+  language: 'javascript',
+  kind: 'function',
+  name: 'computeScore',
+  startByte: 0,
+  endByte: 256,
+  startLine: 1,
+  endLine: 8,
+  contentHash: 'sha256:…',
+  declares: ['computeScore'],
+  references: ['Math.max'],
+};
+
+const result = validateChunk(record);
+// → { ok: true } | { ok: false, errors: [{ code, message }, ...] }
+```
+
+`CHUNK_KINDS` is the frozen tuple `['file', 'module', 'class', 'function', 'method', 'block']`.
+
+---
+
+## `pforge-sdk/anvil` — Anvil cache-key helpers
+
+Exposes the canonical Anvil cache-key algorithm and path helpers so external code can predict, inspect, and audit Anvil entries without depending on the full MCP server package.
+
+```js
+import {
+  computeAnvilKey,
+  anvilEntryPath,
+  anvilCacheDir,
+  anvilStatsPath,
+  ANVIL_STATS_RELATIVE,
+} from 'pforge-sdk/anvil';
+
+// Compute the same cache key that withAnvil() would compute on the server
+const key = computeAnvilKey('forge_search', { q: 'drift' }, 'v1.2.3');
+// → '3f8a…' (64-char hex)
+
+// Resolve the absolute path to the entry on disk
+const entryFile = anvilEntryPath({ toolName: 'forge_search', key });
+// → '/workspace/.forge/anvil/forge_search/3f8a….json'
+
+// Resolve the tool-scoped cache directory
+const cacheDir = anvilCacheDir({ toolName: 'forge_search' });
+// → '/workspace/.forge/anvil/forge_search'
+
+// Resolve the stats file
+const stats = anvilStatsPath();
+// → '/workspace/.forge/anvil/stats.json'
+```
+
+All functions accept an optional `cwd` parameter (defaults to `process.cwd()`).
+
+| Export | Description |
+|---|---|
+| `computeAnvilKey(toolName, inputs, codeHashSeed)` | Returns a 64-char hex cache key matching the server's algorithm |
+| `anvilEntryPath({ toolName, key, cwd? })` | Absolute path to `<cwd>/.forge/anvil/<toolName>/<key>.json` |
+| `anvilCacheDir({ toolName, cwd? })` | Absolute path to `<cwd>/.forge/anvil/<toolName>/` |
+| `anvilStatsPath({ cwd? })` | Absolute path to `<cwd>/.forge/anvil/stats.json` |
+| `ANVIL_STATS_RELATIVE` | Relative path constant `.forge/anvil/stats.json` (platform-native separator) |
+
+---
+
+## `pforge-sdk/lattice-query` — Lattice query builder
+
+Fluent builder for `latticeQuery` parameters plus pure scoring utilities extracted from `pforge-mcp/lattice.mjs`. Zero dependencies.
+
+```js
+import {
+  LatticeQueryBuilder,
+  tokenizeForSearch,
+  scoreChunk,
+} from 'pforge-sdk/lattice-query';
+
+// Build query params for forge_lattice_query / latticeQuery
+const params = new LatticeQueryBuilder()
+  .query('getUserById')
+  .language('javascript')
+  .kind('function')
+  .limit(10)
+  .build();
+// → { query: 'getUserById', language: 'javascript', kind: 'function', limit: 10 }
+
+// Tokenise text with camelCase splitting
+const tokens = tokenizeForSearch('getUserById');
+// Map { 'get' => 1, 'user' => 1, 'by' => 1, 'id' => 1 }
+
+// Score a chunk [0, 1] — name tokens weighted 2× over path tokens
+const score = scoreChunk('user', { name: 'getUserById', filePath: 'src/user.mjs' });
+// → 1
+```
+
+### `LatticeQueryBuilder` API
+
+| Method | Description |
+|---|---|
+| `.query(text)` | Token + substring match against chunk name and filePath |
+| `.language(lang)` | Exact match against `chunk.language` (e.g. `'javascript'`) |
+| `.kind(k)` | Exact match against `chunk.kind` (e.g. `'function'`) |
+| `.filePath(path)` | Substring match against `chunk.filePath` (case-insensitive) |
+| `.limit(n)` | Max results to return (default 25; must be a positive integer) |
+| `.build()` | Returns params object — spread into `latticeQuery(...)` or `client.tool(...)` |
+| `.describe()` | Human-readable description of current filters (for logging) |
+
+---
+
+## `pforge-sdk/run-reader` — Run artifact reader
+
+Read Plan Forge run artifacts from `.forge/runs/` without a running MCP server. Useful for CI scripts, external dashboards, or any tool that needs to inspect run history offline.
+
+```js
+import {
+  listRuns,
+  readRunMeta,
+  readRunSummary,
+  readRunIndex,
+  parseEventLine,
+  runsDir,
+  runDir,
+  runIndexPath,
+  RUNS_DIR_RELATIVE,
+  INDEX_FILE_RELATIVE,
+} from 'pforge-sdk/run-reader';
+
+// List all run IDs in .forge/runs/, newest-first
+const ids = listRuns();
+// → ['20260519-183001', '20260518-102233', ...]
+
+// Read metadata for a specific run (from run.json)
+const meta = readRunMeta({ runId: ids[0] });
+// → { plan: 'docs/plans/Phase-55-PLAN.md', sliceCount: 3, model: 'gpt-4.1', ... }
+
+// Read the post-run summary (from summary.json)
+const summary = readRunSummary({ runId: ids[0] });
+// → { status: 'completed', results: { passed: 3, failed: 0, total: 3 }, ... }
+
+// Read the global run index (from index.jsonl)
+const index = readRunIndex();
+// → [{ runId: '...', plan: '...', status: 'completed' }, ...]
+
+// Parse a single events.log line (pure, no I/O)
+const event = parseEventLine('[2026-05-19T18:30:01.000Z] slice-started: {"sliceId":1}');
+// → { ts: '2026-05-19T18:30:01.000Z', type: 'slice-started', data: { sliceId: 1 } }
+```
+
+All readers are **graceful** — they return `null` or `[]` on missing files rather than throwing.
+
+All functions accept an optional `cwd` parameter (defaults to `process.cwd()`).
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `runsDir({ cwd? })` | Absolute path to `<cwd>/.forge/runs/` |
+| `runDir({ runId, cwd? })` | Absolute path to `<cwd>/.forge/runs/<runId>/` |
+| `runIndexPath({ cwd? })` | Absolute path to `<cwd>/.forge/runs/index.jsonl` |
+| `RUNS_DIR_RELATIVE` | Platform-native relative path `.forge/runs` |
+| `INDEX_FILE_RELATIVE` | Platform-native relative path `.forge/runs/index.jsonl` |
+
+### Artifact readers
+
+| Export | Returns | Source file |
+|---|---|---|
+| `listRuns({ cwd? })` | `string[]` run IDs, newest-first | `.forge/runs/` directory listing |
+| `readRunMeta({ runId, cwd? })` | `object \| null` | `.forge/runs/<runId>/run.json` |
+| `readRunSummary({ runId, cwd? })` | `object \| null` | `.forge/runs/<runId>/summary.json` |
+| `readRunIndex({ cwd? })` | `object[]` | `.forge/runs/index.jsonl` |
+
+### `parseEventLine(line)`
+
+Pure parser for a single `events.log` line. No I/O.
+
+| Format | `[<ISO 8601 timestamp>] <event-type>: <JSON data>` |
+|---|---|
+| Returns | `{ ts: string, type: string, data: object }` or `null` (no match) |
+| Pure | Yes — same input always produces the same output |
+
+### `run.json` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `plan` | `string` | Absolute or relative path to the plan file |
+| `traceId` | `string` | OTEL trace ID for this run |
+| `startTime` | `string` | ISO 8601 UTC start time |
+| `model` | `string` | Primary model used |
+| `mode` | `string` | Execution mode (`auto`, `assisted`) |
+| `quorumMode` | `string` | Quorum mode (`auto`, `power`, `speed`, `false`) |
+| `sliceCount` | `number` | Number of slices in the plan |
+| `executionOrder` | `number[]` | DAG-sorted slice execution order |
+
+### `summary.json` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `plan` | `string` | Plan path |
+| `phase` | `string` | Plan basename without `.md` |
+| `status` | `string` | `completed` or `failed` |
+| `results` | `object` | `{ passed, failed, skipped, total }` |
+| `totalDuration` | `number` | Wall-clock ms for the entire run |
+| `cost` | `object` | `{ total: number }` in USD |
+| `sliceResults` | `object[]` | Per-slice result records |
+
+---
+
+## `pforge-sdk/plan-reader` — Plan file reader
+
+Read Plan Forge plan files from `docs/plans/` without a running MCP server. Useful for CI scripts, status checks, or any tool that needs to inspect plan structure and slice dependencies offline.
+
+```js
+import {
+  listPlans,
+  readPlan,
+  getPlanStatus,
+  getPlanSlices,
+  plansDir,
+  PLANS_DIR_RELATIVE,
+} from 'pforge-sdk/plan-reader';
+
+// List all *-PLAN.md files in docs/plans/, sorted alphabetically
+const plans = listPlans();
+// → ['docs/plans/Phase-53-ORCHESTRATOR-SPLIT-PLAN.md', ...]
+
+// Parse a plan into a structured summary
+const plan = readPlan({ planPath: 'docs/plans/Phase-55-CLEAN-CODE-SWEEP-PLAN.md' });
+// → { title, status, statusLine, executionHold, slices, frontmatter, planPath }
+
+// Quick status check
+const status = getPlanStatus({ planPath: 'docs/plans/Phase-55-CLEAN-CODE-SWEEP-PLAN.md' });
+// → 'hardened' | 'complete' | 'in-progress' | 'paused' | 'draft' | 'unknown' | null
+
+// Just the slices
+const slices = getPlanSlices({ planPath: 'docs/plans/Phase-55-CLEAN-CODE-SWEEP-PLAN.md' });
+// → [{ number: 1, title: 'Baseline audit fixture', dependencies: [] }, ...]
+```
+
+All readers are **graceful** — they return `null` on missing files rather than throwing.
+
+All functions accept an optional `cwd` parameter (defaults to `process.cwd()`).
+
+### `PlanSummary` shape
+
+| Field | Type | Description |
+|---|---|---|
+| `planPath` | `string` | Resolved absolute path to the plan file |
+| `title` | `string\|null` | Full title from the `# ` heading |
+| `statusLine` | `string\|null` | Raw status blockquote text (`> **Status**: ...`) |
+| `status` | `string` | Canonical token: `"hardened"`, `"complete"`, `"in-progress"`, `"paused"`, `"draft"`, `"unknown"` |
+| `executionHold` | `boolean` | `true` if any `- [ ]` checkbox remains in the Execution Hold section |
+| `slices` | `SliceSummary[]` | Ordered list of slice summaries |
+| `frontmatter` | `Record<string,string>` | Parsed YAML frontmatter fields (e.g. `phase`, `name`, `lockHash`, `model`) |
+
+### `SliceSummary` shape
+
+| Field | Type | Description |
+|---|---|---|
+| `number` | `number` | Slice number (supports decimals like `2.1`) |
+| `title` | `string` | Slice title with annotations stripped |
+| `dependencies` | `string[]` | Declared dependencies (e.g. `["Slice 1", "Slice 2"]`) |
+
+### Status token reference
+
+| Token | Matches |
+|---|---|
+| `complete` | `✅`, `COMPLETE`, `COMPLETE` in status line |
+| `hardened` | `HARDENED` in status line |
+| `in-progress` | `IN PROGRESS`, `🚧` in status line |
+| `paused` | `PAUSED`, `BLOCKED`, `⏸` in status line |
+| `draft` | `DRAFT`, `📋`, `PLANNED` in status line |
+| `unknown` | No `> **Status**:` line found |
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `plansDir({ cwd? })` | Absolute path to `<cwd>/docs/plans/` |
+| `PLANS_DIR_RELATIVE` | Platform-native relative path `docs/plans` |
+
+---
+
+## `pforge-sdk/thought-reader` — Thought store reader
+
+Offline access to `.forge/*.jsonl` thought stores written by the OpenBrain
+queue, LiveGuard, and other Plan Forge sub-systems. Pure — no semantic
+search, no TF-IDF, just file I/O. Zero runtime dependencies.
+
+```js
+import {
+  THOUGHT_SOURCES,
+  listThoughtSources,
+  readThoughts,
+  readAllThoughts,
+  parseThoughtLine,
+} from 'pforge-sdk/thought-reader';
+
+// Which thought files exist in this workspace?
+const present = listThoughtSources();
+// → ['openbrain-queue.archive.jsonl', 'liveguard-memories.jsonl']
+
+// Read records from one source (most-recent 20):
+const memories = readThoughts({ source: 'liveguard-memories.jsonl', max: 20 });
+console.log(memories[0].content);
+
+// Read and combine all default sources:
+const all = readAllThoughts({ max: 100 });
+console.log(all.length); // total records from all present sources
+
+// Parse a single JSONL line (pure helper):
+const record = parseThoughtLine('{"_v":1,"content":"gate passed"}');
+// → { _v: 1, content: 'gate passed' }
+```
+
+### Thought record shapes
+
+Records from different sources have different shapes. All include `_v` and `content`:
+
+| Source | Extra fields |
+|---|---|
+| `openbrain-queue.jsonl` | `project?` |
+| `openbrain-queue.archive.jsonl` | `_status`, `_attempts`, `_enqueuedAt`, `_nextAttemptAt`, `project?` |
+| `openbrain-dlq.jsonl` | `_status`, `_attempts`, `project?` |
+| `liveguard-memories.jsonl` | `project?` |
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `forgeDir({ cwd? })` | Absolute path to `<cwd>/.forge/` |
+| `thoughtFilePath({ source, cwd? })` | Absolute path to `<cwd>/.forge/<source>` |
+| `FORGE_DIR_RELATIVE` | `".forge"` |
+| `THOUGHT_SOURCES` | Frozen array of the four default source filenames |
+
+---
+
+## `pforge-sdk/digest-reader` — Digest reader
+
+Offline access to `.forge/digests/*.json` daily digest files written by
+`pforge digest`. Includes analysis helpers for computing severity from an
+in-memory digest. Pure — no external network calls. Zero runtime dependencies.
+
+```js
+import {
+  listDigests,
+  readDigest,
+  readLatestDigest,
+  overallSeverity,
+  getSectionsByMinSeverity,
+} from 'pforge-sdk/digest-reader';
+
+// List available digest dates (newest first):
+const dates = listDigests();
+// → ['2026-05-20', '2026-05-19', '2026-05-18']
+
+// Read a specific date:
+const digest = readDigest({ date: '2026-05-20' });
+if (digest) {
+  console.log(digest.generatedAt);    // → '2026-05-20T06:00:00.000Z'
+  console.log(digest.sections.length); // → 5
+}
+
+// Read the most recent digest:
+const latest = readLatestDigest();
+
+// Compute the overall severity (highest severity across all sections):
+if (latest) {
+  console.log(overallSeverity(latest)); // → 'warn'
+}
+
+// Filter for sections at or above a threshold:
+const alertSections = getSectionsByMinSeverity(latest, 'alert');
+```
+
+### Digest record shape
+
+```json
+{
+  "sections": [
+    {
+      "id": "probe-deltas",
+      "title": "Probe Lane-Match Deltas",
+      "severity": "info",
+      "items": []
+    },
+    {
+      "id": "aging-bugs",
+      "title": "Aging Meta-Bugs",
+      "severity": "warn",
+      "items": [{ "id": "bug-001", "title": "...", "ageDays": 10, "severity": "medium" }]
+    }
+  ],
+  "generatedAt": "2026-05-20T06:00:00.000Z"
+}
+```
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `digestsDir({ cwd? })` | Absolute path to `<cwd>/.forge/digests/` |
+| `digestFilePath({ date, cwd? })` | Absolute path to `<cwd>/.forge/digests/<date>.json` |
+| `DIGESTS_DIR_RELATIVE` | `".forge/digests"` (OS-normalised) |
+| `SEVERITY_LEVELS` | Frozen array `['info', 'warn', 'alert']` in ascending order |
+
+---
+
+## `pforge-sdk/session-reader` — Forge-Master session reader
+
+Offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files
+written by the `pforge-master` session store. Useful for CI scripts, external dashboards,
+or any tool that needs to inspect Forge-Master conversation history without a running
+MCP server. Pure — zero runtime dependencies.
+
+```js
+import {
+  listSessions,
+  readSession,
+  readAllSessionTurns,
+  parseSessionLine,
+  getLane,
+  summarizeSession,
+  fmSessionsDir,
+  sessionFilePath,
+  sessionArchivePath,
+  FM_SESSIONS_DIR_RELATIVE,
+} from 'pforge-sdk/session-reader';
+
+// List all session IDs in .forge/fm-sessions/, newest-modified first
+const ids = listSessions();
+// → ['abc-123', 'def-456', ...]
+
+// Read active turns for a session (excludes archived turns)
+const turns = readSession({ sessionId: ids[0] });
+console.log(turns[0].userMessage);  // → 'What is the plan status?'
+
+// Read all turns including archived (archive + active, sorted by turn number)
+const all = readAllSessionTurns({ sessionId: ids[0] });
+console.log(all.length);  // total turns across archive and active file
+
+// Limit to the 10 most-recent turns:
+const recent = readAllSessionTurns({ sessionId: ids[0], max: 10 });
+
+// Summarize an array of turns
+const summary = summarizeSession(all);
+// → { turnCount: 12, lanes: ['advisory', 'operational'], latestTimestamp: '...', latestUserMessage: '...' }
+
+// Extract the lane from a single turn record (pure helper)
+const lane = getLane(turns[0]);
+// → 'operational'  or  'advisory'  (from string or { lane: '...' } classification)
+
+// Parse a single JSONL line (pure helper, no I/O)
+const record = parseSessionLine('{"turn":1,"userMessage":"hello","classification":"advisory"}');
+// → { turn: 1, userMessage: 'hello', classification: 'advisory' }
+```
+
+All readers are **graceful** — they return `null` or `[]` on missing files rather than throwing.
+
+All functions accept an optional `cwd` parameter (defaults to `process.cwd()`).
+
+### Turn record shape
+
+| Field | Type | Description |
+|---|---|---|
+| `turn` | `number` | 1-based monotonically increasing turn number |
+| `timestamp` | `string` | ISO-8601 UTC timestamp of when the turn was recorded |
+| `userMessage` | `string` | The raw user message text |
+| `classification` | `string \| object` | Forge-Master lane classification — either a lane string or `{ lane, score?, ... }` |
+| `replyHash` | `string` | First 16 hex characters of sha256 of the assistant reply |
+| `toolCalls` | `object[]` | MCP tool calls made during this turn |
+
+### `summarizeSession(turns)` return shape
+
+| Field | Type | Description |
+|---|---|---|
+| `turnCount` | `number` | Total number of turns in the array |
+| `lanes` | `string[]` | Unique classification lanes, sorted alphabetically |
+| `latestTimestamp` | `string \| null` | ISO-8601 timestamp of the most-recent turn with a timestamp |
+| `latestUserMessage` | `string \| null` | The last non-empty user message across all turns |
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `fmSessionsDir({ cwd? })` | Absolute path to `<cwd>/.forge/fm-sessions/` |
+| `sessionFilePath({ sessionId, cwd? })` | Absolute path to `<cwd>/.forge/fm-sessions/<sessionId>.jsonl` |
+| `sessionArchivePath({ sessionId, cwd? })` | Absolute path to `<cwd>/.forge/fm-sessions/<sessionId>.archive.jsonl` |
+| `FM_SESSIONS_DIR_RELATIVE` | Platform-native relative path `.forge/fm-sessions` |
+| `ACTIVE_FILE_SUFFIX` | `'.jsonl'` |
+| `ARCHIVE_FILE_SUFFIX` | `'.archive.jsonl'` |
+
+---
+
+## `pforge-sdk/bug-reader` — Bug registry
+
+The bug-reader module provides offline access to `.forge/bugs/*.json` tempering bug registry files written by the Plan Forge tempering sub-system (`pforge-mcp/tempering/bug-registry.mjs`).
+
+```js
+import {
+  listBugs,
+  readBug,
+  parseBugId,
+  summarizeBugs,
+} from 'pforge-sdk/bug-reader';
+
+// List all open bugs
+const openBugs = listBugs({ status: 'open' });
+
+// List critical bugs from a specific scanner
+const critical = listBugs({ severity: 'critical', scanner: 'vitest' });
+
+// Read a specific bug by ID
+const bug = readBug({ bugId: 'bug-2026-05-20-001' });
+if (bug) {
+  console.log(bug.status);      // → 'open'
+  console.log(bug.severity);    // → 'critical'
+  console.log(bug.scanner);     // → 'vitest'
+}
+
+// Summarise a set of bugs
+const summary = summarizeBugs(openBugs);
+// → { total: 3, byStatus: { open: 3 }, bySeverity: { critical: 1, high: 2 }, scanners: ['vitest'] }
+```
+
+### `listBugs(opts?)` — filter and list bugs
+
+Returns an array of bug record objects, sorted newest-discovered first.
+
+| Option | Type | Description |
+|---|---|---|
+| `cwd` | `string` | Workspace root (defaults to `process.cwd()`) |
+| `status` | `string` | Filter by status — `'open'`, `'in-fix'`, `'fixed'`, `'wont-fix'`, `'duplicate'` |
+| `severity` | `string` | Filter by severity — `'info'`, `'low'`, `'medium'`, `'high'`, `'critical'` |
+| `scanner` | `string` | Filter by originating scanner name |
+| `since` | `string` | ISO-8601 timestamp — exclude bugs discovered before this time |
+| `until` | `string` | ISO-8601 timestamp — exclude bugs discovered after this time |
+
+All filters are optional and combined with AND semantics.
+
+### Bug record shape
+
+| Field | Type | Description |
+|---|---|---|
+| `bugId` | `string` | Unique identifier (`bug-YYYY-MM-DD-NNN`) |
+| `fingerprint` | `string` | SHA-1 dedup fingerprint |
+| `scanner` | `string` | Scanner that discovered the bug |
+| `severity` | `string` | `'info'` \| `'low'` \| `'medium'` \| `'high'` \| `'critical'` |
+| `status` | `string` | `'open'` \| `'in-fix'` \| `'fixed'` \| `'wont-fix'` \| `'duplicate'` |
+| `classification` | `string` | `'real-bug'`, `'infra'`, or custom |
+| `classifierMeta` | `object \| null` | Classifier metadata (confidence score, etc.) |
+| `evidence` | `object` | `{ testName?, assertionMessage?, stackTrace? }` |
+| `affectedFiles` | `string[]` | Files impacted |
+| `reproSteps` | `string \| null` | Reproduction steps |
+| `correlationId` | `string \| null` | Correlation ID from the originating run |
+| `sliceRef` | `string \| null` | Plan slice reference |
+| `discoveredAt` | `string` | ISO-8601 timestamp |
+| `updatedAt` | `string` | ISO-8601 timestamp of last status change |
+
+### `summarizeBugs(bugs)` return shape
+
+| Field | Type | Description |
+|---|---|---|
+| `total` | `number` | Total bug count in the input array |
+| `byStatus` | `Record<string, number>` | Counts grouped by `status` |
+| `bySeverity` | `Record<string, number>` | Counts grouped by `severity` |
+| `scanners` | `string[]` | Unique scanner names, sorted alphabetically |
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `bugsDir({ cwd? })` | Absolute path to `<cwd>/.forge/bugs/` |
+| `bugFilePath({ bugId, cwd? })` | Absolute path to `<cwd>/.forge/bugs/<bugId>.json` |
+| `BUGS_DIR_RELATIVE` | Platform-native relative path `.forge/bugs` |
+| `BUG_STATUSES` | Frozen array of valid status strings |
+| `BUG_SEVERITIES` | Frozen array of severity levels in ascending order |
+
+
+
+| Level | Description | Safe to auto-approve? |
+|---|---|:-:|
+| `read-only` | No writes, no external calls (e.g. `forge_capabilities`, `forge_search`, `forge_drift_report`) | ✅ |
+| `write` | Creates or modifies files (e.g. `forge_export_plan`, `forge_sync_memories`, `forge_runbook`) | ⚠️ Project-dependent |
+| `execute` | Spawns agents / runs plans / consumes tokens (e.g. `forge_run_plan`, `forge_analyze`, `forge_master_ask`) | ❌ Always confirm |
+
+---
+
+## Relationship to other Plan Forge surfaces
+
+| Surface | When to use |
+|---|---|
+| **`pforge-sdk` (this package)** | You want to read tool metadata, stamp provenance, or validate chunk records from Node.js |
+| **MCP tools** (`pforge-mcp/server.mjs`) | You want an AI agent to call Plan Forge from chat |
+| **REST API** ([docs/REST-API.md](../docs/REST-API.md)) | You want to call Plan Forge from a non-Node language, a UI, or a CI job |
+| **CLI** (`pforge`) | You want a human or shell script to drive Plan Forge |
+
+The SDK is intentionally narrow — it covers the artifact contracts (`tools.json`, `hallmark/v1`, `CodeChunker`) that other tooling needs to interoperate. For everything else, use the REST API or the MCP tool surface.
+
+---
+
+## Roadmap
+
+| Version | Adds |
+|---|---|
+| **0.3.0** | `chunker` sub-path; dropped broken `client` declaration; bumped to match v3.x memory architecture |
+| **0.4.0** | `client` sub-path — `PForgeClient` typed REST client, `createClient` factory, `PForgeClientError`, method groups for runs/memory/crucible/liveguard, generic `tool()` dispatcher |
+| **0.5.0** | `anvil` sub-path — `computeAnvilKey`, path helpers; `lattice-query` sub-path — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk`; `notifications/adapter-contract` sub-path — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
+| **0.6.0** | `run-reader` sub-path — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers for offline access to `.forge/runs/` artifacts |
+| **0.7.0** | `plan-reader` sub-path — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, `plansDir`, `PLANS_DIR_RELATIVE` for offline access to `docs/plans/*.md` plan files |
+| **0.8.0** | `thought-reader` sub-path — `readThoughts`, `readAllThoughts`, `listThoughtSources`, `parseThoughtLine`, `forgeDir`, `thoughtFilePath`, `THOUGHT_SOURCES`, `FORGE_DIR_RELATIVE` for offline access to `.forge/*.jsonl` thought stores |
+| **0.9.0** | `digest-reader` sub-path — `listDigests`, `readDigest`, `readLatestDigest`, `overallSeverity`, `getSectionsByMinSeverity`, `digestsDir`, `digestFilePath`, `DIGESTS_DIR_RELATIVE`, `SEVERITY_LEVELS` for offline access to `.forge/digests/*.json` daily digest files |
+| **0.10.0** | `session-reader` sub-path — `listSessions`, `readSession`, `readAllSessionTurns`, `parseSessionLine`, `getLane`, `summarizeSession`, `fmSessionsDir`, `sessionFilePath`, `sessionArchivePath`, `FM_SESSIONS_DIR_RELATIVE`, `ACTIVE_FILE_SUFFIX`, `ARCHIVE_FILE_SUFFIX` for offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files |
+| **0.11.0** (current) | `bug-reader` sub-path — `listBugs`, `readBug`, `parseBugId`, `summarizeBugs`, `bugsDir`, `bugFilePath`, `BUGS_DIR_RELATIVE`, `BUG_STATUSES`, `BUG_SEVERITIES` for offline access to `.forge/bugs/*.json` tempering bug registry files |
+
+Track progress in [docs/V3-CAPABILITY-AUDIT.md](../docs/V3-CAPABILITY-AUDIT.md).
+
+---
+
+## See also
+
+- [docs/REST-API.md](../docs/REST-API.md) — all REST endpoints
+- [docs/capabilities.md](../docs/capabilities.md) — all MCP tools
+- [pforge-mcp/tools.json](../pforge-mcp/tools.json) — canonical tool registry (what `pforge-sdk/tools` reads)
+- [pforge-sdk/schemas/](schemas/) — JSON Schemas (`hallmark-provenance.v1.json`, etc.)

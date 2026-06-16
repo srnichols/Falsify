@@ -1,0 +1,17 @@
+{
+  "protocolKeys": [
+    "hookSpecificOutput",
+    "hookEventName",
+    "permissionDecision",
+    "permissionDecisionReason",
+    "PreToolUse",
+    "deny",
+    "BLOCKED"
+  ],
+  "denyResponseTemplate": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"BLOCKED: '<filePath>' matches Forbidden Action '<forbiddenPattern>' in the active plan's Scope Contract. Modifying this path is not allowed.\"}}",
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny"
+  },
+  "allowResponse": "{}"
+}

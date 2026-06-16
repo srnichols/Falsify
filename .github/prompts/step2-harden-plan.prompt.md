@@ -1,0 +1,283 @@
+---
+description: "Pipeline Step 2 — Harden a draft plan into an execution contract with scope contracts, execution slices, validation gates, and TBD resolution."
+---
+
+# Step 2: Harden the Plan
+
+> **Pipeline**: Step 2 of 5 (Session 1 — Plan Hardening)
+> **When**: After pre-flight passes (Step 1)
+> **Model suggestion**: Claude (best at structured plan generation and scope contract design)
+> **Next Step**: `step3-execute-slice.prompt.md` (new session)
+
+> ⚠️ **Do not harden plans with headless `gh copilot`** (meta-bug [#86](https://github.com/srnichols/plan-forge/issues/86)).
+> `gh copilot` in `-p` / `--autopilot` mode runs in a sandboxed session that cannot write to your
+> repository regardless of the flags you pass (`--allow-all`, `--allow-all-tools --allow-all-paths
+> --no-ask-user`, `--yolo --no-ask-user` all fail the same way). The CLI will either exit 1 with
+> `Permission denied and could not request permission from user`, or exit 0 with the edits written
+> to `~/.copilot/session-state/<sid>/files/` instead of your repo.
+>
+> **Use interactive hardening instead**: open this prompt in VS Code Copilot chat (agent mode),
+> or call `forge_master_ask` with `mode: "harden"`. Both can write to the workspace directly.
+
+Replace `<YOUR-PLAN>` with your plan filename (without path or `.md` extension).
+
+---
+
+Read these files first:
+1. docs/plans/AI-Plan-Hardening-Runbook.md
+2. docs/plans/<YOUR-PLAN>.md
+3. docs/plans/DEPLOYMENT-ROADMAP.md
+4. .github/copilot-instructions.md
+
+Also check for prior phase lessons (if they exist — skip if not found):
+- `/memories/repo/conventions.md` — patterns and conventions from earlier phases
+- `/memories/repo/lessons-learned.md` — past mistakes to avoid
+- `/memories/repo/forbidden-patterns.md` — patterns that caused regressions
+
+**Prior plan postmortems (Phase-25 L5 closed loop)**:
+Before hardening, also scan `.forge/plans/<plan-basename>/postmortem-*.json` for
+the plan you are hardening (same basename as the draft). If any exist, read the
+newest 3 and factor them into the Scope Contract:
+
+- If `retriesPerSlice` shows a slice that flapped 3+ times, strengthen its
+  validation gate or split it into smaller slices.
+- If `gateFlaps > 0` on multiple prior runs, your gate commands are unstable —
+  replace grep/pipe-based gates with allowlisted node assertions.
+- If `topFailureReason` repeats across postmortems, add a mitigation in the
+  current plan's Risks section and reference the prior failure.
+- If `costDelta.delta` trends upward across runs, flag a budget risk in the
+  plan's Budget section.
+- If no postmortems exist, note "No prior postmortems — first execution."
+
+This is a READ of the postmortems — do NOT modify them. Pure signal for the
+hardener.
+
+Now act as a PLAN HARDENING AGENT (see the Plan Hardening Prompt in the runbook).
+
+**CLARIFICATION CHECK**: Before hardening, scan the plan for `[NEEDS CLARIFICATION]` markers.
+If any exist, list them all and wait for the user to resolve them before proceeding.
+
+Harden <YOUR-PLAN>.md by adding all 6 Mandatory Template Blocks from the runbook:
+- Scope Contract (in-scope, out-of-scope, forbidden actions)
+- Required Decisions (flag anything implicit as TBD)
+- Acceptance Criteria (use **MUST**: and **SHOULD**: prefixes for each criterion — the analyzer scores these)
+- Execution Slices (30-120 min each, with Depends On + Context Files + Parallelism tag)
+- Re-anchor Checkpoints
+- Definition of Done (must include Reviewer Gate checkbox)
+- Stop Conditions
+
+**IMPORTANT**: Format Acceptance Criteria as:
+```
+- **MUST**: Description of required criterion
+- **SHOULD**: Description of recommended criterion
+```
+Do NOT use `- [ ]` checkbox format — the analyzer cannot score checkboxes as effectively.
+
+For each Execution Slice:
+- Tag as [parallel-safe] (with Parallel Group) or [sequential]
+- Include relevant .github/instructions/*.instructions.md files in Context Files
+- List only instruction files whose domain matches the slice (not all 17 — each consumes context budget)
+- Add a Parallel Merge Checkpoint after each parallel group
+- **Validation gates MUST be executable commands**, not prose descriptions:
+  - **Good**: `**Validation Gate**:\n\`\`\`bash\ndotnet test\n\`\`\``
+  - **Good**: `**Validation Gate**: \`dotnet build\``
+  - **Bad**: `**Validation Gate**: Files compile, DTOs have correct properties`
+  - For manual checks that can't be automated, prefix with `[manual]`: `**Validation Gate**: [manual] UI layout matches mockup`
+
+Do NOT add features or expand scope. Only structure what already exists.
+
+After hardening, run a TBD RESOLUTION SWEEP:
+1. Scan Required Decisions for TBD entries.
+2. Resolve using context from the plan, roadmap, and guardrails.
+3. If a TBD requires human judgment, list it and ask the user.
+4. Wait for all TBDs to be resolved before finalizing.
+
+Also validate parallelism tags:
+- Are [parallel-safe] slices truly independent (no shared files)?
+- Are Parallel Merge Checkpoints present after each parallel group?
+
+After all sections are drafted, run a **PLAN QUALITY SELF-CHECK** before outputting:
+
+1. Does every Execution Slice have at least one validation gate with an exact command?
+2. Does every [parallel-safe] slice avoid touching files shared by other slices in the same group?
+3. Are all REQUIRED DECISIONS resolved (no TBD remaining)?
+4. Does the Definition of Done include "Reviewer Gate passed (zero 🔴 Critical)"?
+5. Do the Stop Conditions cover: build failure, test failure, scope violation, and security breach?
+6. Does every slice list only the instruction files relevant to its domain (not all 17)?
+7. Are MUST acceptance criteria from the spec traceable to at least one slice's validation gate?
+8. Do all validation gate commands pass the **Gate Portability Rules** below?
+
+### Gate Portability Rules
+
+Gate commands run via `execSync` on the host OS — on Windows this means `cmd.exe`, not bash.
+Every gate command MUST be cross-platform. Apply these rules when writing gates:
+
+> **Windows + Git for Windows note**: If the user has Git for Windows installed, the orchestrator
+> auto-wraps gate commands that contain Unix-shell syntax (`grep`, `test`, `sed`, `awk`, `cat`, etc.)
+> in `bash -c "..."` automatically. In that case, Unix-shell gates work fine. Without Git for Windows,
+> only `node`, `npx`, and `npm` commands are safe in gates on Windows — use `node -e` one-liners
+> for all non-vitest checks.
+
+| Rule | Bad | Good |
+|------|-----|------|
+| **No Unix-only commands** | `grep -c "foo" file.md` | `node -e "const c=require('fs').readFileSync('file.md','utf8');if(!c.includes('foo'))throw new Error('missing');console.log('ok');"` |
+| **No `/dev/stdin`** | `curl ... \| node -e "...readFileSync('/dev/stdin',...)"` | `readFileSync(0,'utf8')` for fd 0, or move to vitest |
+| **No `/tmp/` or `/dev/null`** | `echo '{}' > /tmp/test.json` | `node -e "require('fs').writeFileSync(require('os').tmpdir()+'/test.json','{}')"` |
+| **No pipe to grep** | `git status \| grep -c "Ignored"` | `node -e "const{execSync}=require('child_process');const o=execSync('git status',{encoding:'utf8'});..."` |
+| **No `//` comments in `node -e`** | `node -e "const x=1; // comment"` | Remove comments — `//` swallows the rest of a one-liner |
+| **No `--grep` with vitest** | `npx vitest run --grep "pattern"` | Run the full suite: `bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"` |
+| **No `pforge` CLI in gates** | `pforge runbook plan.md` | `pwsh ./pforge.ps1 runbook plan.md` or rewrite as `node -e` |
+| **No `pforge analyze` in gates** | `pforge analyze docs/plans/Phase-X.md` | Omit — the orchestrator auto-runs analyze post-execution. Use `pforge regression-guard <plan>` if you need a doc-integrity gate. `pforge analyze` exits 1 on noisy text-match coverage heuristics and reliably false-negatives Slice 5 recursive-hardening gates (observed on Phases 38.1-38.8). |
+| **No multi-line `node -e`** | `node -e "\n import(...)...\n"` | Collapse to single line |
+| **No `cat FILE`** | `cat VERSION` | `node -e "console.log(require('fs').readFileSync('VERSION','utf8').trim())"` |
+| **`npx vitest` from project root** | `npx vitest run` (picks up wrong version) | `bash -c "cd pforge-mcp && npx vitest run"` |
+| **curl localhost:* in non-final slices** | `curl http://localhost:3100/api/...` | Move runtime API checks to vitest integration tests |
+| **No nested escaped quotes inside `bash -c "..."`** (meta-bug [#93](https://github.com/srnichols/plan-forge/issues/93)) | `bash -c "grep -q onclick=\"forgeMasterPickPrompt\" file.html"` — collapses on Windows `cmd → bash` with `/bin/bash: -c: line 1: unexpected EOF while looking for matching quote` | Use single quotes inside double: `bash -c "grep -q onclick='forgeMasterPickPrompt' file.html"`, OR move to `node -e` with `.includes()`, OR rely on an existing vitest test that already proves the absence/presence. Never stack three levels of escapes (`\\\"`) — they survive some quoting layers and break on others. |
+| **Don't wrap allowlisted tools in `bash -c`** (meta-bug [#171](https://github.com/srnichols/plan-forge/issues/171)) | `bash -c "pwsh -NoProfile -File pforge.ps1 ..."`, `bash -c "node script.mjs"`, `bash -c "npx vitest run"` — `where bash` resolves to WSL bash on Windows, which has no Windows PATH; `pwsh`/`node`/`npx` calls inside fail with `command not found`. Empirically bit Phase GITHUB-B and Phase CRUCIBLE-IMPORT-CLI. | Call the allowlisted tool directly: `pwsh -NoProfile -File pforge.ps1 ...`, `node script.mjs`, `npx vitest run`. The orchestrator auto-routes commands containing pipes or shell-chains through Git Bash. **Only use `bash -c` when you genuinely need bash semantics**: heredocs, `cd dir && cmd` (because `cd` chains through `&&`), or multi-tool pipelines where the wrapping is explicit. As of v2.93.1, `runGate` also routes literal `bash -c` gates through Git Bash, but authoring the bare command is still preferred. |
+
+**Preferred gate pattern** (covers 90% of slices):
+```bash
+node pforge-mcp/server.mjs --validate
+bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
+```
+
+Add additional `node -e` checks only when the vitest suite doesn't cover a specific validation (e.g., checking a file exists, verifying an export).
+
+If any check fails, revise the plan before outputting. Do not present a plan that fails its own quality check.
+
+**After hardening, run the automated gate linter** (if `forge_analyze` or the orchestrator is available):
+```
+node --input-type=module -e "import{lintGateCommands}from'./pforge-mcp/orchestrator.mjs';const r=lintGateCommands('<plan-file>');console.log(r.summary);r.errors.forEach(e=>console.log('ERR:',e.message));r.warnings.forEach(w=>console.log('WARN:',w.message));"
+```
+Fix all errors and warnings before declaring the plan hardened. The same lint runs as a pre-flight check in `runPlan()` — errors will block execution.
+
+Finally, run a **SESSION BUDGET CHECK**:
+
+- Count total slices
+- If 8+ slices: recommend a session break point (e.g., "Plan for a session break after Slice N —
+  commit progress, start a new session, resume from Slice N+1")
+- If any single slice has 5+ Context Files: flag it and suggest trimming to the 3 most relevant
+
+Output a TBD summary:
+| # | Decision | Status | Resolution |
+|---|----------|--------|------------|
+
+If ALL TBDs resolved: "Plan hardened ✅ — proceed to Step 3 (Execute Slices)"
+If ANY need input: list them and WAIT.
+
+---
+
+## lockHash — Drift Protection (A6)
+
+After all sections are finalized and the plan quality self-check passes, compute and insert the `lockHash` into the plan's frontmatter as the **final hardening action**:
+
+1. Compute the hash using `computeLockHash(planContent)` from `pforge-mcp/orchestrator.mjs`:
+   ```bash
+   node -e "import('./pforge-mcp/orchestrator.mjs').then(m=>require('fs').promises.readFile('<PLAN_PATH>','utf-8').then(c=>console.log(m.computeLockHash(c))))"
+   ```
+   Or invoke from the orchestrator:
+   ```bash
+   node --input-type=module -e "
+   import { computeLockHash } from './pforge-mcp/orchestrator.mjs';
+   import { readFileSync } from 'node:fs';
+   const c = readFileSync('<PLAN_PATH>', 'utf-8');
+   console.log(computeLockHash(c));
+   "
+   ```
+
+2. Add or replace the `lockHash:` field in the plan's YAML frontmatter (the `---` block at the top):
+   ```yaml
+   ---
+   lockHash: <computed-hex>
+   ---
+   ```
+
+3. **Do NOT re-compute the hash after inserting it.** The orchestrator strips frontmatter before hashing, so the `lockHash` field itself is excluded from the hash input. Inserting it does not change the computed value.
+
+4. **Template-only change**: this step does NOT retroactively re-harden plans that are already running. A plan without `lockHash` runs exactly as before (backwards-compatible).
+
+5. If any slice Scope, Validation Gate, or Forbidden Actions content changes after the lockHash is written, you MUST re-compute and update the lockHash before the plan can execute.
+
+---
+
+## Retro / Closure Slice — Status-Header Rewrite (meta-bug [#212](https://github.com/srnichols/plan-forge/issues/212))
+
+The final slice of a hardened plan (typically `S<N>` named "Retro", "Closure", or "Phase closure")
+appends a `## What actually shipped` section to the plan file. That section alone is **not enough**
+— the plan's top-of-file status block stays stale (`status: HARDENED — awaiting Execution Hold lift`,
+or `> **Status**: in-progress`) and misleads anyone scanning the directory for what's done versus
+what's still running.
+
+The retro slice MUST also rewrite the plan's status header in the same commit:
+
+1. **YAML frontmatter** (if present): change `status:` from `HARDENED` / `in-progress` / `running`
+   to `complete` (or `shipped`). Example:
+   ```yaml
+   ---
+   status: complete
+   shippedAt: 2026-MM-DD
+   shippedIn: vX.Y.Z
+   lockHash: <unchanged>
+   ---
+   ```
+
+2. **Quote-block status line** (first line after the title): rewrite from
+   `> **Status**: HARDENED — awaiting Execution Hold lift` (or similar)
+   to
+   `> **Status**: ✅ Complete. All <N> slices shipped. See [What actually shipped](#what-actually-shipped) for the retro.`
+
+3. **Validation gate for the retro slice MUST include both checks**, not just the retro-section check:
+   ```bash
+   node -e "const c=require('fs').readFileSync('docs/plans/<YOUR-PLAN>.md','utf8'); if(!c.includes('## What actually shipped'))throw new Error('retro section missing'); if(!/^>\\s*\\*\\*Status\\*\\*:\\s*(✅|Complete)/m.test(c))throw new Error('status header not rewritten to Complete'); console.log('ok retro+status');"
+   ```
+
+4. Do NOT change `lockHash` during the retro — the retro slice runs AFTER all gated work and is
+   permitted to mutate only the status header, the `## What actually shipped` section, and the
+   `Progress tracker` checkboxes. Re-hashing here would break the orchestrator's drift detection
+   for any in-flight retries.
+
+This rule applies to every hardened plan with a retro/closure slice. If a plan has no explicit
+retro slice, the shipper (`pforge ship` / `step6-ship.prompt.md`) is responsible for the same
+status-header rewrite at tag time.
+
+---
+
+## Release-Slice Hardening (when the plan ships a tag)
+
+If any slice contains `chore(release): vX.Y.Z` or creates a git tag, that slice
+is a **release slice** and MUST include these gates verbatim (meta-bug #129):
+
+```bash
+# 1. Refuse to release if the target tag already exists on origin.
+git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q . && {
+  echo "FATAL: tag v$VERSION already exists on origin — refusing to release"
+  exit 1
+} || true
+
+# 2. Refuse to retrograde the version (target must be > latest shipped tag).
+LATEST=$(git ls-remote --tags origin 'refs/tags/v[0-9]*' | \
+  awk -F/ '{print $NF}' | sort -V | tail -1 | sed 's/^v//')
+node -e "
+  const a='$VERSION'.split('.').map(Number);
+  const b='$LATEST'.split('.').map(Number);
+  for (let i=0;i<3;i++){if((a[i]||0)>(b[i]||0))process.exit(0);if((a[i]||0)<(b[i]||0))process.exit(1);}
+  process.exit(1);
+" || { echo "FATAL: v$VERSION is not strictly greater than latest v$LATEST"; exit 1; }
+```
+
+The orchestrator now also runs this as a **preflight** check on the plan
+filename / frontmatter / `chore(release)` line — see
+`detectVersionCollision()` in orchestrator.mjs. The plan-level gate above is
+a defense-in-depth backup; both must pass.
+
+If the plan intentionally re-tags a shipped version (almost never), the
+operator must pass `--allow-retrograde` to bypass the orchestrator preflight,
+and the plan must include a Stop Condition explaining why.
+
+---
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before hardening**: `search_thoughts("<phase topic>", project: "Falsify", created_by: "copilot-vscode")` — load prior decisions, patterns, and post-mortem lessons that inform scope and slicing
+- **During TBD resolution**: `search_thoughts("<ambiguous topic>", project: "Falsify", created_by: "copilot-vscode", type: "decision")` — check if prior decisions already resolve the ambiguity
+- **After hardening**: `capture_thought("Plan hardened: <phase name> — N slices, key decisions: ...", project: "Falsify", created_by: "copilot-vscode", source: "plan-forge-step-2-hardening", type: "decision")` — persist hardening decisions for the execution session

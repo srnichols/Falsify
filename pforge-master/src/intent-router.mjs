@@ -1,0 +1,575 @@
+/**
+ * Plan Forge — Forge-Master Intent Router (Phase-28, Slice 2).
+ *
+ * Two-stage classifier:
+ *   1. Keyword regex table (fast path, zero cost)
+ *   2. Router-model call (only when keyword match is ambiguous)
+ *
+ * Lanes:
+ *   - build              — user wants to create/add/change a feature → Crucible
+ *   - operational        — status, cost, health, memory, watcher queries
+ *   - troubleshoot       — bug, incident, failure investigation
+ *   - offtopic           — everything outside Plan Forge's domain
+ *   - advisory           — architectural guidance and principled recommendations
+ *   - tempering          — tempering gate evaluation and enforcement checks
+ *   - principle-judgment — principled architectural decisions and principle reviews
+ *   - meta-bug-triage    — triage of meta-bugs, self-repair, plan/orchestrator defects
+ *
+ * Exports:
+ *   classify(message, opts?) → {lane, confidence: "low"|"medium"|"high", reason, suggestedTools}
+ *
+ * @module forge-master/intent-router
+ */
+
+import { getForgeMasterConfig } from "./config.mjs";
+import { query as queryCacheRaw, addEntry as addCacheEntry } from "./embedding/cache.mjs";
+
+// ─── Lane Constants ─────────────────────────────────────────────────
+
+export const LANES = Object.freeze({
+  BUILD: "build",
+  OPERATIONAL: "operational",
+  TROUBLESHOOT: "troubleshoot",
+  OFFTOPIC: "offtopic",
+  ADVISORY: "advisory",
+  TEMPERING: "tempering",
+  PRINCIPLE_JUDGMENT: "principle-judgment",
+  META_BUG_TRIAGE: "meta-bug-triage",
+});
+
+// ─── Suggested Tools per Lane ───────────────────────────────────────
+
+export const LANE_TOOLS = Object.freeze({
+  [LANES.BUILD]: [
+    "forge_crucible_submit",
+    "forge_crucible_ask",
+    "forge_crucible_preview",
+    "forge_crucible_list",
+  ],
+  [LANES.OPERATIONAL]: [
+    "forge_plan_status",
+    "forge_phase_status",
+    "forge_status",
+    "forge_cost_report",
+    "forge_estimate_quorum",
+    "forge_health_trend",
+    "forge_watch",
+    "forge_watch_live",
+    "brain_recall",
+    "forge_memory_report",
+    "forge_search",
+    "forge_timeline",
+  ],
+  [LANES.TROUBLESHOOT]: [
+    "forge_diagnose",
+    "forge_bug_list",
+    "forge_watch_live",
+    "forge_smith",
+    "forge_sweep",
+    "forge_analyze",
+    "forge_alert_triage",
+    "forge_regression_guard",
+    "forge_search",
+    "forge_timeline",
+  ],
+  [LANES.OFFTOPIC]: [],
+  [LANES.ADVISORY]: [
+    "forge_search",
+    "forge_timeline",
+    "brain_recall",
+    "forge_capabilities",
+    "forge_hotspot",
+    "forge_drift_report",
+    "forge_plan_status",
+    "forge_cost_report",
+    "forge_graph_query",
+    "forge_patterns_list",
+  ],
+  [LANES.TEMPERING]: [],
+  [LANES.PRINCIPLE_JUDGMENT]: [],
+  [LANES.META_BUG_TRIAGE]: [],
+});
+
+// ─── Lane Descriptors ────────────────────────────────────────────────
+
+/**
+ * Per-lane metadata used by the reasoning loop.
+ * `recommendedTierBump: 1` marks lanes as high-stakes — the reasoning loop
+ * will auto-escalate to the next higher tier when it receives a message in
+ * one of these lanes (unless the caller opts out via `autoEscalate: false`).
+ */
+export const LANE_DESCRIPTORS = Object.freeze({
+  [LANES.BUILD]:              { recommendedTierBump: 0 },
+  [LANES.OPERATIONAL]:        { recommendedTierBump: 0 },
+  [LANES.TROUBLESHOOT]:       { recommendedTierBump: 0 },
+  [LANES.OFFTOPIC]:           { recommendedTierBump: 0 },
+  [LANES.ADVISORY]:           { recommendedTierBump: 0 },
+  [LANES.TEMPERING]:          { recommendedTierBump: 1 },
+  [LANES.PRINCIPLE_JUDGMENT]: { recommendedTierBump: 1 },
+  [LANES.META_BUG_TRIAGE]:    { recommendedTierBump: 1 },
+});
+
+// ─── Keyword Regex Table ────────────────────────────────────────────
+
+/**
+ * Each entry: { pattern: RegExp, lane: string, weight: number }
+ * Higher weight = stronger signal. Evaluated in order; all matches
+ * accumulate into a lane score map.
+ */
+const KEYWORD_RULES = [
+  // ── Build signals ──
+  { pattern: /\b(i want to|i'd like to|let's|can we|help me)\b.{0,40}\b(build|create|add|implement|develop|introduce|design|scaffold|make)\b/i, lane: LANES.BUILD, weight: 3 },
+  { pattern: /\b(new feature|new phase|add.{0,15}(feature|capability|module|component))\b/i, lane: LANES.BUILD, weight: 3 },
+  { pattern: /\b(feature request|enhancement|proposal|spec out|plan out)\b/i, lane: LANES.BUILD, weight: 2 },
+  { pattern: /\bcrucible\b/i, lane: LANES.BUILD, weight: 2 },
+  { pattern: /\b(tweak|refactor|rework|redesign|overhaul)\b/i, lane: LANES.BUILD, weight: 1 },
+
+  // ── Operational signals ──
+  { pattern: /\b(status|progress|how.{0,10}(is|are|was|were)|current state)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  { pattern: /\b(cost|spend|budget|price|token|tokens|expense|billing)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(how much did|how much does|how much will|total cost|cost per)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(health|watcher|watchers|alert|alerts|trend|trends|metric|metrics)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  { pattern: /\b(memory|memories|recall|remembered|brain)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  { pattern: /\b(plan run|plan status|phase status|slice.{0,5}(passed|failed|done|complete))\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(quorum|quorum mode|estimate|projection)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  { pattern: /\b(extension|extensions|ext search|ext info)\b/i, lane: LANES.OPERATIONAL, weight: 1 },
+  { pattern: /\b(deploy journal|runbook|capabilities)\b/i, lane: LANES.OPERATIONAL, weight: 1 },
+  { pattern: /\b(drift|diff|hotspot)\b/i, lane: LANES.OPERATIONAL, weight: 1 },
+  // Phase-37.3 Slice 1 — completeness-sweep vocabulary (TODOs/stubs/mocks live in operational readouts)
+  { pattern: /\b(sweep|completeness\s+sweep|todos?|stubs?|mocks?|incomplete|placeholders?)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Phase-37.3 Slice 1 — read-only Crucible verbs (list/show/view smelts → operational, not build)
+  { pattern: /\b(list|show|view|display)\s+(?:all\s+)?(?:active\s+|pending\s+|open\s+|crucible\s+)*(smelts?|crucible\s+entries?|crucible\s+items?)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Phase-38 — session/turn recall and conversational context
+  { pattern: /\b(remind me|recap|summarize|left off|continue from|this session|this conversation|earlier.{0,15}(asked|said|mentioned|discussed))\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(last\s+(session|time|conversation)|previous\s+session|past\s+sessions?)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(prior\s+chats?|in\s+a\s+previous\s+chat|earlier\s+planning)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Phase-38.R3 — first-person session recall ("did I say", "I mentioned", "we agreed")
+  { pattern: /\b(did I say|I said|I mentioned|I told you|we decided|we agreed|we discussed)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Phase-38.R3 — "execute/run the plan" → operational (not advisory "review")
+  { pattern: /\b(execute|run)\s+(the\s+)?plan\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(note for later|keep in mind|for later|remember that)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  { pattern: /\b(decisions?\s+we.{0,10}made|what\s+(did|have)\s+(i|we)\s+(decide|commit|choose|pick|say))\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(everything\s+we.{0,10}(talked|discussed)|every\s+decision|key\s+outcomes?)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Phase-38 — multi-step orchestration verbs
+  { pattern: /\b(pause|abort|rollback|rolled\s+back|restore|queue\s+(it|as)|do\s+not\s+execute)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(create\s+a\s+plan|execute.{0,10}(first|next|the)\s+slice)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  { pattern: /\b(apply\s+a\s+hotfix|in-?flight\s+run|working\s+tree)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Meta-bug #98 — conversational operational phrasings that previously slipped
+  // through keyword scoring and fell out to the "no_signals → offtopic" default.
+  { pattern: /\b(pick\s+up\s+(the\s+)?thread|pick\s+up\s+where|back\s+to\s+(the|that|what)|where\s+we\s+left\s+off)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(preferences?|settings?\s+I|my\s+(model|mode|quorum|threshold|config|setting)s?)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(open\s+bugs?|registered\s+bugs?|bug\s+registry)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  { pattern: /\b(failing\s+gate|gate\s+failure|gate\s+failed|scope\s+contract|violates?\s+(the\s+)?scope)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  // Phase-38 — quorum/complexity/cost-savings vocabulary
+  { pattern: /\b(speed\s+mode|power\s+mode|auto.?mode|complexity\s+scores?|per-?slice\s+complexity)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  { pattern: /\b(how\s+much\s+would\s+I\s+save|save.{0,20}(moving|switching)|flip.{0,10}from.{0,10}to)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+
+  // ── Troubleshoot signals ──
+  { pattern: /\b(fail|failed|failure|failing|broken|broke|crash|crashed)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  { pattern: /\b(bug|bugs|defect|defects|incident|error|errors|exception)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  { pattern: /\b(why did|why does|why is|root cause|diagnose|debug|investigate)\b/i, lane: LANES.TROUBLESHOOT, weight: 2 },
+  { pattern: /\b(regression|regressed|test.{0,5}fail|build.{0,5}fail)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  { pattern: /\b(fix|fixing|troubleshoot|trouble|problem|issue)\b/i, lane: LANES.TROUBLESHOOT, weight: 1 },
+  { pattern: /\b(what went wrong|not working|doesn't work|stopped working)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  // Combined "why + fail" is a very strong investigation signal (outweighs phase/slice operational terms)
+  { pattern: /\b(why did|why does|why is)\b.{0,60}\b(fail|failed|failure|error|crash)\b/i, lane: LANES.TROUBLESHOOT, weight: 4 },
+  // ── Phase-32 Slice 2: meta-bug / self-repair family → strong troubleshoot signal
+  { pattern: /\b(meta[-\s]?bug|self[-\s]?repair|plan[-\s]?defect|orchestrator[-\s]?defect|prompt[-\s]?defect)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  // Phase-38 — service unavailability / fallback vocabulary
+  { pattern: /\b(unavailable|fall\s*back|fallback|rate[- ]limiting\s+us)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  { pattern: /\b(reject\s+it|regenerate|violates?\s+the\s+scope)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+
+  // ── Tempering lane signals ─────────────────────────────────────────
+  { pattern: /\btempering\s+(gate|evaluation|check|enforcement)\b/i, lane: LANES.TEMPERING, weight: 4 },
+  { pattern: /\b(run|evaluate|execute)\s+(a\s+)?tempering\b/i, lane: LANES.TEMPERING, weight: 3 },
+
+  // ── Principle-judgment lane signals ───────────────────────────────
+  { pattern: /\bprinciple\s+judgment\b/i, lane: LANES.PRINCIPLE_JUDGMENT, weight: 5 },
+  { pattern: /\bprincipled?\s+(decision|review|call|assessment|ruling)\b/i, lane: LANES.PRINCIPLE_JUDGMENT, weight: 3 },
+
+  // ── Meta-bug-triage lane signals ──────────────────────────────────
+  { pattern: /\btriage\b.{0,40}\b(meta[-\s]?bug|self[-\s]?repair|plan[-\s]?defect|orchestrator[-\s]?defect)\b/i, lane: LANES.META_BUG_TRIAGE, weight: 5 },
+  { pattern: /\b(triage|triaging)\b/i, lane: LANES.META_BUG_TRIAGE, weight: 3 },
+
+  // ── Phase-32 Slice 2: Plan Forge domain glossary ──────────────────
+  // Slices and gates with a Plan Forge context marker (prevents "slice me an apple")
+  { pattern: /\b(slice|slices|gate|gates)\s+(\d+|status|passed|failed|done|complete|ran|running|in.progress|stuck|blocked)/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Plan hardening vocabulary
+  { pattern: /\b(harden|hardened|hardening)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Plan execution / resume vocabulary
+  { pattern: /\b(executed|execution|resume-from|resume\s+from)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Tempering / baseline / enforcement signals
+  { pattern: /\b(tempering|baseline|enforcement|suppressed)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Quorum extras: reflexion, retry, escalation
+  { pattern: /\b(reflexion|escalation|retry|retried|attempt)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Phase reference (e.g. "Phase-33", "Phase 27.2") → strong operational signal
+  { pattern: /\b(phase[-\s]?\d+(\.\d+)?)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // pforge CLI / run-plan invocation references
+  { pattern: /\b(pforge|run-plan|forge\s+run|forge\s+plan)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Crucible extras: smelt, preview, finalize
+  { pattern: /\b(smelt|smelts|smelted|preview|finalize|finalise)\b/i, lane: LANES.BUILD, weight: 2 },
+
+  // ── Phase-37 Slice 2: troubleshoot lane calibration patterns ─────────────
+  // Forge-Master runtime components: orchestrator / worker / gate vocabulary
+  { pattern: /\b(orchestrator|worker|gate|timeout|stuck|hang|deadlock|erroring|crash|exception)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+  // Recurrence / "did we see this before" pattern
+  { pattern: /\b(did we see|seen before|recurring|again|last time)\b/i, lane: LANES.TROUBLESHOOT, weight: 2 },
+  // Incident / outage family
+  { pattern: /\b(incident|outage|alert)\b/i, lane: LANES.TROUBLESHOOT, weight: 3 },
+
+  // ── Phase-37 Slice 2: advisory lane calibration patterns ──────────────────
+  // Architecture / design / abstraction / principle vocabulary
+  { pattern: /\b(architecture|design|refactor|abstraction|principle|over.?engineer|separation of concerns)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  // Review / audit / critique / opinion vocabulary
+  { pattern: /\b(review|audit|critique|thoughts on|opinion)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  // Decision-framing vocabulary: should I/we, best path, trade-offs
+  { pattern: /\b(should i|should we|best path|best approach|way forward|trade.?offs?)\b/i, lane: LANES.ADVISORY, weight: 3 },
+
+  // ── Phase-37 Slice 1: operational lane calibration patterns ──────────────
+  // Combined phase/slice reference (covers "slice 4" without the longer context gates)
+  { pattern: /\b(phase[- ]?\d+|slice\s+\d+)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Cost/spend family — adds "spent", "tokens", "quorum", "estimate" variants
+  { pattern: /\b(cost|spend|spent|budget|tokens|quorum|estimate)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+  // Shipping/release vocabulary
+  { pattern: /\b(ship|shipped|landed|merged|released|deployed)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Status vocabulary expansion: adds running/ran/failed/passed/green/red
+  { pattern: /\b(status|progress|running|ran|failed|passed|green|red)\b/i, lane: LANES.OPERATIONAL, weight: 2 },
+  // Memory/recall family — weight 3 (stronger than the existing weight-2 rule)
+  { pattern: /\b(memory|recall|brain|remembered)\b/i, lane: LANES.OPERATIONAL, weight: 3 },
+
+  // ── Advisory signals ──
+  { pattern: /\bshould\s+(i|we)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(what|which)\s+is\s+the\s+(right|best)\s+(approach|path|way|choice)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(architecture\s+advice|architect\s+this|arch\s+review)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(refactor\s+or\s+ship|ship\s+vs|fix\s+later|do\s+it\s+right)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(cto|principal\s+engineer|staff\s+engineer)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  { pattern: /\b(recommend|recommendation|your\s+take)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  { pattern: /\bhelp\s+me\s+decide\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(what|which)\s+(path|direction)\s+(should|to|forward)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  // Phase-38 — architecture/analysis advisory vocabulary
+  { pattern: /\b(dependency\s+graph|data\s+flow|call\s+graph|module.{0,10}depend|services?\s+(are\s+)?affected)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(code\s+smells?|anti[- ]?patterns?|recurring\s+patterns?|emerging.{0,15}pattern)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(daily\s+digest|overall\s+health|project\s+health|health.{0,10}summary|one[- ]paragraph\s+summary)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(is\s+it\s+better|better\s+architecturally|model\s+as\s+(an?\s+)?enum|pluggable\s+strategy)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(eager[- ]load\w*|lazy[- ]load\w*|expose\s+over|keep.{0,10}internal)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  { pattern: /\b(map\s+out|summarize\s+all|identify\s+common)\b/i, lane: LANES.ADVISORY, weight: 2 },
+  // Phase-38.R3 — explicit advice request + impact analysis
+  { pattern: /\badvise\b|\barchitectural\s+(guidance|advice)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(affected\s+if\s+(I|we)|impact\s+(of\s+)?chang|what\s+(breaks|changes)\s+if)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  // Phase-43 — CTO-style risk/audit prompts
+  { pattern: /\b(biggest|top|main|primary|key)\s+(risk|risks|concern|concerns|issue|issues|threat)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(what'?s|whats)\s+(at\s+risk|going\s+wrong|the\s+state\s+of|broken)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(weekly|monthly|quarterly)\s+(audit|review|risk|digest|summary)\b/i, lane: LANES.ADVISORY, weight: 3 },
+
+  // ── Off-topic signals ──
+  { pattern: /\b(weather|temperature|forecast|sports|score|game)\b/i, lane: LANES.OFFTOPIC, weight: 3 },
+  { pattern: /\b(recipe|cook|food|restaurant|movie|music|song)\b/i, lane: LANES.OFFTOPIC, weight: 3 },
+  { pattern: /\b(joke|funny|tell me a|what is the meaning of life)\b/i, lane: LANES.OFFTOPIC, weight: 2 },
+  { pattern: /\b(stock|stocks|crypto|bitcoin|investment|portfolio)\b/i, lane: LANES.OFFTOPIC, weight: 3 },
+  { pattern: /\b(write me|generate code|write code|code for)\b/i, lane: LANES.OFFTOPIC, weight: 2 },
+];
+
+// ─── Off-Topic Redirect (canned response) ───────────────────────────
+
+export const OFFTOPIC_REDIRECT =
+  "I'm scoped to Plan Forge topics. Try asking about:\n" +
+  "  \u2022 operational \u2014 \"what's the status of slice 4\", \"cost report for this week\"\n" +
+  "  \u2022 troubleshoot \u2014 \"why did the gate fail\", \"diagnose this incident\"\n" +
+  "  \u2022 build \u2014 \"I want to add OAuth\" (routes to Crucible)\n" +
+  "  \u2022 advisory \u2014 \"should I refactor or ship\", \"architecture advice\"\n" +
+  "Outside those lanes I'll redirect you.";
+
+// Internal confidence thresholds (used within deriveFromScores only)
+const HIGH_CONFIDENCE = 0.85;
+const AMBIGUOUS_THRESHOLD = 0.55;
+
+/**
+ * Convert a raw keyword score to a confidence tier string.
+ * @param {number} score
+ * @returns {"low"|"medium"|"high"}
+ */
+function scoreToConfidence(score) {
+  if (score <= 2) return "low";
+  if (score <= 5) return "medium";
+  return "high";
+}
+
+// ─── Keyword Classification ─────────────────────────────────────────
+
+/**
+ * Score a message against the keyword table.
+ * @param {string} message
+ * @returns {{ scores: Record<string, number>, totalWeight: number }}
+ */
+function scoreKeywords(message) {
+  const scores = {
+    [LANES.BUILD]: 0,
+    [LANES.OPERATIONAL]: 0,
+    [LANES.TROUBLESHOOT]: 0,
+    [LANES.OFFTOPIC]: 0,
+    [LANES.ADVISORY]: 0,
+    [LANES.TEMPERING]: 0,
+    [LANES.PRINCIPLE_JUDGMENT]: 0,
+    [LANES.META_BUG_TRIAGE]: 0,
+  };
+  let totalWeight = 0;
+
+  for (const rule of KEYWORD_RULES) {
+    if (rule.pattern.test(message)) {
+      scores[rule.lane] += rule.weight;
+      totalWeight += rule.weight;
+    }
+  }
+
+  return { scores, totalWeight };
+}
+
+/**
+ * Derive lane + raw score from keyword scores.
+ * @param {{ scores: Record<string, number>, totalWeight: number }} result
+ * @returns {{ lane: string, score: number } | null}
+ */
+function deriveFromScores({ scores, totalWeight }) {
+  if (totalWeight === 0) return null;
+
+  const sorted = Object.entries(scores)
+    .filter(([, s]) => s > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (sorted.length === 0) return null;
+
+  // OFFTOPIC tie-breaker: when offtopic score >= any non-offtopic score, offtopic wins.
+  const offtopicScore = scores[LANES.OFFTOPIC] ?? 0;
+  const maxNonOfftopicScore = Math.max(
+    0,
+    ...Object.entries(scores)
+      .filter(([lane]) => lane !== LANES.OFFTOPIC)
+      .map(([, s]) => s),
+  );
+
+  if (offtopicScore > 0 && offtopicScore >= maxNonOfftopicScore) {
+    return { lane: LANES.OFFTOPIC, score: offtopicScore };
+  }
+
+  const [topLane, topScore] = sorted[0];
+  const numericConfidence = topScore / totalWeight;
+
+  // If the top lane has a clear lead, classify with confidence
+  if (sorted.length === 1 || numericConfidence >= AMBIGUOUS_THRESHOLD) {
+    return { lane: topLane, score: topScore };
+  }
+
+  // Multiple lanes scored but no clear winner — ambiguous
+  return null;
+}
+
+// ─── Router-Model Fallback ──────────────────────────────────────────
+
+const ROUTER_PROMPT = `You are a message classifier for Plan Forge, a software plan orchestration system.
+
+Classify the user's message into exactly ONE lane:
+- "build" — the user wants to create, add, implement, or design a new feature, phase, or component
+- "operational" — the user asks about status, cost, health, metrics, memory, watchers, extensions, plans, or runs
+- "troubleshoot" — the user asks about bugs, failures, errors, incidents, regressions, or root causes
+- "advisory" — the user asks for architectural guidance, a recommendation, or a principled decision ("should I", "what's the right approach", "recommend a path")
+- "tempering" — the user requests a tempering gate evaluation, enforcement check, or tempering run
+- "principle-judgment" — the user asks for a principled architectural decision, principle review, or principle ruling
+- "meta-bug-triage" — the user wants to triage a meta-bug, self-repair issue, plan defect, or orchestrator defect
+- "offtopic" — the message is unrelated to Plan Forge (weather, personal questions, code generation, etc.)
+
+Respond with ONLY a JSON object: {"lane": "<lane>"}
+Do not include any other text.
+
+User message: `;
+
+/**
+ * Call the router model for ambiguous classification.
+ * @param {string} message
+ * @param {{ callApiWorker: Function, routerModel: string, routerProvider: object, priorTurns?: object[] }} deps
+ * @returns {Promise<string|null>} lane name or null on failure
+ */
+async function callRouterModel(message, deps) {
+  try {
+    let prompt = ROUTER_PROMPT;
+    if (deps.priorTurns && deps.priorTurns.length > 0) {
+      const contextLines = deps.priorTurns
+        .slice(-5)
+        .map(t => (t.userMessage || "").trim().slice(0, 100))
+        .filter(Boolean)
+        .map(m => `- ${JSON.stringify(m)}`)
+        .join("\n");
+      if (contextLines) {
+        prompt = `Recent conversation (last user messages):\n${contextLines}\n\n${ROUTER_PROMPT}`;
+      }
+    }
+    const result = await deps.callApiWorker(
+      prompt + JSON.stringify(message),
+      deps.routerModel,
+      deps.routerProvider,
+      { timeout: 15_000, role: "forge-master-router" },
+    );
+
+    if (!result?.output) return null;
+
+    const text = result.output.trim();
+    // Try JSON parse first
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.lane && Object.values(LANES).includes(parsed.lane)) {
+        return parsed.lane;
+      }
+    } catch { /* not JSON, try regex extraction */ }
+
+    // Fallback: look for a lane name in the output
+    for (const lane of Object.values(LANES)) {
+      if (text.toLowerCase().includes(lane)) return lane;
+    }
+
+    return null;
+  } catch {
+    return null; // graceful degradation — keyword-only
+  }
+}
+
+// ─── Public API ─────────────────────────────────────────────────────
+
+/**
+ * Classify a user message into one of four lanes.
+ *
+ * Stage 1: keyword regex table (fast, zero cost).
+ * Stage 2: router-model call (only when keywords are ambiguous).
+ * Fallback: if router model unavailable, falls back to keyword-only
+ *           with reduced confidence.
+ *
+ * @param {string} message — the user's input text
+ * @param {{
+ *   cwd?: string,
+ *   callApiWorker?: Function,
+ *   detectApiProvider?: Function,
+ *   keywordOnly?: boolean,   — when true, skip stage-2 router-model entirely
+ *   priorTurns?: object[],   — recent session turns for context-aware routing
+ * }} [opts]
+ * @returns {Promise<{
+ *   lane: string,
+ *   confidence: "low"|"medium"|"high",
+ *   reason: string,
+ *   suggestedTools: string[],
+ * }>}
+ */
+export async function classify(message, opts = {}) {
+  if (!message || typeof message !== "string" || !message.trim()) {
+    return {
+      lane: LANES.OFFTOPIC,
+      confidence: "high",
+      reason: "empty_message",
+      suggestedTools: LANE_TOOLS[LANES.OFFTOPIC],
+    };
+  }
+
+  const trimmed = message.trim();
+  const embedFn = opts._embed; // DI seam for tests
+
+  // Stage 1: keyword scoring
+  const kwResult = scoreKeywords(trimmed);
+  const kwClassification = deriveFromScores(kwResult);
+
+  if (kwClassification) {
+    const result = {
+      lane: kwClassification.lane,
+      confidence: scoreToConfidence(kwClassification.score),
+      reason: "keyword_match",
+      suggestedTools: LANE_TOOLS[kwClassification.lane],
+    };
+    _writeThroughCache(trimmed, result, embedFn);
+    return result;
+  }
+
+  // Stage 1.5: embedding cache lookup (skipped when embeddingFallback === false)
+  if (opts.embeddingFallback !== false) {
+    try {
+      const cacheHits = await queryCacheRaw(trimmed, {
+        threshold: 0.85,
+        topK: 1,
+        ...(embedFn ? { _embed: embedFn } : {}),
+      });
+      if (cacheHits.length > 0) {
+        const hit = cacheHits[0];
+        return {
+          lane: hit.classification.lane,
+          confidence: hit.classification.confidence || "medium",
+          reason: "embedding-cache",
+          via: "embedding-cache",
+          suggestedTools: LANE_TOOLS[hit.classification.lane],
+        };
+      }
+    } catch (err) {
+      console.warn("embedding cache query failed", err?.message || String(err));
+    }
+  }
+
+  // No keyword match or ambiguous — try router model (skipped when keywordOnly)
+  if (!opts.keywordOnly && opts.callApiWorker && opts.detectApiProvider) {
+    const config = getForgeMasterConfig({ cwd: opts.cwd });
+    const routerProvider = opts.detectApiProvider(config.routerModel);
+
+    if (routerProvider) {
+      const modelLane = await callRouterModel(trimmed, {
+        callApiWorker: opts.callApiWorker,
+        routerModel: config.routerModel,
+        routerProvider,
+        priorTurns: opts.priorTurns,
+      });
+
+      if (modelLane) {
+        const result = {
+          lane: modelLane,
+          confidence: "medium",
+          reason: "router_model",
+          suggestedTools: LANE_TOOLS[modelLane],
+        };
+        _writeThroughCache(trimmed, result, embedFn);
+        return result;
+      }
+    }
+  }
+
+  // Fallback: if keywords scored anything at all, pick top with low confidence
+  if (kwResult.totalWeight > 0) {
+    const sorted = Object.entries(kwResult.scores)
+      .filter(([, s]) => s > 0)
+      .sort((a, b) => b[1] - a[1]);
+    const [topLane, topScore] = sorted[0];
+    const result = {
+      lane: topLane,
+      confidence: scoreToConfidence(topScore),
+      reason: "keyword_weak",
+      suggestedTools: LANE_TOOLS[topLane],
+    };
+    _writeThroughCache(trimmed, result, embedFn);
+    return result;
+  }
+
+  // No signals at all — default to offtopic. Meta-bug #98 considered
+  // flipping this to operational, but explicit tests guard the "slice
+  // me an apple" / "phase of the moon" → offtopic contract. The #98
+  // fix lives in the expanded keyword patterns above, not here.
+  return {
+    lane: LANES.OFFTOPIC,
+    confidence: "low",
+    reason: "no_signals",
+    suggestedTools: LANE_TOOLS[LANES.OFFTOPIC],
+  };
+}
+
+/**
+ * Fire-and-forget: write a successful classification to the embedding cache.
+ * Errors are swallowed — cache population must never break the classify path.
+ */
+function _writeThroughCache(text, classification, embedFn) {
+  addCacheEntry({
+    text,
+    classification: { lane: classification.lane, confidence: classification.confidence },
+    confidence: classification.confidence === "high" ? 0.95 : classification.confidence === "medium" ? 0.75 : 0.5,
+    ...(embedFn ? { _embed: embedFn } : {}),
+  }).catch(() => { /* swallow — cache write is advisory */ });
+}

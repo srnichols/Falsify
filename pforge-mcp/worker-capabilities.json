@@ -1,0 +1,220 @@
+{
+  "_comment": "Single source of truth for worker + runtime capability checks. Consumed by orchestrator.mjs detectWorkers() and pforge.ps1 Invoke-Smith Runtime & Worker Readiness section. See issue #28 for the silent-failure mode this prevents.",
+  "_version": 2,
+  "_updated": "2026-05-06",
+
+  "workers": {
+    "gh-copilot": {
+      "description": "GitHub Copilot CLI (primary worker). Probes the standalone `copilot` binary first; falls back to the legacy `gh copilot` extension for older installs.",
+      "probe": {
+        "command": "copilot",
+        "versionArgs": ["--version"],
+        "helpArgs": ["--help"],
+        "capabilityMarkers": ["--allow-all", "--prompt"],
+        "capabilityDescription": "Non-interactive prompt mode with --prompt and --allow-all (env: COPILOT_ALLOW_ALL)",
+        "fallback": {
+          "command": "gh",
+          "versionArgs": ["copilot", "--version"],
+          "helpArgs": ["copilot", "--", "--help"],
+          "capabilityMarkers": ["--yolo", "-p,", "--no-ask-user"],
+          "capabilityDescription": "Legacy gh copilot extension agentic mode"
+        }
+      },
+      "minVersion": "1.0.32",
+      "versionRegex": "GitHub Copilot CLI\\s+v?(\\d+\\.\\d+\\.\\d+)",
+      "defaultModel": "claude-sonnet-4.6",
+      "invocation": {
+        "cmd": "copilot",
+        "baseArgs": ["-p", "@{PROMPT_FILE}", "--allow-all"],
+        "fallback": {
+          "cmd": "gh",
+          "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "text"]
+        }
+      },
+      "install": {
+        "windows": "winget install GitHub.CopilotCLI   (or npm install -g @github/copilot)",
+        "macos": "brew install github/gh/copilot      (or npm install -g @github/copilot)",
+        "linux": "npm install -g @github/copilot",
+        "docs": "https://docs.github.com/en/copilot/github-copilot-in-the-cli"
+      },
+      "failureModes": [
+        "Standalone `copilot` CLI unavailable AND `gh` < 2.88 — both probe targets miss; install one.",
+        "VS Code Copilot Chat extension installs an empty `copilot.bat` shim on Windows, which breaks `gh copilot` invocations with `%1 is not a valid Win32 application`. probeWorker() now disambiguates this case (issue #159) and points at the bad shim instead of saying 'not found'.",
+        "Standalone `copilot` not authenticated — run `copilot` interactively once and `/login`, or set `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` (issue #155)."
+      ]
+    },
+
+    "claude": {
+      "description": "Anthropic Claude Code CLI (fallback worker)",
+      "probe": {
+        "command": "claude",
+        "versionArgs": ["--version"],
+        "helpArgs": ["--help"],
+        "capabilityMarkers": ["-p", "--model"],
+        "capabilityDescription": "Prompt mode with -p and --model"
+      },
+      "minVersion": "2.0.0",
+      "versionRegex": "(\\d+\\.\\d+\\.\\d+)",
+      "invocation": {
+        "cmd": "claude",
+        "baseArgs": ["-p", "{PROMPT}"]
+      },
+      "install": {
+        "windows": "winget install Anthropic.Claude   (or npm install -g @anthropic-ai/claude-code)",
+        "macos": "brew install anthropic/tap/claude   (or npm install -g @anthropic-ai/claude-code)",
+        "linux": "npm install -g @anthropic-ai/claude-code",
+        "docs": "https://docs.anthropic.com/claude/docs/claude-code"
+      }
+    },
+
+    "copilot-coding-agent": {
+      "description": "GitHub Copilot Coding Agent (cloud worker — creates Issues, polls for PRs)",
+      "probe": {
+        "command": "gh",
+        "versionArgs": ["auth", "status"],
+        "capabilityMarkers": ["Logged in to github.com"],
+        "capabilityDescription": "Authenticated gh CLI with Copilot Coding Agent access"
+      },
+      "command": "gh",
+      "costModel": "subscription",
+      "concurrency": 5,
+      "requires": ["github-remote", "gh-cli"],
+      "invocation": {
+        "cmd": "gh",
+        "baseArgs": ["issue", "create"]
+      },
+      "install": {
+        "windows": "winget upgrade --id GitHub.cli && gh auth login",
+        "macos": "brew upgrade gh && gh auth login",
+        "linux": "Upgrade gh via your package manager, then gh auth login",
+        "docs": "https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent"
+      },
+      "failureModes": [
+        "gh auth status fails — run 'gh auth login' first.",
+        "Repo is not GitHub-hosted — copilot-coding-agent requires a GitHub remote.",
+        "Copilot Coding Agent never opens a PR within the polling timeout (default 30 min) — slice marked failed."
+      ]
+    },
+
+    "codex": {
+      "description": "OpenAI Codex CLI (fallback worker)",
+      "probe": {
+        "command": "codex",
+        "versionArgs": ["--version"],
+        "helpArgs": ["--help"],
+        "capabilityMarkers": ["-p", "--model"],
+        "capabilityDescription": "Prompt mode with -p and --model"
+      },
+      "minVersion": "1.0.0",
+      "versionRegex": "(\\d+\\.\\d+\\.\\d+)",
+      "invocation": {
+        "cmd": "codex",
+        "baseArgs": ["-p", "{PROMPT}"]
+      },
+      "install": {
+        "windows": "npm install -g @openai/codex",
+        "macos": "npm install -g @openai/codex",
+        "linux": "npm install -g @openai/codex",
+        "docs": "https://platform.openai.com/docs/codex"
+      }
+    }
+  },
+
+  "runtimes": {
+    "git": {
+      "description": "Git version control (required)",
+      "required": true,
+      "probe": {
+        "command": "git",
+        "versionArgs": ["--version"]
+      },
+      "minVersion": "2.30.0",
+      "versionRegex": "git version\\s+(\\d+\\.\\d+\\.\\d+)",
+      "install": {
+        "windows": "winget install --id Git.Git",
+        "macos": "brew install git",
+        "linux": "Install via package manager (apt/dnf/pacman)",
+        "docs": "https://git-scm.com/downloads"
+      }
+    },
+
+    "gh": {
+      "description": "GitHub CLI (required for PR/branch-protection flows; v2.88+ required for Copilot CLI worker)",
+      "required": true,
+      "probe": {
+        "command": "gh",
+        "versionArgs": ["--version"]
+      },
+      "minVersion": "2.88.0",
+      "versionRegex": "gh version\\s+(\\d+\\.\\d+\\.\\d+)",
+      "install": {
+        "windows": "winget upgrade --id GitHub.cli",
+        "macos": "brew upgrade gh",
+        "linux": "Upgrade via package manager (apt/dnf/pacman/snap)",
+        "docs": "https://cli.github.com/"
+      },
+      "failureModes": [
+        "gh < 2.88 ships legacy gh-copilot extension v1.2.x (suggest/explain only) — run-plan slices will silently succeed with zero code changes."
+      ]
+    },
+
+    "node": {
+      "description": "Node.js (required for pforge-mcp server + orchestrator)",
+      "required": true,
+      "probe": {
+        "command": "node",
+        "versionArgs": ["--version"]
+      },
+      "minVersion": "20.0.0",
+      "versionRegex": "v?(\\d+\\.\\d+\\.\\d+)",
+      "install": {
+        "windows": "winget install OpenJS.NodeJS.LTS",
+        "macos": "brew install node",
+        "linux": "Install via package manager or nvm",
+        "docs": "https://nodejs.org/"
+      }
+    },
+
+    "pwsh": {
+      "description": "PowerShell 7.x (recommended for cross-platform; pforge.ps1 targets 5.1+ but 7+ is the supported baseline)",
+      "required": false,
+      "probe": {
+        "command": "pwsh",
+        "versionArgs": ["--version"]
+      },
+      "minVersion": "7.0.0",
+      "versionRegex": "PowerShell\\s+(\\d+\\.\\d+\\.\\d+)",
+      "install": {
+        "windows": "winget install Microsoft.PowerShell",
+        "macos": "brew install --cask powershell",
+        "linux": "See https://aka.ms/powershell",
+        "docs": "https://aka.ms/powershell"
+      }
+    }
+  },
+
+  "packageManagers": {
+    "_comment": "Detected at runtime to pick the right install hint. First found wins per OS.",
+    "windows": ["winget", "scoop", "choco"],
+    "macos": ["brew", "port"],
+    "linux": ["apt", "dnf", "pacman", "zypper", "apk"]
+  },
+
+  "innerLoop": {
+    "_comment": "Inner-loop subsystem capability flags. Advertised via forge_capabilities so MCP consumers + agent adapters can auto-discover feature availability on this node. See INNER_LOOP_SURFACE in capabilities.mjs for the full schema. Phase-25 (v2.57) shipped the first 7; Phase-26 (v2.58) added competitive/autoFix/costAnomaly.",
+    "schemaVersion": "1.1",
+    "addedIn": "2.57.0",
+    "subsystems": {
+      "reflexion": true,
+      "trajectory": true,
+      "autoSkills": true,
+      "gateSynthesis": true,
+      "postmortem": true,
+      "federation": true,
+      "reviewer": true,
+      "competitive": true,
+      "autoFix": true,
+      "costAnomaly": true
+    }
+  }
+}

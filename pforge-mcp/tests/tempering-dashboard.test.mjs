@@ -1,0 +1,221 @@
+/**
+ * Plan Forge — Phase TEMPER-01 Slice 01.2: dashboard surface.
+ *
+ * Pure file-contract tests — we pin the source to make sure the
+ * dashboard tab, the Watcher-tab Tempering chip row, and the REST
+ * wiring cannot be accidentally regressed by another slice. The actual
+ * DOM rendering is exercised by the playwright E2E suite (out of scope
+ * for this phase — see TEMPER-03).
+ */
+
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const indexHtml = readFileSync(resolve(__dirname, "..", "dashboard", "index.html"), "utf-8");
+const appJs = readFileSync(resolve(__dirname, "..", "dashboard", "app.js"), "utf-8");
+const serverMjs = SERVER_COMBINED_SRC;
+
+describe("dashboard/index.html — Tempering tab shell", () => {
+  it("registers a Tempering tab button in the Forge sub-tabs", () => {
+    expect(indexHtml).toMatch(/data-tab="tempering"/);
+    expect(indexHtml).toMatch(/🛠 Tempering/);
+  });
+
+  it("declares a <section id=\"tab-tempering\"> panel", () => {
+    expect(indexHtml).toMatch(/<section\s+id="tab-tempering"/);
+  });
+
+  it("wires the Run scan button to runTemperingScan()", () => {
+    expect(indexHtml).toMatch(/onclick="runTemperingScan\(\)"/);
+    expect(indexHtml).toMatch(/data-testid="tempering-scan-btn"/);
+  });
+
+  it("has the four read-only Tempering panes (summary/coverage/gaps/history)", () => {
+    expect(indexHtml).toMatch(/data-testid="tempering-summary"/);
+    expect(indexHtml).toMatch(/data-testid="tempering-coverage"/);
+    expect(indexHtml).toMatch(/data-testid="tempering-gaps"/);
+    expect(indexHtml).toMatch(/data-testid="tempering-history"/);
+  });
+
+  it("never exposes a write-style control other than the scan button", () => {
+    // Slice 01.2 is still read-only. Bug registry / fix-proposal controls
+    // belong to TEMPER-04/06. This guard fails if anyone adds
+    // onclick="delete…" / onclick="edit…" buttons to the panel early.
+    const section = indexHtml.match(/<section\s+id="tab-tempering"[\s\S]*?<\/section>/);
+    expect(section).toBeTruthy();
+    expect(section[0]).not.toMatch(/onclick="(delete|edit|abandon|file)/i);
+  });
+});
+
+describe("dashboard/app.js — Tempering wiring", () => {
+  it("registers a tempering tabLoadHook", () => {
+    expect(appJs).toMatch(/tempering:\s*\(\)\s*=>\s*\{\s*loadTemperingStatus\(\)/);
+  });
+
+  it("ships loadTemperingStatus, runTemperingScan, renderTemperingPanel", () => {
+    expect(appJs).toMatch(/async\s+function\s+loadTemperingStatus/);
+    expect(appJs).toMatch(/async\s+function\s+runTemperingScan/);
+    expect(appJs).toMatch(/function\s+renderTemperingPanel/);
+  });
+
+  it("calls the REST wrappers for both tempering tools", () => {
+    expect(appJs).toMatch(/\/api\/tool\/forge_tempering_status/);
+    expect(appJs).toMatch(/\/api\/tool\/forge_tempering_scan/);
+  });
+
+  it("seeds state.tempering with the expected shape", () => {
+    expect(appJs).toMatch(/tempering:\s*\{[\s\S]{0,200}?initialized:\s*false/);
+    expect(appJs).toMatch(/scans:\s*\[\]/);
+  });
+
+  it("exposes renderTemperingPanel on window for refresh wiring", () => {
+    expect(appJs).toMatch(/window\.renderTemperingPanel\s*=\s*renderTemperingPanel/);
+  });
+
+  it("adds a Watcher-tab Tempering chip row with the correct testid", () => {
+    expect(appJs).toMatch(/data-testid="watcher-tempering-row"/);
+    // Must render only when `latest.tempering` is truthy — protects the
+    // panel from rendering an empty row on projects with no scans.
+    expect(appJs).toMatch(/if\s*\(latest\.tempering\)/);
+  });
+
+  it("renders coverage progress bars per layer with minimum markers", () => {
+    expect(appJs).toMatch(/data-testid="tempering-coverage-row-/);
+    expect(appJs).toMatch(/Math\.min\(100,\s*actual\)|\bactual\b/);
+  });
+});
+
+describe("server.mjs — REST routing for Tempering tools", () => {
+  it("marks both tempering tools as MCP_ONLY so they are not shelled through pforge.ps1", () => {
+    expect(serverMjs).toMatch(/"forge_tempering_scan".*"forge_tempering_status"|"forge_tempering_status".*"forge_tempering_scan"/s);
+  });
+});
+
+// ─── TEMPER-04 Slice 04.2: Visual Regression Viewer ──────────────────
+
+describe("dashboard — Visual Regression Viewer (TEMPER-04 Slice 04.2)", () => {
+  it("index.html has visual-diff-viewer section with data-testid", () => {
+    expect(indexHtml).toMatch(/data-testid="visual-diff-viewer"/);
+    expect(indexHtml).toMatch(/id="visual-diff-list"/);
+  });
+
+  it("app.js wires upsertVisualRegressionCard in the event switch", () => {
+    expect(appJs).toMatch(/upsertVisualRegressionCard\(/);
+  });
+
+  it("app.js exposes approve/bug/ignore actions on window", () => {
+    expect(appJs).toMatch(/window\.approveBaseline\s*=/);
+    expect(appJs).toMatch(/window\.openBugStub\s*=/);
+    expect(appJs).toMatch(/window\.ignoreOnce\s*=/);
+  });
+
+  it("app.js approveBaseline POSTs to forge_tempering_approve_baseline", () => {
+    expect(appJs).toMatch(/\/api\/tool\/forge_tempering_approve_baseline/);
+  });
+
+  it("app.js openBugStub POSTs to /api/tempering/bug-stub", () => {
+    expect(appJs).toMatch(/\/api\/tempering\/bug-stub/);
+  });
+});
+
+describe("server.mjs — artifact and bug-stub endpoints (TEMPER-04 Slice 04.2)", () => {
+  it("registers GET /api/tempering/artifact endpoint", () => {
+    expect(serverMjs).toMatch(/\/api\/tempering\/artifact/);
+  });
+
+  it("registers POST /api/tempering/bug-stub endpoint", () => {
+    expect(serverMjs).toMatch(/\/api\/tempering\/bug-stub/);
+  });
+
+  it("artifact endpoint enforces .forge/tempering/ prefix", () => {
+    expect(serverMjs).toMatch(/\.forge.*tempering/);
+  });
+});
+
+// ─── TEMPER-05 Slice 05.1: Flakiness / Perf-Budget / Load panels ────
+
+describe("dashboard — Flakiness / Perf-Budget / Load panels (TEMPER-05 Slice 05.1)", () => {
+  it("index.html has tempering-flakiness section with data-testid", () => {
+    expect(indexHtml).toMatch(/data-testid="tempering-flakiness"/);
+    expect(indexHtml).toMatch(/id="tempering-flakiness-body"/);
+  });
+
+  it("index.html has tempering-perf-budget section with data-testid", () => {
+    expect(indexHtml).toMatch(/data-testid="tempering-perf-budget"/);
+    expect(indexHtml).toMatch(/id="tempering-perf-budget-body"/);
+  });
+
+  it("index.html has tempering-load-stress section with data-testid", () => {
+    expect(indexHtml).toMatch(/data-testid="tempering-load-stress"/);
+    expect(indexHtml).toMatch(/id="tempering-load-stress-body"/);
+  });
+
+  it("app.js exposes render functions for the 3 new panels", () => {
+    expect(appJs).toMatch(/window\.renderFlakinessPanel\s*=/);
+    expect(appJs).toMatch(/window\.renderPerfBudgetPanel\s*=/);
+    expect(appJs).toMatch(/window\.renderLoadStressPanel\s*=/);
+  });
+
+  it("app.js defines hub handlers for the 3 new scanner events", () => {
+    expect(appJs).toMatch(/handleFlakinessDetected/);
+    expect(appJs).toMatch(/handlePerfRegression/);
+    expect(appJs).toMatch(/handleLoadCompleted/);
+  });
+});
+
+// ─── Phase TEMPER-06 Slice 06.1 — Bug Registry dashboard ────────────
+
+describe("dashboard — Bug Registry tab (TEMPER-06 Slice 06.1)", () => {
+  it("index.html registers a Bug Registry tab button", () => {
+    expect(indexHtml).toMatch(/data-tab="bugregistry"/);
+    expect(indexHtml).toMatch(/🐛 Bug Registry/);
+  });
+
+  it("index.html declares a <section id=\"tab-bugregistry\"> panel", () => {
+    expect(indexHtml).toMatch(/<section\s+id="tab-bugregistry"/);
+  });
+
+  it("index.html has filter controls for status/severity/scanner", () => {
+    expect(indexHtml).toMatch(/bugregistry-filter-status/);
+    expect(indexHtml).toMatch(/bugregistry-filter-severity/);
+    expect(indexHtml).toMatch(/bugregistry-filter-scanner/);
+  });
+
+  it("index.html has a bug table container", () => {
+    expect(indexHtml).toMatch(/bugregistry-table/);
+  });
+
+  it("app.js registers bugregistry tabLoadHook", () => {
+    expect(appJs).toMatch(/bugregistry:\s*\(\)\s*=>\s*\{\s*loadBugRegistry\(\)/);
+  });
+
+  it("app.js ships loadBugRegistry and renderBugRegistry", () => {
+    expect(appJs).toMatch(/async\s+function\s+loadBugRegistry/);
+    expect(appJs).toMatch(/function\s+renderBugRegistry/);
+  });
+
+  it("app.js handles tempering-bug-registered WS event", () => {
+    expect(appJs).toMatch(/tempering-bug-registered/);
+  });
+
+  it("app.js handles tempering-bug-status-changed WS event", () => {
+    expect(appJs).toMatch(/tempering-bug-status-changed/);
+  });
+
+  it("app.js initializes state.tempering.bugs array", () => {
+    expect(appJs).toMatch(/bugs:\s*\[\]/);
+  });
+
+  it("app.js uses /api/bugs/list endpoint", () => {
+    expect(appJs).toContain("/api/bugs/list");
+  });
+
+  it("app.js exposes render functions on window", () => {
+    expect(appJs).toMatch(/window\.loadBugRegistry\s*=/);
+    expect(appJs).toMatch(/window\.renderBugRegistry\s*=/);
+  });
+});

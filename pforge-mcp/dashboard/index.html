@@ -1,0 +1,2350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan Forge Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="anvil-lattice.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🔨</text></svg>">
+  <style>
+    /* ─── Design Tokens ──────────────────────────────────────────── */
+    :root {
+      --bg-0: #0b1220;          /* page bg (deepest)   */
+      --bg-1: #111827;          /* primary surface     */
+      --bg-2: #1f2937;          /* raised surface      */
+      --bg-3: #374151;          /* hover / input       */
+      --line: #2b3648;          /* dividers            */
+      --line-strong: #374151;
+      --fg-0: #f1f5f9;          /* primary text        */
+      --fg-1: #cbd5e1;          /* secondary text      */
+      --fg-2: #94a3b8;          /* tertiary text       */
+      --fg-3: #64748b;          /* muted               */
+      --accent: #60a5fa;        /* Forge (blue-400)    */
+      --accent-strong: #3b82f6;
+      --guard: #fbbf24;         /* LiveGuard (amber)   */
+      --success: #34d399;
+      --warning: #f59e0b;
+      --danger: #f87171;
+      --ring: 0 0 0 2px rgba(96,165,250,0.45);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+      --shadow-md: 0 4px 10px -2px rgba(0,0,0,0.4);
+      --shadow-lg: 0 20px 40px -10px rgba(0,0,0,0.55);
+    }
+    html.light {
+      --bg-0: #e6ebf2;
+      --bg-1: #ffffff;
+      --bg-2: #d9e1ea;
+      --bg-3: #c5cfdb;
+      --line: #b5c1d0;
+      --line-strong: #94a3b8;
+      --fg-0: #0f172a;
+      --fg-1: #1e293b;
+      --fg-2: #475569;
+      --fg-3: #64748b;
+      --accent: #2563eb;
+      --accent-strong: #1d4ed8;
+      --shadow-sm: 0 1px 2px rgba(15,23,42,0.10);
+      --shadow-md: 0 4px 10px -2px rgba(15,23,42,0.14);
+      --shadow-lg: 0 20px 40px -10px rgba(15,23,42,0.22);
+    }
+
+    /* ─── Base ───────────────────────────────────────────────────── */
+    body {
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* Skip link (a11y) */
+    .skip-link {
+      position: absolute; left: -9999px; top: auto;
+      width: 1px; height: 1px; overflow: hidden;
+    }
+    .skip-link:focus {
+      left: 0.5rem; top: 0.5rem; width: auto; height: auto;
+      background: var(--accent-strong); color: #fff;
+      padding: 0.5rem 0.75rem; border-radius: var(--radius-sm);
+      z-index: 100; font-size: 0.85rem;
+    }
+
+    /* Focus-visible ring for every interactive element */
+    button:focus-visible, a:focus-visible, input:focus-visible,
+    select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+      outline: none;
+      box-shadow: var(--ring);
+      border-radius: var(--radius-sm);
+    }
+
+    /* ─── Animations ─────────────────────────────────────────────── */
+    .slice-card { transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
+    .slice-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .slice-executing { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
+    .tab-content { animation: fadeIn 0.18s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    /* ─── Tabs ───────────────────────────────────────────────────── */
+    .tab-active {
+      color: var(--accent) !important;
+      border-bottom: 2px solid var(--accent) !important;
+    }
+    /* LiveGuard sub-tabs inherit the LiveGuard accent when active */
+    #subtabs-liveguard .tab-active {
+      color: var(--guard) !important;
+      border-bottom-color: var(--guard) !important;
+    }
+    /* Settings sub-tabs use purple accent (platform-wide config, not Forge-owned) */
+    #subtabs-settings .tab-active {
+      color: #c084fc !important;
+      border-bottom-color: #c084fc !important;
+    }
+    /* Forge-Master sub-tabs use cyan accent (read-only reasoning orchestrator) */
+    #subtabs-forge-master .tab-active {
+      color: #22d3ee !important;
+      border-bottom-color: #22d3ee !important;
+    }
+    .tab-btn {
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tab-btn:hover { color: var(--fg-0); }
+    .tab-btn svg { flex-shrink: 0; width: 14px; height: 14px; }
+    .group-tab svg { flex-shrink: 0; width: 16px; height: 16px; }
+
+    /* ─── Folder-tab treatment for top-level group tabs ───────────
+       Inactive tabs sit 2px lower with no side borders; active tab
+       rises to nav-surface level with rounded top, colored top edge,
+       faint side edges, and a subtle colored glow — reading as a
+       file-folder tab tucked in front of the subtab row. */
+    .group-tab {
+      border-top-left-radius: 8px;
+      border-top-right-radius: 8px;
+      border-top: 2px solid transparent;
+      border-left: 1px solid transparent;
+      border-right: 1px solid transparent;
+      background: transparent;
+      position: relative;
+      top: 2px;
+      transition: color 0.15s ease, border-color 0.15s ease,
+                  background 0.15s ease, top 0.15s ease,
+                  box-shadow 0.15s ease;
+    }
+    .group-tab:not(.group-active):hover {
+      background: rgba(55, 65, 81, 0.35);
+      top: 0;
+    }
+    .group-tab.group-active {
+      top: 0;
+      background: var(--bg-2);
+      border-top-color: currentColor !important;
+      border-left-color: rgba(75, 85, 99, 0.6);
+      border-right-color: rgba(75, 85, 99, 0.6);
+      border-bottom-color: transparent !important;
+      box-shadow:
+        0 -4px 14px -4px currentColor,
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+      z-index: 2;
+    }
+    /* Light theme: soften glow so it's not overpowering on pale bg */
+    html.light .group-tab.group-active {
+      box-shadow:
+        0 -2px 8px -3px currentColor,
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
+      border-left-color: rgba(148, 163, 184, 0.4);
+      border-right-color: rgba(148, 163, 184, 0.4);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .group-tab { transition: none; }
+    }
+
+    /* ─── Drawer ─────────────────────────────────────────────────── */
+    #run-detail-drawer {
+      transform: translateX(100%);
+      transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+      box-shadow: var(--shadow-lg);
+    }
+    #run-detail-drawer.open { transform: translateX(0); }
+    #drawer-overlay {
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+      backdrop-filter: blur(2px);
+    }
+    #drawer-overlay.open { opacity: 1; pointer-events: auto; }
+
+    /* ─── Tables ─────────────────────────────────────────────────── */
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { color: var(--accent); }
+    tr.row-selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+    tr.row-compare  { outline: 2px solid var(--warning); outline-offset: -2px; background: rgba(245,158,11,0.08); }
+
+    /* ─── Legacy dark-class overrides (preserved for light theme) ── */
+    html.light body { background: var(--bg-0); color: var(--fg-0); }
+    html.light .bg-gray-800 { background: var(--bg-1); border-color: var(--line); }
+    html.light .bg-gray-900 { background: var(--bg-0); }
+    html.light .bg-gray-700 { background: var(--bg-2); }
+    html.light .text-gray-100 { color: var(--fg-0); }
+    html.light .text-gray-300 { color: var(--fg-1); }
+    html.light .text-gray-400 { color: var(--fg-2); }
+    html.light .text-gray-500 { color: var(--fg-3); }
+    html.light .text-white { color: var(--fg-0); }
+    html.light .border-gray-700, html.light .border-gray-600 { border-color: var(--line); }
+    html.light kbd { background: var(--bg-3) !important; color: var(--fg-0) !important; border: 1px solid var(--line-strong); }
+
+    /* ─── Global search — FORGE-SHOP-04 Slice 04.2 ───────────────── */
+    .search-result-item { cursor: pointer; transition: background 0.15s; }
+    .search-result-item:hover, .search-result-item.search-active { background: rgba(59,130,246,0.15); }
+    .search-source-badge {
+      display: inline-block; font-size: 0.65rem;
+      padding: 1px 6px; border-radius: 9999px; font-weight: 600; letter-spacing: 0.02em;
+    }
+    .search-source-badge[data-source="run"]       { background: #1e3a5f; color: #93c5fd; }
+    .search-source-badge[data-source="bug"]       { background: #5c1a1a; color: #fca5a5; }
+    .search-source-badge[data-source="incident"]  { background: #5c3a0a; color: #fdba74; }
+    .search-source-badge[data-source="review"]    { background: #1a3a1a; color: #86efac; }
+    .search-source-badge[data-source="plan"]      { background: #2e1a5c; color: #c4b5fd; }
+    .search-source-badge[data-source="tempering"] { background: #1a3a3a; color: #5eead4; }
+    .search-source-badge[data-source="memory"]    { background: #3a3a1a; color: #fde68a; }
+    .search-source-badge[data-source="hub-event"] { background: #2a2a3a; color: #a5b4fc; }
+    .search-source-badge[data-source="forge-master"] { background: #1a2e1a; color: #86efac; }
+    .search-snippet mark { background: rgba(250,204,21,0.3); color: inherit; border-radius: 2px; padding: 0 1px; }
+    .search-loading { display: flex; align-items: center; justify-content: center; padding: 1rem; color: var(--fg-2); }
+    .search-error { padding: 0.75rem; color: var(--danger); font-size: 0.8rem; text-align: center; }
+
+    /* ─── Scrollbar polish (webkit) ──────────────────────────────── */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+    ::-webkit-scrollbar-thumb:hover { background-color: var(--fg-3); background-clip: content-box; }
+
+    /* ─── Responsive ─────────────────────────────────────────────── */
+    @media (max-width: 1024px) { .hide-tablet { display: none; } }
+    @media (max-width: 768px) {
+      .hide-mobile { display: none; }
+      #run-detail-drawer { width: 100% !important; }
+      header h1 { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <!-- Header -->
+  <header class="bg-gray-800 border-b border-gray-700 px-4 py-2.5 flex items-center gap-3" role="banner">
+    <div class="flex items-center gap-2.5 shrink-0">
+      <span class="text-2xl" aria-hidden="true">🔨</span>
+      <h1 class="text-base font-bold text-white tracking-tight">Plan Forge</h1>
+      <span id="connection-badge" class="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-red-900/70 text-red-300 border border-red-800/50" title="WebSocket connection to hub">disconnected</span>
+      <a id="version-badge" href="https://github.com/srnichols/plan-forge/releases" target="_blank" rel="noopener"
+         class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-700/70 text-gray-300 hover:bg-gray-600 hover:text-white transition border border-gray-600/60"
+         title="Plan Forge version — click to view releases on GitHub">v…</a>
+      <span id="hub-clients" class="text-[11px] px-2 py-0.5 rounded-full bg-gray-700/60 text-gray-400 hidden border border-gray-600/40" title="Connected clients">0 clients</span>
+    </div>
+    <!-- Phase FORGE-SHOP-04 Slice 04.2 — Global search bar -->
+    <div class="relative flex-1 max-w-xl mx-2" id="search-container" data-testid="search-container">
+      <label for="global-search" class="sr-only">Search</label>
+      <input type="search" id="global-search" data-testid="global-search"
+        class="w-full bg-gray-700/60 border border-gray-600/70 text-gray-100 text-sm rounded-lg px-3 py-1.5 pl-9
+               placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:bg-gray-700 transition"
+        placeholder="Search runs, bugs, incidents, plans…" autocomplete="off"
+        aria-controls="search-results" aria-expanded="false" role="combobox" />
+      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" aria-hidden="true">🔍</span>
+      <kbd id="search-hint" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-gray-400
+           bg-gray-800/80 px-1.5 py-0.5 rounded border border-gray-600 pointer-events-none" aria-hidden="true">/</kbd>
+      <div id="search-results" role="listbox" data-testid="search-results"
+        class="hidden absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600
+               rounded-lg shadow-xl max-h-96 overflow-y-auto z-50">
+      </div>
+    </div>
+    <div class="flex items-center gap-3 text-sm text-gray-400 shrink-0">
+      <!-- Phase UPDATE-01: non-intrusive update banner (hidden by default) -->
+      <a id="update-banner" href="#" target="_blank" rel="noopener" class="hidden items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-blue-900/60 text-blue-200 border border-blue-700/60 hover:bg-blue-800/70 transition" title="A newer Plan Forge release is available">
+        <span aria-hidden="true">⬆</span>
+        <span id="update-banner-text">Update available</span>
+        <button id="update-now-btn" onclick="event.preventDefault(); event.stopPropagation(); triggerSelfUpdate();"
+          class="ml-1 text-[11px] font-medium px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white transition" title="Install update now">Update now</button>
+        <span id="update-progress" class="hidden ml-1 text-[11px] text-blue-300"></span>
+        <button onclick="event.preventDefault(); event.stopPropagation(); dismissUpdateBanner();" class="ml-1 text-blue-300 hover:text-white transition" title="Dismiss (until next release)" aria-label="Dismiss update notice">✕</button>
+      </a>
+      <a href="/ui" target="_blank" rel="noopener" class="hover:text-white transition-colors text-xs hide-mobile" title="Open Plan Browser">Plan Browser ↗</a>
+      <span id="run-status" class="text-xs font-medium text-gray-300 px-2 py-0.5 rounded bg-gray-700/50 border border-gray-700" title="Current run status">Idle</span>
+      <span id="ws-port" class="text-[10px] text-gray-500 font-mono hide-tablet"></span>
+      <button id="check-updates-btn" onclick="triggerUpdateCheck();" title="Check GitHub for a newer Plan Forge release (bypasses 24h cache)" aria-label="Check for updates" class="text-base leading-none hover:text-white transition w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/60">⬆</button>
+      <button id="restart-server-btn" onclick="triggerServerRestart();" title="Restart MCP server (reloads code after updates). The MCP client will respawn the process automatically." aria-label="Restart MCP server" class="text-base leading-none hover:text-white transition w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/60">⟳</button>
+      <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme" aria-label="Toggle theme" class="text-base leading-none hover:text-white transition w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/60">🌙</button>
+    </div>
+  </header>
+
+  <!-- Tabs — Two-level: Group tabs + Sub tabs -->
+  <nav class="bg-gray-800 border-b border-gray-700 px-4 text-sm" aria-label="Primary navigation">
+    <!-- Group tabs -->
+    <div class="flex gap-1 items-center" role="tablist" aria-label="Dashboard sections">
+      <button class="group-tab group-active px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-400 whitespace-nowrap flex items-center gap-1.5" data-group="forge" onclick="switchGroup('forge')" role="tab" aria-selected="true" aria-controls="subtabs-forge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.3 2.3-2.7-2.7 2.3-2.3z"/></svg><span>Forge</span>
+      </button>
+      <button class="group-tab px-4 py-2 font-semibold text-gray-500 hover:text-amber-400 border-b-2 border-transparent whitespace-nowrap flex items-center gap-1.5" data-group="liveguard" onclick="switchGroup('liveguard')" role="tab" aria-selected="false" aria-controls="subtabs-liveguard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>LiveGuard</span>
+      </button>
+      <button class="group-tab px-4 py-2 font-semibold text-gray-500 hover:text-cyan-400 border-b-2 border-transparent whitespace-nowrap flex items-center gap-1.5" data-group="forge-master" onclick="switchGroup('forge-master')" role="tab" aria-selected="false" aria-controls="subtabs-forge-master" title="Forge-Master — read-only reasoning orchestrator (v2.63+)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4"/><path d="M9 3h6"/><path d="M15 3h4a2 2 0 0 1 2 2v4"/><path d="M3 9v10a2 2 0 0 0 2 2h14a2 2 0 0 1-2-2V9"/><path d="M3 9h18"/><path d="M12 12v6"/><path d="M9 15h6"/></svg><span>Forge-Master</span>
+      </button>
+      <button class="group-tab px-4 py-2 font-semibold text-gray-500 hover:text-purple-400 border-b-2 border-transparent whitespace-nowrap flex items-center gap-1.5" data-group="settings" onclick="switchGroup('settings')" role="tab" aria-selected="false" aria-controls="subtabs-settings" title="Settings — platform-wide configuration">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span>
+      </button>
+      <button id="notif-bell" class="ml-auto px-3 py-2 relative hover:text-yellow-400 text-gray-400 transition" onclick="toggleNotifications()" aria-label="Toggle notifications" title="Notifications">
+        <span aria-hidden="true">🔔</span><span id="notif-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center hidden" aria-live="polite">0</span>
+      </button>
+    </div>
+    <!-- Sub tabs: Forge -->
+    <div id="subtabs-forge" class="flex flex-wrap gap-x-0.5 gap-y-1 pt-1 pb-1" role="tablist" aria-label="Forge sections">
+      <button class="tab-btn tab-active px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="home" data-testid="home-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10"/></svg><span>Home</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="review" data-testid="review-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg><span>Review</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="progress" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span>Progress</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="crucible" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.38 0 2.5-1 2.5-2.5 0-1-.5-2-1-2.5-.5-.5-1-1-1-2s.5-1.5 1-2c-2-.5-5 2-5 5 0 .5 0 1 .5 1.5-.33-.33-.5-.83-.5-1.5zM12 2s5 5 5 10a5 5 0 0 1-10 0c0-3 1-5 2.5-7L12 2z"/></svg><span>Crucible</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="governance" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Governance</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="runs" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Runs</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="cost" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Cost</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="actions" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Actions</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="replay" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Replay</span></button>
+
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="traces" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="4" r="2"/><circle cx="6" cy="20" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 6v4a4 4 0 0 0 4 4h6"/><path d="M6 14v4"/></svg><span>Traces</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="skills" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.4L18 9l-4.2 1.6L12 15l-1.8-4.4L6 9l4.2-1.6L12 3z"/><path d="M19 14l.8 2L22 17l-2.2.9L19 20l-.8-2.1L16 17l2.2-.9L19 14z"/><path d="M5 15l.6 1.4L7 17l-1.4.6L5 19l-.6-1.4L3 17l1.4-.6L5 15z"/></svg><span>Skills</span></button>
+
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="tempering" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.3 2.3-2.7-2.7 2.3-2.3a4 4 0 0 0-.3-.3z"/></svg><span>Tempering</span></button>
+
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="memory" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6"/></svg><span>Memory</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="timeline" data-testid="timeline-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Timeline</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="innerloop" data-testid="innerloop-tab-btn" role="tab" title="Inner Loop — self-deterministic feedback subsystems"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.55"/><path d="M21 3v6h-6"/><circle cx="12" cy="12" r="2"/></svg><span>Inner Loop</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="github-metrics" data-testid="github-metrics-tab-btn" role="tab" title="GitHub × Plan-Forge — Copilot adoption and orchestration leaderboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>GH Metrics</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="team-dashboard" data-testid="team-dashboard-tab-btn" role="tab" title="Team Dashboard — multi-developer plan coordination and conflict-risk overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.87"/></svg><span>Team</span></button>
+
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400" data-tab="anvil-lattice" data-testid="anvil-lattice-tab-btn" role="tab" title="Anvil &amp; Lattice — memoization cache and code-graph index stats" onclick="window.loadAnvilLattice?.()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg><span>Anvil &amp; Lattice</span></button>
+    </div>
+    <!-- Sub tabs: Forge-Master (top-level group — not owned by the Forge) -->
+    <div id="subtabs-forge-master" class="hidden flex flex-wrap gap-x-0.5 gap-y-1 pt-1 pb-1" role="tablist" aria-label="Forge-Master sections">
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-cyan-400" data-tab="forge-master" data-testid="forge-master-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4"/><path d="M9 3h6"/><path d="M15 3h4a2 2 0 0 1 2 2v4"/><path d="M3 9v10a2 2 0 0 0 2 2h14a2 2 0 0 1-2-2V9"/><path d="M3 9h18"/><path d="M12 12v6"/><path d="M9 15h6"/></svg><span>Studio</span></button>
+    </div>
+    <!-- Sub tabs: Settings (top-level group — platform-wide configuration, 9 sub-tabs per Phase-30) -->
+    <div id="subtabs-settings" class="hidden flex flex-wrap gap-x-0.5 gap-y-1 pt-1 pb-1" role="tablist" aria-label="Settings sections">
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-general" data-testid="settings-general-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>General</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-models" data-testid="settings-models-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 2v2"/><path d="M15 2v2"/><path d="M9 20v2"/><path d="M15 20v2"/><path d="M2 9h2"/><path d="M2 15h2"/><path d="M20 9h2"/><path d="M20 15h2"/></svg><span>Models</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-execution" data-testid="settings-execution-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg><span>Execution</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-api-keys" data-testid="settings-api-keys-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg><span>API Keys</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-updates" data-testid="settings-updates-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Updates</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-memory" data-testid="settings-memory-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6"/></svg><span>Memory</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-bridge" data-testid="settings-bridge-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Bridge</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-crucible" data-testid="settings-crucible-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.38 0 2.5-1 2.5-2.5 0-1-.5-2-1-2.5-.5-.5-1-1-1-2s.5-1.5 1-2c-2-.5-5 2-5 5 0 .5 0 1 .5 1.5-.33-.33-.5-.83-.5-1.5zM12 2s5 5 5 10a5 5 0 0 1-10 0c0-3 1-5 2.5-7L12 2z"/></svg><span>Crucible</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-brain" data-testid="settings-brain-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 4.5 17.5a2.5 2.5 0 0 1-.44-4.96A2.5 2.5 0 0 1 4.5 10 2.5 2.5 0 0 1 7 7.5a2.5 2.5 0 0 1 .44-4.96A2.5 2.5 0 0 1 9.5 2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 19.5 17.5a2.5 2.5 0 0 0 .44-4.96A2.5 2.5 0 0 0 19.5 10 2.5 2.5 0 0 0 17 7.5a2.5 2.5 0 0 0-.44-4.96A2.5 2.5 0 0 0 14.5 2z"/></svg><span>Brain</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="extensions" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6a2 2 0 0 1 2-2h4v3a2 2 0 1 0 4 0V4h4a2 2 0 0 1 2 2v4h-3a2 2 0 1 0 0 4h3v4a2 2 0 0 1-2 2h-4v-3a2 2 0 1 0-4 0v3H6a2 2 0 0 1-2-2v-4h3a2 2 0 1 0 0-4H4V6z"/></svg><span>Extensions</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-copilot" data-testid="settings-copilot-tab-btn" role="tab" title="Chat Customizations — edit .github/copilot-instructions.md (D5 / v3.1.0)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M8 10h8M8 14h5"/></svg><span>Copilot</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-forgemaster" data-testid="settings-forgemaster-tab-btn" role="tab" title="Forge-Master observer settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8L12 3z"/></svg><span>Forge-Master</span></button>
+    </div>
+    <!-- Sub tabs: LiveGuard -->
+    <div id="subtabs-liveguard" class="hidden flex flex-wrap gap-x-0.5 gap-y-1 pt-1 pb-1" role="tablist" aria-label="LiveGuard sections">
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-health" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 8-4-16-3 8H2"/></svg><span>Health</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-incidents" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>Incidents</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-triage" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 12a5 5 0 0 1 5-5V3h-1a6 6 0 0 0-6 6v5a4 4 0 0 0 4 4v0a4 4 0 0 0 4-4"/><circle cx="17" cy="15" r="3"/><path d="M17 18v3"/></svg><span>Triage</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-security" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Security</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="lg-env" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><line x1="7" y1="7" x2="7.01" y2="7"/><line x1="7" y1="17" x2="7.01" y2="17"/></svg><span>Env</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="watcher" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Watcher</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-amber-400" data-tab="bugregistry" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="8" height="12" rx="4"/><path d="M12 2v2"/><path d="M10 6h4"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4 7l3 2"/><path d="M20 7l-3 2"/><path d="M4 18l3-2"/><path d="M20 18l-3-2"/></svg><span>Bug Registry</span></button>
+    </div>
+  </nav>
+
+  <main id="main-content" role="main">
+
+  <!-- Notification dropdown -->
+  <div id="notif-panel" class="hidden absolute right-4 top-24 w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
+    <div class="flex justify-between items-center p-3 border-b border-gray-700">
+      <span class="text-sm font-semibold">Notifications</span>
+      <button onclick="clearNotifications()" class="text-xs text-gray-500 hover:text-white">Clear all</button>
+    </div>
+    <div id="notif-list" class="p-2 text-sm">
+      <p class="text-gray-500 text-center py-4">No notifications</p>
+    </div>
+  </div>
+
+  <!-- Tab Content -->
+  <div class="p-4 max-w-6xl mx-auto">
+
+    <!-- Phase-26 Slice 14 — welcome card for inner-loop features. -->
+    <!--
+      Hidden by default. Shown once per machine (tracked in
+      `.forge/dashboard-state.json#seenInnerLoop258`) after upgrade to v2.58+.
+      Dismissing or enabling any feature sets the flag; the card never
+      reappears on that machine.
+    -->
+    <div id="welcome-innerloop" data-testid="welcome-innerloop" class="hidden mb-4 bg-emerald-900/20 border border-emerald-700/50 rounded-lg p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1">
+          <h3 class="text-sm font-semibold text-emerald-300 mb-1">🔁 New: Inner-Loop subsystems</h3>
+          <p class="text-xs text-gray-400 mb-3">
+            Plan Forge v2.58 ships five self-deterministic feedback subsystems. All default to
+            <strong>advisory</strong> — detection runs, no action is taken without your opt-in.
+            Review the new <a href="#" onclick="document.querySelector('[data-tab=innerloop]').click();return false;" class="text-emerald-400 underline">Inner Loop tab</a>
+            or tweak defaults below.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="welcomeGotoInnerLoop()" data-testid="welcome-innerloop-goto" class="text-xs px-3 py-1 bg-emerald-700 hover:bg-emerald-600 rounded text-white">Open Inner Loop tab</button>
+            <button onclick="welcomeGotoConfig()" data-testid="welcome-innerloop-config" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Configure</button>
+            <a href="manual/inner-loop.html" target="_blank" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Docs ↗</a>
+          </div>
+        </div>
+        <button onclick="welcomeDismissInnerLoop()" data-testid="welcome-innerloop-dismiss" aria-label="Dismiss" class="text-gray-500 hover:text-gray-300 text-lg leading-none">×</button>
+      </div>
+    </div>
+
+    <!-- Home Tab (Phase FORGE-SHOP-01 Slice 01.2) — shop-floor overview -->
+    <section id="tab-home" class="tab-content">
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold text-blue-400">🏠 Home</h2>
+        <p class="text-xs text-gray-500">Shop-floor overview — subsystem health at a glance.</p>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <!-- Crucible quadrant -->
+        <div id="home-q-crucible" role="region" aria-labelledby="home-q-crucible-label" data-testid="home-q-crucible" class="bg-gray-800 rounded-lg p-4">
+          <h3 id="home-q-crucible-label" class="text-sm font-semibold text-orange-400 mb-2">🔥 Crucible</h3>
+          <div id="home-q-crucible-stats" class="text-xs text-gray-400 mb-3">Loading…</div>
+          <button data-testid="home-drill-crucible" class="text-xs text-blue-400 hover:text-blue-300" onclick="applyFilter('crucible', 'source', 'home')">Drill through →</button>
+        </div>
+        <!-- Active Runs quadrant -->
+        <div id="home-q-runs" role="region" aria-labelledby="home-q-runs-label" data-testid="home-q-runs" class="bg-gray-800 rounded-lg p-4">
+          <h3 id="home-q-runs-label" class="text-sm font-semibold text-blue-400 mb-2">📊 Active Runs</h3>
+          <div id="home-q-runs-stats" class="text-xs text-gray-400 mb-3">Loading…</div>
+          <button data-testid="home-drill-runs" class="text-xs text-blue-400 hover:text-blue-300" onclick="applyFilter('runs', 'source', 'home')">Drill through →</button>
+        </div>
+        <!-- LiveGuard quadrant -->
+        <div id="home-q-liveguard" role="region" aria-labelledby="home-q-liveguard-label" data-testid="home-q-liveguard" class="bg-gray-800 rounded-lg p-4">
+          <h3 id="home-q-liveguard-label" class="text-sm font-semibold text-amber-400 mb-2">🛡️ LiveGuard</h3>
+          <div id="home-q-liveguard-stats" class="text-xs text-gray-400 mb-3">Loading…</div>
+          <button data-testid="home-drill-liveguard" class="text-xs text-blue-400 hover:text-blue-300" onclick="applyFilter('lg-health', 'source', 'home')">Drill through →</button>
+        </div>
+        <!-- Tempering quadrant -->
+        <div id="home-q-tempering" role="region" aria-labelledby="home-q-tempering-label" data-testid="home-q-tempering" class="bg-gray-800 rounded-lg p-4">
+          <h3 id="home-q-tempering-label" class="text-sm font-semibold text-emerald-400 mb-2">🛠 Tempering</h3>
+          <div id="home-q-tempering-stats" class="text-xs text-gray-400 mb-3">Loading…</div>
+          <button data-testid="home-drill-tempering" class="text-xs text-blue-400 hover:text-blue-300" onclick="applyFilter('tempering', 'source', 'home')">Drill through →</button>
+        </div>
+      </div>
+      <!-- Activity feed -->
+      <div class="mt-4 bg-gray-800 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold text-gray-300">Activity Feed</h3>
+          <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+            <input type="checkbox" id="home-group-toggle" data-testid="home-group-toggle" class="rounded">
+            Group by correlation
+          </label>
+        </div>
+        <div id="home-activity-feed" role="log" aria-live="polite" data-testid="home-activity-feed" class="max-h-64 overflow-y-auto text-xs">
+          <p class="text-gray-500 text-center py-4">Loading…</p>
+        </div>
+      </div>
+      <!-- Phase-40 S4 — Observer Narrations card -->
+      <div id="card-observer-narrations" class="mt-4 bg-gray-800 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold text-purple-400">🔭 Observer Narrations</h3>
+          <span class="text-xs text-gray-500" id="observer-narrations-cost"></span>
+        </div>
+        <div id="home-observer-narrations-list" class="max-h-48 overflow-y-auto space-y-2 text-xs" role="log" aria-live="polite">
+          <p class="text-gray-500 text-center py-3" id="home-observer-narrations-empty">
+            Observer disabled — <a href="#settings-forgemaster" class="text-blue-400 hover:text-blue-300" onclick="activateTab('settings-forgemaster');return false;">enable in Settings</a>
+          </p>
+        </div>
+      </div>
+      <!-- Phase-40 S5 — Cross-Run Watcher Anomalies card -->
+      <div id="card-cross-run-anomalies" class="mt-4 bg-gray-800 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold text-amber-400">⚡ Cross-Run Watcher Anomalies</h3>
+          <button onclick="loadCrossRunAnomalies()" class="text-xs text-gray-500 hover:text-white px-2 py-0.5 rounded border border-gray-700">↺ Refresh</button>
+        </div>
+        <div id="home-cross-run-anomalies-list" class="max-h-48 overflow-y-auto space-y-2 text-xs" role="log">
+          <p class="text-gray-500 text-center py-3">Click Refresh to scan the last 14 days of run history.</p>
+        </div>
+      </div>
+      <!-- Phase-56 — Embedding Backend Status card -->
+      <div id="card-embedding-status" class="mt-4 bg-gray-800 rounded-lg p-4" data-testid="embedding-status-card">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold text-teal-400">🧠 Embedding Backend</h3>
+          <button onclick="loadEmbeddingStatus()" class="text-xs text-gray-500 hover:text-white px-2 py-0.5 rounded border border-gray-700">↺ Refresh</button>
+        </div>
+        <div id="embedding-status-content" class="text-xs text-gray-500 space-y-1">
+          <p class="text-center py-2">Click Refresh to check embedding backend status.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Review Tab (Phase FORGE-SHOP-02 Slice 02.2) — review queue UI -->
+    <section id="tab-review" class="tab-content hidden">
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold text-amber-400">📋 Review</h2>
+        <p class="text-xs text-gray-500">Pending human reviews from automated hooks.</p>
+      </div>
+      <!-- Filter chip bar -->
+      <div data-testid="review-filter-bar" class="flex flex-wrap gap-2 mb-4">
+        <span class="text-xs text-gray-500 self-center mr-1">Source:</span>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="source" data-filter-value="crucible-stall" data-testid="review-chip-source-crucible-stall">crucible-stall</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="source" data-filter-value="tempering-quorum-inconclusive" data-testid="review-chip-source-tempering-quorum-inconclusive">quorum-inconclusive</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="source" data-filter-value="tempering-baseline" data-testid="review-chip-source-tempering-baseline">baseline</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="source" data-filter-value="bug-classify" data-testid="review-chip-source-bug-classify">bug-classify</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="source" data-filter-value="fix-plan-approval" data-testid="review-chip-source-fix-plan-approval">fix-plan</button>
+        <span class="text-xs text-gray-500 self-center ml-2 mr-1">Severity:</span>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="severity" data-filter-value="blocker" data-testid="review-chip-severity-blocker">blocker</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="severity" data-filter-value="high" data-testid="review-chip-severity-high">high</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="severity" data-filter-value="medium" data-testid="review-chip-severity-medium">medium</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="severity" data-filter-value="low" data-testid="review-chip-severity-low">low</button>
+        <span class="text-xs text-gray-500 self-center ml-2 mr-1">Status:</span>
+        <button class="filter-chip tab-active text-xs px-2 py-0.5 rounded-full border border-blue-500 text-blue-400" data-filter-type="status" data-filter-value="open" data-testid="review-chip-status-open">open</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="status" data-filter-value="resolved" data-testid="review-chip-status-resolved">resolved</button>
+        <button class="filter-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-filter-type="status" data-filter-value="deferred" data-testid="review-chip-status-deferred">deferred</button>
+      </div>
+      <!-- Two-pane layout -->
+      <div class="grid grid-cols-2 gap-4" style="grid-template-columns: 1fr 1fr;">
+        <div id="review-list-pane" class="bg-gray-800 rounded-lg p-4 max-h-96 overflow-y-auto">
+          <div data-testid="review-empty-state" class="text-gray-500 text-center py-8">🧹 Shop floor clear — no pending reviews</div>
+        </div>
+        <div id="review-detail-pane" class="bg-gray-800 rounded-lg p-4">
+          <p class="text-gray-500 text-sm text-center py-8">Select a review item to see details</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Progress Tab -->
+    <section id="tab-progress" class="tab-content hidden">
+      <!-- Run summary bar -->
+      <div id="run-summary" class="bg-gray-800 rounded-lg p-4 mb-4 flex items-center justify-between">
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h2 id="run-plan-name" class="text-lg font-semibold">No active run</h2>
+            <span id="run-mode-badge" class="hidden text-xs px-2 py-0.5 rounded-full"></span>
+            <span id="run-model-badge" class="hidden text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300"></span>
+            <span id="run-exec-mode-badge" class="hidden text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400"></span>
+          </div>
+          <p id="run-progress-text" class="text-sm text-gray-400">Start a run with <code class="bg-gray-700 px-1 rounded">pforge run-plan</code></p>
+        </div>
+        <div id="run-progress-bar" class="w-48 h-2 bg-gray-700 rounded-full overflow-hidden hidden">
+          <div id="run-progress-fill" class="h-full bg-blue-500 transition-all duration-500 w-0"></div>
+        </div>
+      </div>
+
+      <!-- Phase-27.2 Slice 5 — Plan projection strip (collapsed by default). -->
+      <!-- Populated by hydratePlanProjectionStrip() once forge_estimate_quorum -->
+      <!-- returns; hidden until then. -->
+      <details id="plan-projection-strip" class="bg-gray-800 rounded-lg mb-4 hidden" data-testid="plan-projection-strip">
+        <summary class="px-4 py-2 cursor-pointer hover:bg-gray-700/50 flex items-center gap-3 text-sm select-none">
+          <span>💵 Plan projection</span>
+          <span id="projection-auto"   class="text-xs text-gray-300"></span>
+          <span id="projection-power"  class="text-xs text-gray-300"></span>
+          <span id="projection-speed"  class="text-xs text-gray-300"></span>
+          <span id="projection-false"  class="text-xs text-gray-300"></span>
+          <span id="projection-recommended" class="text-xs text-blue-300 font-semibold"></span>
+        </summary>
+        <div id="projection-details" class="px-4 pb-3 text-xs text-gray-400 grid gap-1 md:grid-cols-2"></div>
+      </details>
+
+      <!-- Plan Browser  -->
+      <details id="plan-browser" class="bg-gray-800 rounded-lg mb-4 relative">
+        <summary class="px-4 py-3 cursor-pointer hover:bg-gray-700/50 flex items-center gap-2 text-sm font-semibold select-none">
+          <span>📄</span> Available Plans
+          <span id="plan-count" class="text-xs text-gray-500 ml-1"></span>
+        </summary>
+        <a href="/ui" target="_blank" class="absolute top-3 right-4 text-xs text-blue-400 hover:text-blue-300">Plan Browser →</a>
+        <div id="plan-list" class="px-4 pb-3">
+          <p class="text-gray-500 text-sm py-2">Loading plans...</p>
+        </div>
+      </details>
+
+      <!-- Slice cards -->
+      <div id="slice-cards" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <div class="text-gray-500 text-center py-12">Waiting for run events...</div>
+      </div>
+
+      <!-- Event History — Split Panel -->
+      <details class="bg-gray-800 rounded-lg mt-4" open>
+        <summary class="px-4 py-3 cursor-pointer hover:bg-gray-700/50 flex items-center gap-2 text-sm font-semibold select-none">
+          <span>📜</span> Event Log
+          <span id="event-log-count" class="text-xs text-gray-500 ml-1">(0)</span>
+        </summary>
+        <div class="flex gap-0 border-t border-gray-700">
+          <!-- Left: Plan lifecycle events -->
+          <div class="flex-1 border-r border-gray-700">
+            <div class="px-3 py-1.5 text-xs font-semibold text-gray-500 bg-gray-800/80 border-b border-gray-700">Run Events</div>
+            <div id="event-log" class="px-3 pb-2 max-h-52 overflow-y-auto font-mono text-xs space-y-0.5"></div>
+          </div>
+          <!-- Right: Active slice log -->
+          <div class="flex-1">
+            <div class="px-3 py-1.5 text-xs font-semibold text-gray-500 bg-gray-800/80 border-b border-gray-700 flex items-center justify-between">
+              <span>Slice Log <span id="slice-log-label" class="text-blue-400"></span></span>
+              <div class="flex items-center gap-2">
+                <input id="slice-log-search" type="text" placeholder="Filter..." class="bg-gray-700 text-white text-xs rounded px-2 py-0.5 w-28 focus:w-40 transition-all focus:outline-none focus:ring-1 focus:ring-blue-500" oninput="filterSliceLog(this.value)">
+                <button onclick="clearSliceLog()" class="text-gray-600 hover:text-gray-400 text-xs">Clear</button>
+              </div>
+            </div>
+            <div id="slice-log" class="px-3 pb-2 max-h-52 overflow-y-auto font-mono text-xs space-y-0.5 text-gray-500">
+              <p class="py-4 text-center">Click a slice card to view its log</p>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- Crucible Tab (v2.37) — 3-panel smelt workspace -->
+    <section id="tab-crucible" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-4 mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold">🔥 Crucible — Idea Smelting</h2>
+          <p class="text-sm text-gray-400">Turn a raw idea into a hardened phase plan. Every plan must be smelted here before execution.</p>
+        </div>
+        <button id="crucible-new-btn" class="bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold px-4 py-2 rounded" onclick="startNewSmelt()">+ New Smelt</button>
+      </div>
+
+      <div class="grid gap-4" style="grid-template-columns: 25% 45% 30%;">
+        <!-- Left: smelt list -->
+        <div class="bg-gray-800 rounded-lg p-3">
+          <h3 class="text-sm font-semibold mb-2 text-gray-300">Smelts</h3>
+          <div id="crucible-smelt-list" class="space-y-1 text-xs">
+            <p class="text-gray-500 py-2">Loading…</p>
+          </div>
+        </div>
+
+        <!-- Center: active interview -->
+        <div class="bg-gray-800 rounded-lg p-4">
+          <div id="crucible-interview-empty" class="text-center text-gray-500 py-16">
+            <p class="text-sm">Select a smelt on the left, or click <span class="text-orange-400">+ New Smelt</span> to start one.</p>
+          </div>
+          <div id="crucible-interview" class="hidden">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500">Smelt</span>
+                <code id="crucible-active-id" class="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-300"></code>
+                <span id="crucible-active-lane" class="text-xs px-2 py-0.5 rounded-full bg-orange-900 text-orange-200"></span>
+              </div>
+              <div class="text-xs text-gray-400">
+                <span id="crucible-q-index">0</span> / <span id="crucible-q-total">0</span>
+              </div>
+            </div>
+            <div id="crucible-question-block" class="mb-4">
+              <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Question</p>
+              <p id="crucible-question-text" class="text-sm text-gray-200"></p>
+            </div>
+            <div class="mb-3">
+              <label class="text-xs uppercase tracking-wide text-gray-500">Your answer</label>
+              <textarea id="crucible-answer" rows="4" class="w-full bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 p-2 mt-1 focus:outline-none focus:ring-1 focus:ring-orange-500" placeholder="Answer here. The recommended default (if any) is pre-filled."></textarea>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="text-xs text-gray-500">
+                <span id="crucible-recommendation-label" class="hidden">
+                  <span class="text-gray-400">Recommended:</span>
+                  <span id="crucible-recommendation-value" class="text-orange-300"></span>
+                </span>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="abandonSmelt()" class="text-xs text-gray-400 hover:text-red-400 px-2 py-1">Abandon</button>
+                <button id="crucible-finalize-btn" class="hidden bg-green-700 hover:bg-green-600 text-white text-sm px-3 py-1 rounded" onclick="finalizeSmelt()">Finalize → Hardener</button>
+                <button id="crucible-next-btn" class="bg-orange-600 hover:bg-orange-500 text-white text-sm px-3 py-1 rounded" onclick="submitAnswer()">Next →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: live draft preview -->
+        <div class="bg-gray-800 rounded-lg p-3">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-gray-300">Draft Preview</h3>
+            <span id="crucible-unresolved-count" class="text-xs text-yellow-400"></span>
+          </div>
+          <pre id="crucible-preview" class="text-xs text-gray-300 whitespace-pre-wrap font-mono max-h-[70vh] overflow-y-auto bg-gray-900 rounded p-2">No active smelt</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Governance Tab (v2.37) — read-only view of Principles + profile -->
+    <section id="tab-governance" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-4 mb-4">
+        <h2 class="text-lg font-semibold">🛡 Governance</h2>
+        <p class="text-sm text-gray-400">Read-only view of your Project Principles and profile files. Editing happens in your editor — this tab is intentionally non-editable.</p>
+      </div>
+
+      <div class="grid gap-4 lg:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold mb-2 text-gray-300">Principles &amp; Profile</h3>
+          <div id="governance-files" class="space-y-3">
+            <p class="text-gray-500 py-2">Loading…</p>
+          </div>
+        </div>
+
+        <div class="bg-gray-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-gray-300">Manual-Import Audit</h3>
+            <span id="governance-audit-count" class="text-xs text-gray-500"></span>
+          </div>
+          <p class="text-xs text-gray-500 mb-2">Every <code>--manual-import</code> bypass and every grandfather-stamped plan.</p>
+          <div id="governance-audit" class="space-y-1 text-xs max-h-[60vh] overflow-y-auto">
+            <p class="text-gray-500 py-2">Loading…</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Runs Tab -->
+    <section id="tab-runs" class="tab-content hidden">
+      <!-- Filter Bar  -->
+      <div class="bg-gray-800 rounded-lg p-3 mb-3 flex flex-wrap gap-2 items-center text-sm">
+        <select id="filter-plan" title="Filter by plan" class="bg-gray-700 text-white text-xs rounded px-2 py-1" onchange="applyRunFilters()">
+          <option value="">All Plans</option>
+        </select>
+        <select id="filter-status" title="Filter by status" class="bg-gray-700 text-white text-xs rounded px-2 py-1" onchange="applyRunFilters()">
+          <option value="">All Status</option>
+          <option value="completed">Pass</option>
+          <option value="failed">Fail</option>
+        </select>
+        <select id="filter-model" title="Filter by model" class="bg-gray-700 text-white text-xs rounded px-2 py-1" onchange="applyRunFilters()">
+          <option value="">All Models</option>
+        </select>
+        <select id="filter-mode" title="Filter by mode" class="bg-gray-700 text-white text-xs rounded px-2 py-1" onchange="applyRunFilters()">
+          <option value="">All Modes</option>
+          <option value="auto">auto</option>
+          <option value="assisted">assisted</option>
+          <option value="estimate">estimate</option>
+        </select>
+        <input id="filter-date-start" type="date" title="Start date" class="bg-gray-700 text-white text-xs rounded px-2 py-1 hide-mobile" onchange="applyRunFilters()">
+        <input id="filter-date-end" type="date" title="End date" class="bg-gray-700 text-white text-xs rounded px-2 py-1 hide-mobile" onchange="applyRunFilters()">
+        <button onclick="clearRunFilters()" class="text-xs text-gray-500 hover:text-white ml-1">Clear</button>
+        <button id="compare-btn" onclick="toggleCompareMode()" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded ml-1">Compare</button>
+        <div class="ml-auto flex gap-2">
+          <span id="runs-count" class="text-xs text-gray-500"></span>
+          <div class="relative">
+            <button onclick="toggleExportMenu('runs')" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded">Export ▾</button>
+            <div id="export-menu-runs" class="hidden absolute right-0 top-7 bg-gray-800 border border-gray-700 rounded shadow z-50">
+              <button onclick="exportRuns('json')" class="block w-full text-left text-xs px-3 py-1.5 hover:bg-gray-700">JSON</button>
+              <button onclick="exportRuns('csv')" class="block w-full text-left text-xs px-3 py-1.5 hover:bg-gray-700">CSV</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Comparison Panel  -->
+      <div id="compare-panel" class="hidden bg-gray-800 rounded-lg p-4 mb-3 border border-amber-700/30">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="text-sm font-semibold text-amber-400">Run Comparison</h3>
+          <button onclick="closeComparison()" class="text-gray-500 hover:text-white text-sm">✕</button>
+        </div>
+        <div id="compare-content" class="grid gap-4 md:grid-cols-2 text-sm"></div>
+      </div>
+      <div class="bg-gray-800 rounded-lg overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-700">
+            <tr>
+              <th class="sortable px-4 py-2 text-left" data-sort="date" onclick="sortRuns('date')">Date</th>
+              <th class="sortable px-4 py-2 text-left" data-sort="plan" onclick="sortRuns('plan')">Plan</th>
+              <th class="sortable px-4 py-2 text-center hide-tablet" data-sort="mode" onclick="sortRuns('mode')">Mode</th>
+              <th class="sortable px-4 py-2 text-left hide-tablet" data-sort="model" onclick="sortRuns('model')">Model</th>
+              <th class="sortable px-4 py-2 text-center" data-sort="slices" onclick="sortRuns('slices')">Slices</th>
+              <th class="sortable px-4 py-2 text-center" data-sort="status" onclick="sortRuns('status')">Status</th>
+              <th class="sortable px-4 py-2 text-right" data-sort="cost" onclick="sortRuns('cost')">Cost</th>
+              <th class="sortable px-4 py-2 text-right" data-sort="duration" onclick="sortRuns('duration')">Duration</th>
+            </tr>
+          </thead>
+          <tbody id="runs-table-body">
+            <tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Cost Tab -->
+    <section id="tab-cost" class="tab-content hidden">
+      <!-- Anomaly Banner  -->
+      <div id="cost-anomaly-banner" class="hidden bg-amber-900/30 border border-amber-600/40 rounded-lg p-3 mb-3 flex items-center justify-between">
+        <span id="cost-anomaly-text" class="text-sm text-amber-300"></span>
+        <button onclick="document.getElementById('cost-anomaly-banner').classList.add('hidden')" class="text-amber-500 hover:text-amber-300">✕</button>
+      </div>
+      <div class="grid gap-4 md:grid-cols-3 mb-4">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-sm text-gray-400">Total Spend</p>
+          <p id="cost-total" class="text-2xl font-bold text-green-400">$0.00</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-sm text-gray-400">Total Runs</p>
+          <p id="cost-runs" class="text-2xl font-bold">0</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-sm text-gray-400">Total Tokens</p>
+          <p id="cost-tokens" class="text-2xl font-bold">0</p>
+        </div>
+      </div>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm text-gray-400 mb-2">Cost by Model</h3>
+          <canvas id="chart-model-cost" height="200"></canvas>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm text-gray-400 mb-2">Monthly Spend</h3>
+          <canvas id="chart-monthly" height="200"></canvas>
+        </div>
+      </div>
+      <!-- Cost Trend Line  -->
+      <div class="bg-gray-800 rounded-lg p-4 mt-4">
+        <div class="flex justify-between items-center mb-2 relative">
+          <h3 class="text-sm text-gray-400">Cost Per Run</h3>
+          <button onclick="toggleExportMenu('cost')" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded">Export ▾</button>
+          <div id="export-menu-cost" class="hidden absolute right-0 top-7 bg-gray-800 border border-gray-700 rounded shadow z-50">
+            <button onclick="exportCost('json')" class="block w-full text-left text-xs px-3 py-1.5 hover:bg-gray-700">JSON</button>
+            <button onclick="exportCost('csv')" class="block w-full text-left text-xs px-3 py-1.5 hover:bg-gray-700">CSV</button>
+          </div>
+        </div>
+        <canvas id="chart-cost-trend" height="120"></canvas>
+      </div>
+      <!-- Duration Per Run Chart  -->
+      <div class="bg-gray-800 rounded-lg p-4 mt-4">
+        <h3 class="text-sm text-gray-400 mb-2">Duration Per Run</h3>
+        <canvas id="chart-duration-trend" height="120"></canvas>
+      </div>
+      <!-- Model Performance Comparison  -->
+      <div class="bg-gray-800 rounded-lg p-4 mt-4">
+        <h3 class="text-sm text-gray-400 mb-3">Model Performance</h3>
+        <canvas id="chart-model-perf" height="140" class="mb-4"></canvas>
+        <div id="model-comparison" class="overflow-x-auto">
+          <p class="text-gray-500 text-sm">Loading model data...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Actions Tab -->
+    <section id="tab-actions" class="tab-content hidden">
+      <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <button onclick="runAction('smith')" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition">
+          <div class="flex items-center gap-2 mb-1"><span>🔨</span><span class="font-semibold">Smith</span></div>
+          <p class="text-sm text-gray-400">Diagnose environment &amp; setup</p>
+        </button>
+        <button onclick="runSweep()" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition">
+          <div class="flex items-center gap-2 mb-1"><span>🧹</span><span class="font-semibold">Sweep</span></div>
+          <p class="text-sm text-gray-400">Find TODO/FIXME markers (table view)</p>
+        </button>
+        <button onclick="runAction('analyze', prompt('Plan path:'))" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition">
+          <div class="flex items-center gap-2 mb-1"><span>📊</span><span class="font-semibold">Analyze</span></div>
+          <p class="text-sm text-gray-400">Consistency score for a plan</p>
+        </button>
+        <button onclick="runAnalyzeQuorum()" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-purple-700/30">
+          <div class="flex items-center gap-2 mb-1"><span>📊</span><span class="font-semibold">Analyze (Quorum)</span></div>
+          <p class="text-sm text-gray-400">Multi-model consensus analysis</p>
+        </button>
+        <button onclick="runDiagnose()" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-purple-700/30">
+          <div class="flex items-center gap-2 mb-1"><span>🔬</span><span class="font-semibold">Diagnose</span></div>
+          <p class="text-sm text-gray-400">Multi-model bug investigation</p>
+        </button>
+        <button onclick="runStatusEditable()" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition">
+          <div class="flex items-center gap-2 mb-1"><span>📋</span><span class="font-semibold">Status</span></div>
+          <p class="text-sm text-gray-400">Phase status (editable)</p>
+        </button>
+        <button onclick="runAction('check')" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition">
+          <div class="flex items-center gap-2 mb-1"><span>✅</span><span class="font-semibold">Validate</span></div>
+          <p class="text-sm text-gray-400">Check setup files</p>
+        </button>
+        <button onclick="runAction('ext search')" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition">
+          <div class="flex items-center gap-2 mb-1"><span>🧩</span><span class="font-semibold">Extensions</span></div>
+          <p class="text-sm text-gray-400">Browse extension catalog</p>
+        </button>
+        <button onclick="runBranch()" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-green-700/30">
+          <div class="flex items-center gap-2 mb-1"><span>🌿</span><span class="font-semibold">Create Branch</span></div>
+          <p class="text-sm text-gray-400">Git branch from plan's strategy</p>
+        </button>
+        <button onclick="runCommit()" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-green-700/30">
+          <div class="flex items-center gap-2 mb-1"><span>💾</span><span class="font-semibold">Auto-Commit</span></div>
+          <p class="text-sm text-gray-400">Conventional commit from slice goal</p>
+        </button>
+        <button onclick="runDiff()" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-blue-700/30">
+          <div class="flex items-center gap-2 mb-1"><span>📝</span><span class="font-semibold">Diff</span></div>
+          <p class="text-sm text-gray-400">Compare changes vs scope contract</p>
+        </button>
+        <button onclick="openLaunchPanel()" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-cyan-700/30">
+          <div class="flex items-center gap-2 mb-1"><span>🚀</span><span class="font-semibold">Launch Plan</span></div>
+          <p class="text-sm text-gray-400">Execute a plan with model &amp; mode selection</p>
+        </button>
+        <button onclick="copyWatchCommand(true)" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-blue-700/30">
+          <div class="flex items-center gap-2 mb-1"><span>👁️</span><span class="font-semibold">Live Watch</span></div>
+          <p class="text-sm text-gray-400">Copy <code class="bg-gray-700 px-1 rounded">pforge watch-live</code> command</p>
+        </button>
+        <button onclick="copyWatchCommand(false)" class="action-btn bg-gray-800 hover:bg-gray-700 rounded-lg p-4 text-left transition border border-blue-700/30">
+          <div class="flex items-center gap-2 mb-1"><span>📸</span><span class="font-semibold">Watch Snapshot</span></div>
+          <p class="text-sm text-gray-400">Copy <code class="bg-gray-700 px-1 rounded">pforge watch</code> command</p>
+        </button>
+      </div>
+      <!-- Action result -->
+      <div id="action-result" class="mt-4 hidden">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <div class="flex justify-between items-center mb-2">
+            <h3 id="action-result-title" class="font-semibold text-sm"></h3>
+            <button onclick="document.getElementById('action-result').classList.add('hidden')" class="text-gray-500 hover:text-white">✕</button>
+          </div>
+          <pre id="action-result-output" class="text-xs text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Replay Tab  -->
+    <section id="tab-replay" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-4 mb-4">
+        <div class="flex gap-2 items-center mb-3">
+          <label class="text-sm text-gray-400">Run:</label>
+          <select id="replay-run-select" title="Select run" class="bg-gray-700 text-white text-sm rounded px-3 py-1" onchange="loadReplaySlices()"></select>
+          <label class="text-sm text-gray-400 ml-2">Slice:</label>
+          <select id="replay-slice-select" title="Select slice" class="bg-gray-700 text-white text-sm rounded px-3 py-1" onchange="loadReplayLog()"></select>
+          <div class="ml-auto flex gap-2">
+            <button onclick="filterReplay('all')" class="text-xs px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">All</button>
+            <button onclick="filterReplay('error')" class="text-xs px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">Errors</button>
+            <button onclick="filterReplay('file')" class="text-xs px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">Files</button>
+          </div>
+        </div>
+      </div>
+      <div id="replay-content" class="bg-gray-800 rounded-lg p-4">
+        <pre id="replay-log" class="text-xs text-gray-300 whitespace-pre-wrap max-h-96 overflow-y-auto font-mono">Select a run and slice to view session replay...</pre>
+      </div>
+    </section>
+
+    <!-- Extensions Tab  -->
+    <section id="tab-extensions" class="tab-content hidden">
+      <div class="mb-4">
+        <input id="ext-search" type="text" placeholder="Search extensions..." class="bg-gray-700 text-white text-sm rounded-lg px-4 py-2 w-full max-w-sm" oninput="filterExtensions()">
+      </div>
+      <div id="ext-cards" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <div class="text-gray-500 text-center py-12">Loading catalog...</div>
+      </div>
+    </section>
+
+    <!-- Phase-30 Settings Sub-tabs (9 decomposed sections) -->
+    <section id="tab-settings-general" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-4">⚙️ General</h2>
+        <p class="text-sm text-gray-400 mb-4">Project identity: preset, template version, and agent configuration.</p>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Preset</label>
+            <input id="cfg-preset" title="Preset" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Template Version</label>
+            <input id="cfg-version" title="Template version" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" readonly>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Agents</label>
+            <div id="cfg-agents" class="flex gap-2 flex-wrap"></div>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+          <p id="cfg-status" class="text-xs text-gray-500 mt-2"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings-models" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-4">🧩 Models</h2>
+        <p class="text-sm text-gray-400 mb-4">Model routing: default execution model and image generation model selection.</p>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Model Routing — Default</label>
+            <select id="cfg-model-default" title="Default model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
+              <option value="auto">auto</option>
+              <optgroup label="xAI Grok (API)">
+                <option value="grok-4.20">grok-4.20</option>
+                <option value="grok-4">grok-4</option>
+                <option value="grok-3">grok-3</option>
+                <option value="grok-3-mini">grok-3-mini</option>
+              </optgroup>
+              <optgroup label="Claude (CLI)">
+                <option value="claude-sonnet-4.6">claude-sonnet-4.6</option>
+                <option value="claude-opus-4.6">claude-opus-4.6</option>
+              </optgroup>
+              <optgroup label="OpenAI (CLI)">
+                <option value="gpt-5.2-codex">gpt-5.2-codex</option>
+                <option value="gpt-5-mini">gpt-5-mini</option>
+              </optgroup>
+              <optgroup label="Google (CLI)">
+                <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
+              </optgroup>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Image Generation Model</label>
+            <div class="flex gap-2 items-center">
+              <select id="cfg-model-image" title="Image generation model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 flex-1">
+                <option value="">None (disabled)</option>
+                <optgroup label="xAI Grok (XAI_API_KEY)">
+                  <option value="grok-imagine-image">grok-imagine-image</option>
+                  <option value="grok-imagine-image-pro">grok-imagine-image-pro</option>
+                </optgroup>
+                <optgroup label="OpenAI (OPENAI_API_KEY)">
+                  <option value="dall-e-3">dall-e-3</option>
+                  <option value="dall-e-4">dall-e-4</option>
+                  <option value="gpt-image-1">gpt-image-1</option>
+                </optgroup>
+              </select>
+              <span class="text-xs text-gray-500 shrink-0">🎨</span>
+            </div>
+            <p class="text-xs text-gray-600 mt-1">Agents delegate image tasks (logos, diagrams, icons) to this model via <code class="text-gray-500">forge_generate_image</code>. Requires <code class="text-gray-500">XAI_API_KEY</code> for Grok or <code class="text-gray-500">OPENAI_API_KEY</code> for DALL-E.</p>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings-execution" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-4">▶ Execution</h2>
+        <p class="text-sm text-gray-400 mb-4">Parallelism, retries, history limits, quorum settings, and worker availability.</p>
+        <div class="space-y-4">
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Max Parallelism</label>
+              <input id="cfg-max-parallel" type="number" min="1" max="10" value="3" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Max Retries</label>
+              <input id="cfg-max-retries" type="number" min="0" max="5" value="1" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Run History Limit</label>
+              <input id="cfg-max-history" type="number" min="10" max="500" value="50" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+            </div>
+          </div>
+          <div class="border-t border-gray-700 pt-3">
+            <h3 class="text-sm text-gray-400 font-semibold mb-2">Quorum Settings</h3>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="flex items-center gap-2 text-xs text-gray-500">
+                  <input id="cfg-quorum-enabled" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0"> Enable Quorum
+                </label>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Preset</label>
+                <select id="cfg-quorum-preset" class="bg-gray-700 text-white text-xs rounded px-2 py-1.5 w-full border border-gray-600">
+                  <option value="">Custom</option>
+                  <option value="power">Power (flagships)</option>
+                  <option value="speed">Speed (fast)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Threshold (1-10)</label>
+                <input id="cfg-quorum-threshold" type="number" min="1" max="10" value="7" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+              </div>
+            </div>
+            <div class="mt-2">
+              <label class="block text-xs text-gray-500 mb-1">Quorum Models (comma-separated)</label>
+              <input id="cfg-quorum-models" type="text" placeholder="claude-opus-4.6, gpt-5.3-codex, grok-4.20-0309-reasoning" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full border border-gray-600 focus:border-purple-500 outline-none">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Available Workers</label>
+            <div id="cfg-workers" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings-api-keys" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-4">🔑 API Keys</h2>
+        <p class="text-sm text-gray-400 mb-4">Provider API key management. Stored in <code class="text-gray-500">.forge/secrets.json</code> (gitignored). Environment variables take precedence.</p>
+        <div class="space-y-4">
+          <div id="cfg-api-keys" class="space-y-2">
+            <div class="text-xs text-gray-500">Loading...</div>
+          </div>
+          <div id="cfg-api-providers" class="text-sm text-gray-300 mt-2"></div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings-updates" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-4">⬇ Updates</h2>
+        <p class="text-sm text-gray-400 mb-4">Update source configuration for <code class="text-gray-500">pforge update</code>.</p>
+        <div class="space-y-4">
+          <label for="cfg-update-source" class="block text-sm text-gray-400 mb-1">Update Source</label>
+          <p class="text-xs text-gray-600 mb-2">Where <code class="text-gray-500">pforge update</code> pulls template bytes from.</p>
+          <select id="cfg-update-source" title="Update source" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none">
+            <option value="auto">Auto — prefer newer tagged release over <code>-dev</code> sibling (recommended)</option>
+            <option value="github-tags">GitHub tags only — ignore any local sibling clone</option>
+            <option value="local-sibling">Local sibling only — contributor workflow (always use ../plan-forge)</option>
+          </select>
+          <p id="cfg-update-source-hint" class="text-xs text-gray-500 mt-1">Loading…</p>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings-memory" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-4">💾 Memory</h2>
+        <p class="text-sm text-gray-400 mb-4">OpenBrain connection status, semantic search, and preset queries. Configured via <code class="text-gray-300">openbrain</code> in <code class="text-gray-300">.forge.json</code>.</p>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">OpenBrain Memory</label>
+            <div id="cfg-openbrain" class="text-sm text-gray-300 bg-gray-700 rounded px-3 py-2">Checking...</div>
+            <!-- Memory Search -->
+            <div id="memory-search-panel" class="mt-3">
+              <div class="flex gap-2">
+                <input id="memory-search-input" type="text" placeholder="Search plans, configs, runs..." class="flex-1 bg-gray-700 text-white text-sm rounded px-3 py-1.5 border border-gray-600 focus:border-blue-500 outline-none" onkeydown="if(event.key==='Enter')searchMemory()">
+                <button onclick="searchMemory()" class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 py-1.5 rounded">Search</button>
+              </div>
+              <div id="memory-presets" class="flex flex-wrap gap-1.5 mt-2"></div>
+              <div id="memory-search-results" class="mt-2 max-h-64 overflow-y-auto"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings-bridge" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl space-y-6">
+        <div>
+          <h2 class="text-lg font-semibold mb-1">🔔 Bridge</h2>
+          <p class="text-sm text-gray-400">Notification channels, adapters, routes, and rate limiting. Configure in <code class="text-gray-500">.forge.json</code> → <code class="text-gray-500">bridge</code>. Supports Telegram, Slack, Discord, and generic webhooks.</p>
+        </div>
+        <!-- Bridge status & channels (flattened from cfg-bridge-details accordion) -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+            Bridge — Notification Channels
+            <span id="bridge-enabled-badge" class="hidden text-xs px-1.5 py-0.5 rounded-full bg-green-900 text-green-300 ml-auto">enabled</span>
+          </h3>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-gray-500 w-16 shrink-0">Status</span>
+              <div id="bridge-status-badge" class="text-sm text-gray-400">Loading...</div>
+            </div>
+            <div id="bridge-channels-list" class="space-y-1"></div>
+            <div id="bridge-approvals-panel" class="hidden">
+              <p class="text-xs text-amber-400 font-semibold mb-2">⏳ Pending Approvals</p>
+              <div id="bridge-approvals-list" class="space-y-2"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Adapters -->
+        <div class="border-t border-gray-700 pt-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3">Adapters</h3>
+          <p class="text-xs text-gray-500 mb-3">Enable adapters and configure their connection settings. Secrets must use environment variable templates (<code class="text-gray-400">${env:VAR_NAME}</code>).</p>
+          <div id="notify-adapter-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="text-gray-500 text-center py-8">Loading adapter config...</div>
+          </div>
+        </div>
+        <!-- Routes -->
+        <div class="border-t border-gray-700 pt-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3">Routes</h3>
+          <p class="text-xs text-gray-500 mb-3">Events matching a route are dispatched to the listed adapters. Event names support globs (e.g. <code class="text-gray-400">slice-*</code>).</p>
+          <div id="notify-routes-editor">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-gray-400 text-xs">
+                  <th class="text-left pb-1">Event</th>
+                  <th class="text-left pb-1">Severity</th>
+                  <th class="text-left pb-1">Via</th>
+                  <th class="pb-1 w-8"></th>
+                </tr>
+              </thead>
+              <tbody id="notify-routes-tbody"></tbody>
+            </table>
+            <button onclick="addNotifyRoute()" class="text-xs text-blue-400 hover:text-blue-300 mt-2">+ Add route</button>
+          </div>
+        </div>
+        <!-- Rate Limiting -->
+        <div class="border-t border-gray-700 pt-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3">Rate Limiting</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Max per minute</label>
+              <input id="notify-rate-per-minute" type="number" min="1" max="100" value="10" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Digest after (events)</label>
+              <input id="notify-rate-digest-after" type="number" min="1" max="50" value="5" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full">
+            </div>
+          </div>
+        </div>
+        <!-- Save/Reload -->
+        <div class="flex gap-2 pt-2">
+          <button onclick="saveNotificationsConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Notifications</button>
+          <button onclick="renderNotificationsSubtab()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+        </div>
+        <p id="notify-status" class="text-xs text-gray-500 mt-1"></p>
+      </div>
+    </section>
+
+    <section id="tab-settings-crucible" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-1">🔥 Crucible</h2>
+        <p class="text-sm text-gray-400 mb-4">Controls the idea-smelting pipeline. Persisted to <code class="text-gray-400">.forge/crucible/config.json</code>.</p>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Default Lane</label>
+            <select id="crucible-cfg-lane" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Default lane">
+              <option value="tweak">Tweak (3 questions)</option>
+              <option value="feature" selected>Feature (6 questions)</option>
+              <option value="full">Full (12 questions)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Self-Referral Depth (0–3)</label>
+            <input id="crucible-cfg-depth" type="number" min="0" max="3" value="1" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Max recursion depth">
+            <p class="text-xs text-gray-600 mt-1">How many times a smelt can spawn a child smelt before hardening.</p>
+          </div>
+          <div>
+            <label class="flex items-center gap-2 text-sm text-gray-400">
+              <input id="crucible-cfg-auto-approve" type="checkbox" class="bg-gray-700 rounded" title="Auto-approve agent smelts">
+              <span>Auto-approve agent-submitted smelts</span>
+            </label>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Default-Source Weights (sum to 100)</label>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <span class="text-xs text-gray-500">Memory</span>
+                <input id="crucible-cfg-w-memory" type="number" min="0" max="100" value="34" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Memory weight">
+              </div>
+              <div>
+                <span class="text-xs text-gray-500">Principles</span>
+                <input id="crucible-cfg-w-principles" type="number" min="0" max="100" value="33" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Principles weight">
+              </div>
+              <div>
+                <span class="text-xs text-gray-500">Plans</span>
+                <input id="crucible-cfg-w-plans" type="number" min="0" max="100" value="33" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Plans weight">
+              </div>
+            </div>
+            <p class="text-xs text-gray-600 mt-1">Values are normalized server-side if they don't sum to 100.</p>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Stale Defaults Warning (hours)</label>
+            <input id="crucible-cfg-stale" type="number" min="1" max="168" value="24" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Stale defaults threshold">
+            <p class="text-xs text-gray-600 mt-1">Warn when Project Principles or profile files are newer than the smelt by this many hours.</p>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveCrucibleConfig()" class="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded text-sm">Save Crucible Config</button>
+            <button onclick="loadCrucibleConfigUI()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+          <p id="crucible-cfg-status" class="text-xs text-gray-500"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings-brain" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-4">🧠 Brain</h2>
+        <p class="text-sm text-gray-400 mb-4">Brain facade tier counters, top keys by hit rate, and recent recall misses. Read-only diagnostics for the L1/L2/L3 memory routing layer.</p>
+        <div id="cfg-brain">
+          <div class="space-y-6">
+            <div>
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">Tier Counters</h3>
+              <p class="text-xs text-gray-500 mb-3">Read-only summary of brain facade routing across L1 (session), L2 (durable), and L3 (semantic) tiers.</p>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-gray-400 text-xs">
+                    <th class="text-left pb-1">Tier</th>
+                    <th class="text-left pb-1">Description</th>
+                    <th class="text-right pb-1">Recalls</th>
+                    <th class="text-right pb-1">Misses</th>
+                  </tr>
+                </thead>
+                <tbody id="brain-tier-tbody">
+                  <tr class="text-gray-500 text-center"><td colspan="4" class="py-4">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="border-t border-gray-700 pt-4">
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">Top Keys by Hit Rate</h3>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-gray-400 text-xs">
+                    <th class="text-left pb-1">Key</th>
+                    <th class="text-right pb-1">Hits</th>
+                    <th class="text-right pb-1">Tier</th>
+                  </tr>
+                </thead>
+                <tbody id="brain-topkeys-tbody">
+                  <tr class="text-gray-500 text-center"><td colspan="3" class="py-4">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="border-t border-gray-700 pt-4">
+              <h3 class="text-sm font-semibold text-gray-300 mb-3">Recent Recall Misses</h3>
+              <ul id="brain-misses-list" class="text-sm text-gray-400 space-y-1">
+                <li class="text-gray-500">Loading...</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings-forgemaster" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-4">⚒ Forge-Master</h2>
+        <p class="text-sm text-gray-400 mb-4">Observer controls for live narrations, budget caps, and Brain capture. Values persist to <code class="text-gray-500">.forge.json</code> → <code class="text-gray-500">forgeMaster.observer</code>.</p>
+        <div class="space-y-6">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-300 mb-3">Observer</h3>
+            <div class="space-y-4">
+              <label class="flex items-center gap-2 text-sm text-gray-300">
+                <input id="cfg-observer-enabled" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0">
+                Enable observer narrations
+              </label>
+              <div>
+                <label class="block text-sm text-gray-400 mb-1">Model Tier</label>
+                <select id="cfg-observer-modeltier" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                  <option value="">Inherit ask mode (default)</option>
+                  <option value="flagship">Flagship (best quality)</option>
+                  <option value="mid">Mid (balanced)</option>
+                  <option value="fast">Fast (cheapest)</option>
+                </select>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Daily budget (USD)</label>
+                  <input id="cfg-observer-budget-usd" type="number" min="0" step="0.01" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Narrations per hour</label>
+                  <input id="cfg-observer-budget-narrations" type="number" min="0" step="1" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                </div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Batch window (ms)</label>
+                  <input id="cfg-observer-batch-window-ms" type="number" min="0" step="1000" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                </div>
+                <label class="flex items-center gap-2 text-sm text-gray-300 md:mt-6">
+                  <input id="cfg-observer-brain-capture" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0">
+                  Capture narrations to Brain
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="border-t border-gray-700 pt-4">
+            <h3 class="text-sm font-semibold text-gray-300 mb-3">Auditor</h3>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm text-gray-400 mb-1">Model Tier</label>
+                <select id="cfg-auditor-modeltier" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                  <option value="">Inherit ask mode (default)</option>
+                  <option value="flagship">Flagship (best quality)</option>
+                  <option value="mid">Mid (balanced)</option>
+                  <option value="fast">Fast (cheapest)</option>
+                </select>
+              </div>
+              <label class="flex items-center gap-2 text-sm text-gray-300">
+                <input id="cfg-auditor-on-failure" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0">
+                Auto-run auditor after failed runs
+              </label>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Run cadence</label>
+                <input id="cfg-auditor-every-n-runs" type="number" min="5" step="1" placeholder="blank = off" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                <p class="text-xs text-gray-600 mt-1">Blank disables scheduled audits. Values 1–4 are rejected; recommended range is 5–25.</p>
+              </div>
+            </div>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- D5 — Chat Customizations Editor (Settings > Copilot, v3.1.0) -->
+    <section id="tab-settings-copilot" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-1">🤖 Chat Customizations</h2>
+        <p class="text-sm text-gray-400 mb-4">
+          Manage <code class="text-blue-300">.github/copilot-instructions.md</code> — the file GitHub Copilot reads automatically to apply project-specific guidance in every chat session.
+          Generated by <code class="text-blue-300">pforge sync-instructions</code>.
+        </p>
+
+        <!-- Status card -->
+        <div id="copilot-instr-status" class="bg-gray-900/60 border border-gray-700 rounded-lg p-4 mb-5 text-sm">
+          <div class="flex items-center gap-2 mb-2">
+            <span id="copilot-instr-exists-badge" class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">Checking…</span>
+            <span id="copilot-instr-sections" class="text-xs text-gray-500"></span>
+            <span id="copilot-instr-modified" class="text-xs text-gray-500 ml-auto"></span>
+          </div>
+          <div id="copilot-instr-path" class="text-xs text-gray-500 font-mono truncate"></div>
+        </div>
+
+        <!-- Sync options -->
+        <div class="mb-5 space-y-3">
+          <h3 class="text-sm font-semibold text-gray-300">Sync options</h3>
+          <label class="flex items-center gap-3 text-sm text-gray-300 cursor-pointer select-none">
+            <input type="checkbox" id="opt-no-principles" class="w-4 h-4 accent-purple-500 cursor-pointer">
+            <span>Skip <strong>Project Principles</strong> section</span>
+          </label>
+          <label class="flex items-center gap-3 text-sm text-gray-300 cursor-pointer select-none">
+            <input type="checkbox" id="opt-no-profile" class="w-4 h-4 accent-purple-500 cursor-pointer">
+            <span>Skip <strong>Project Profile</strong> section</span>
+          </label>
+          <label class="flex items-center gap-3 text-sm text-gray-300 cursor-pointer select-none">
+            <input type="checkbox" id="opt-no-extras" class="w-4 h-4 accent-purple-500 cursor-pointer">
+            <span>Skip <strong>extra instruction files</strong></span>
+          </label>
+          <label class="flex items-center gap-3 text-sm text-gray-300 cursor-pointer select-none">
+            <input type="checkbox" id="opt-force" class="w-4 h-4 accent-purple-500 cursor-pointer">
+            <span>Force overwrite even when content is unchanged</span>
+          </label>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex flex-wrap gap-3 mb-5">
+          <button onclick="copilotInstrPreview()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition font-medium">
+            Preview
+          </button>
+          <button onclick="copilotInstrSync()" class="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded-lg transition font-medium">
+            Sync Now
+          </button>
+          <button onclick="loadCopilotInstrStatus()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition">
+            Refresh
+          </button>
+        </div>
+
+        <!-- Result / feedback -->
+        <div id="copilot-instr-msg" class="hidden mb-4 text-sm rounded-lg px-4 py-3 border"></div>
+
+        <!-- Preview / current-file content viewer -->
+        <div id="copilot-instr-preview-wrap" class="hidden">
+          <div class="flex items-center justify-between mb-2">
+            <h3 id="copilot-instr-preview-label" class="text-sm font-semibold text-gray-300">Preview</h3>
+            <button onclick="copilotInstrCopyPreview()" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-gray-300 transition">Copy</button>
+          </div>
+          <pre id="copilot-instr-preview" class="bg-gray-900 text-gray-300 text-xs rounded-lg p-4 overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto font-mono border border-gray-700"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Traces Tab  -->
+    <section id="tab-traces" class="tab-content hidden">
+      <div class="flex gap-4 mb-4 flex-wrap">
+        <select id="trace-run-select" title="Select trace run" class="bg-gray-700 text-white text-sm rounded px-3 py-2" onchange="loadTraceDetail()">
+          <option value="">Select a run...</option>
+        </select>
+        <input id="trace-search" type="text" placeholder="Search spans..." class="bg-gray-700 text-white text-sm rounded px-3 py-2 border border-gray-600 focus:border-blue-500 outline-none w-48" oninput="filterTraceSpans()">
+        <div class="flex gap-2 text-xs items-center">
+          <button onclick="filterTraceEvents('all')" class="px-2 py-1 bg-gray-600 rounded hover:bg-gray-500">All</button>
+          <button onclick="filterTraceEvents('ERROR')" class="px-2 py-1 bg-red-900 rounded hover:bg-red-800">Errors</button>
+          <button onclick="filterTraceEvents('WARN')" class="px-2 py-1 bg-yellow-900 rounded hover:bg-yellow-800">Warnings</button>
+        </div>
+      </div>
+      <!-- Waterfall -->
+      <div id="trace-waterfall" class="bg-gray-800 rounded-lg p-4 mb-4 overflow-x-auto">
+        <div id="waterfall-bars" class="relative min-h-32">
+          <p class="text-gray-500 text-center py-8">Select a run to view its trace</p>
+        </div>
+      </div>
+      <!-- Span Detail -->
+      <div id="trace-detail" class="grid gap-4 md:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm text-gray-400 mb-2">Span Events</h3>
+          <div id="trace-events" class="text-xs space-y-1 max-h-64 overflow-y-auto font-mono">
+            <p class="text-gray-500">Click a span bar to view events</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm text-gray-400 mb-2">Span Attributes</h3>
+          <pre id="trace-attributes" class="text-xs text-gray-300 max-h-64 overflow-y-auto">Click a span bar to view attributes</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Skills Tab -->
+    <section id="tab-skills" class="tab-content hidden">
+      <!-- Skill Catalog  -->
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold text-white mb-2">Available Skills</h2>
+        <div id="skill-catalog" class="grid gap-2 md:grid-cols-2 lg:grid-cols-3 mb-6">
+          <p class="text-gray-500 text-sm">Loading skills...</p>
+        </div>
+      </div>
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold text-white mb-2">Skill Executions</h2>
+        <p class="text-sm text-gray-400">Real-time timeline of slash command skill invocations via <code class="text-blue-400">forge_run_skill</code>.</p>
+      </div>
+      <div id="skill-timeline" class="space-y-2">
+        <div class="text-gray-500 text-center py-8">No skill executions yet. Invoke a skill via <code>/skill-name</code> or <code>forge_run_skill</code>.</div>
+      </div>
+    </section>
+
+    <!-- Watcher Tab (v2.35) -->
+    <section id="tab-watcher" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-blue-400">👁️ Watcher</h2>
+          <p class="text-xs text-gray-500">Live feed from <code class="bg-gray-700 px-1 rounded">pforge watch-live</code> — read-only observer (v2.35)</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <button onclick="copyWatchCommand(true)" class="text-xs px-3 py-1 bg-blue-700/40 hover:bg-blue-700/70 text-blue-300 rounded">Copy watch-live cmd</button>
+          <button onclick="renderWatcherPanel()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">Latest Snapshot</h3>
+          <div id="watcher-snapshot">
+            <p class="text-gray-500 text-sm py-4 text-center">No watcher snapshots yet. Run <code class="bg-gray-700 px-1 rounded">pforge watch &lt;target&gt;</code> or <code class="bg-gray-700 px-1 rounded">pforge watch-live &lt;target&gt;</code>.</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">Advice History</h3>
+          <div id="watcher-advice">
+            <p class="text-gray-500 text-sm py-4 text-center">No advice generated yet.</p>
+          </div>
+        </div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4 mt-4">
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">Anomalies</h3>
+        <div id="watcher-anomalies" class="max-h-96 overflow-y-auto">
+          <p class="text-gray-500 text-sm py-4 text-center">No anomalies detected.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tempering Tab (Phase TEMPER-01 Slice 01.2) — coverage-vs-minima view
+         Read-only; reads the latest scan-*.json records from .forge/tempering/
+         via forge_tempering_status. Never triggers a test run. -->
+    <section id="tab-tempering" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-emerald-400">🛠 Tempering</h2>
+          <p class="text-xs text-gray-500">Coverage vs. minima from the latest <code class="bg-gray-700 px-1 rounded">forge_tempering_scan</code>. Read-only — no tests are executed.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="tempering-scan-btn" class="text-xs px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded text-white" onclick="runTemperingScan()" data-testid="tempering-scan-btn">Run scan</button>
+          <button onclick="renderTemperingPanel()" class="text-xs px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+
+      <!-- Legend: what each scanner type means -->
+      <details class="mb-4 bg-gray-800/60 border border-gray-700 rounded-lg" data-testid="tempering-legend">
+        <summary class="text-xs text-gray-300 cursor-pointer hover:text-white px-3 py-2 select-none">
+          ℹ️ <span class="font-medium">What do these test types mean?</span>
+        </summary>
+        <div class="px-4 pb-3 pt-1 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs text-gray-400">
+          <div><span class="text-emerald-300 font-medium">Unit</span> — a single function or class in isolation; fast, no I/O.</div>
+          <div><span class="text-emerald-300 font-medium">Integration</span> — multiple modules wired together (service + repository, API + DB).</div>
+          <div><span class="text-emerald-300 font-medium">UI / Playwright</span> — end-to-end browser driving through real pages and clicks.</div>
+          <div><span class="text-emerald-300 font-medium">Contract</span> — request/response shape agreements between services (schema, OpenAPI).</div>
+          <div><span class="text-emerald-300 font-medium">Visual Diff</span> — compares rendered screenshots against a baseline; catches silent CSS/layout regressions.</div>
+          <div><span class="text-emerald-300 font-medium">Flakiness</span> — tests whose pass/fail outcome isn’t deterministic on the same code.</div>
+          <div><span class="text-emerald-300 font-medium">Performance Budget</span> — enforced ceilings on latency, memory, or throughput per critical path.</div>
+          <div><span class="text-emerald-300 font-medium">Load / Stress</span> — behaviour under sustained traffic and beyond-design traffic.</div>
+          <div><span class="text-emerald-300 font-medium">Mutation</span> — deliberately breaks source to verify the tests actually detect it; measures assertion strictness.</div>
+        </div>
+      </details>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Latest scan summary -->
+        <div class="bg-gray-800 rounded-lg p-4 lg:col-span-1" data-testid="tempering-summary">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3">Latest scan</h3>
+          <div id="tempering-summary-body">
+            <p class="text-gray-500 text-sm py-4 text-center">No Tempering scans yet.</p>
+          </div>
+        </div>
+
+        <!-- Coverage vs. minima -->
+        <div class="bg-gray-800 rounded-lg p-4 lg:col-span-2" data-testid="tempering-coverage">
+          <h3 class="text-sm font-semibold text-gray-300 mb-1">Coverage vs. minima</h3>
+          <p class="text-xs text-gray-500 mb-3">How much of each architectural layer your tests actually exercise, compared to the minimum the project requires. <span class="text-gray-400">Domain</span> = business rules, <span class="text-gray-400">Integration</span> = cross-module wiring, <span class="text-gray-400">Controller</span> = HTTP/entry-point handlers, <span class="text-gray-400">Overall</span> = weighted average.</p>
+          <div id="tempering-coverage-body">
+            <p class="text-gray-500 text-sm py-4 text-center">No coverage data.</p>
+          </div>
+        </div>
+
+        <!-- Gap list -->
+        <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3" data-testid="tempering-gaps">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3">Gap report (worst-first, top 10 per layer)</h3>
+          <div id="tempering-gaps-body">
+            <p class="text-gray-500 text-sm py-4 text-center">No gaps — every layer meets its minimum, or no scans yet.</p>
+          </div>
+        </div>
+
+        <!-- History -->
+        <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3" data-testid="tempering-history">
+          <h3 class="text-sm font-semibold text-gray-300 mb-3">Recent scans</h3>
+          <div id="tempering-history-body">
+            <p class="text-gray-500 text-sm py-4 text-center">No scan history.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Visual Regression Viewer (TEMPER-04 Slice 04.2) -->
+      <div id="visual-diff-viewer" class="hidden mt-4" data-testid="visual-diff-viewer">
+        <h3 class="text-lg font-semibold text-white mb-2">Visual Regression Viewer</h3>
+        <div id="visual-diff-list" class="space-y-4" data-testid="visual-diff-list"></div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3 mt-4" data-testid="tempering-flakiness">
+        <h3 class="text-lg font-semibold mb-1">🎲 Flaky Tests</h3>
+        <p class="text-xs text-gray-500 mb-3">Tests that sometimes pass and sometimes fail on the same code — usually due to timing, shared state, or network assumptions. Flaky tests erode trust in the suite and hide real regressions. Listed worst-first by fail rate.</p>
+        <div id="tempering-flakiness-body"></div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3 mt-4" data-testid="tempering-perf-budget">
+        <h3 class="text-lg font-semibold mb-1">⚡ Performance Budget</h3>
+        <p class="text-xs text-gray-500 mb-3">Upper bounds on latency, memory, or throughput for critical paths. A budget miss means a request, function, or page is slower than the product promised — caught before it ships, not after users complain.</p>
+        <div id="tempering-perf-budget-body"></div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3 mt-4" data-testid="tempering-load-stress">
+        <h3 class="text-lg font-semibold mb-1">🔥 Load / Stress</h3>
+        <p class="text-xs text-gray-500 mb-3">Behaviour under sustained traffic (load) and beyond-design traffic (stress). Surfaces connection-pool exhaustion, memory leaks, and thundering-herd failures that unit tests can’t see.</p>
+        <div id="tempering-load-stress-body"></div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4 lg:col-span-3 mt-4" data-testid="tempering-mutation">
+        <h3 class="text-lg font-semibold mb-1">🧬 Mutation Testing</h3>
+        <p class="text-xs text-gray-500 mb-3">Deliberately breaks your source code in small ways (flips a condition, drops a line) and re-runs the tests. If nothing fails, a test is missing. The mutation-kill score measures how strict your tests really are — coverage says a line ran, mutation says it was actually checked.</p>
+        <div id="tempering-mutation-body"></div>
+      </div>
+    </section>
+
+    <!-- Bug Registry Tab (TEMPER-06 Slice 06.1) -->
+    <section id="tab-bugregistry" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-red-400">🐛 Bug Registry</h2>
+          <p class="text-xs text-gray-500">Bugs discovered by tempering scanners — classified, deduplicated, tracked</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <button onclick="loadBugRegistry()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded" data-testid="bugregistry-refresh-btn">Refresh</button>
+        </div>
+      </div>
+      <!-- Filters -->
+      <div class="flex gap-2 mb-3 flex-wrap" data-testid="bugregistry-filters">
+        <select id="bugregistry-filter-status" class="bg-gray-700 text-gray-200 text-xs rounded px-2 py-1" onchange="loadBugRegistry()">
+          <option value="">All Statuses</option>
+          <option value="open">Open</option>
+          <option value="in-fix">In Fix</option>
+          <option value="fixed">Fixed</option>
+          <option value="wont-fix">Won't Fix</option>
+          <option value="duplicate">Duplicate</option>
+        </select>
+        <select id="bugregistry-filter-severity" class="bg-gray-700 text-gray-200 text-xs rounded px-2 py-1" onchange="loadBugRegistry()">
+          <option value="">All Severities</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select id="bugregistry-filter-scanner" class="bg-gray-700 text-gray-200 text-xs rounded px-2 py-1" onchange="loadBugRegistry()">
+          <option value="">All Scanners</option>
+          <option value="unit">Unit</option>
+          <option value="integration">Integration</option>
+          <option value="ui-playwright">UI/Playwright</option>
+          <option value="contract">Contract</option>
+          <option value="visual-diff">Visual Diff</option>
+          <option value="flakiness">Flakiness</option>
+          <option value="performance-budget">Perf Budget</option>
+          <option value="load-stress">Load Stress</option>
+          <option value="mutation">Mutation</option>
+        </select>
+      </div>
+      <!-- Bug table -->
+      <div id="bugregistry-table-container" data-testid="bugregistry-table">
+        <p class="text-gray-500 text-sm py-4 text-center">Loading...</p>
+      </div>
+    </section>
+
+    <!-- Memory Tab (GX.1 v2.36) — three-tier memory health: L1 hub, L2 files, L3 OpenBrain bridge -->
+    <section id="tab-memory" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-blue-400">🧠 Memory</h2>
+          <p class="text-xs text-gray-500">Three-tier memory health — L1 hub events, L2 <code class="bg-gray-700 px-1 rounded">.forge/*.jsonl</code>, L3 OpenBrain bridge (v2.36)</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/MEMORY-ARCHITECTURE.md" target="_blank" class="text-xs text-blue-600/60 hover:text-blue-400">Docs ↗</a>
+          <button onclick="loadMemoryReport()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+
+      <!-- KPI strip -->
+      <div class="grid gap-4 grid-cols-2 lg:grid-cols-5 mb-4">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-400">Captures</p>
+          <p id="mem-captures-total" class="text-2xl font-bold text-blue-400">—</p>
+          <p id="mem-captures-deduped" class="text-xs text-gray-500 mt-1">— deduped</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-400">Queue · Pending</p>
+          <p id="mem-queue-pending" class="text-2xl font-bold">—</p>
+          <p id="mem-queue-deferred" class="text-xs text-gray-500 mt-1">— deferred</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-400">Queue · Delivered</p>
+          <p id="mem-queue-delivered" class="text-2xl font-bold text-green-400">—</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-400">DLQ + Failed</p>
+          <p id="mem-queue-dlq" class="text-2xl font-bold text-red-400">—</p>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-xs text-gray-400">Cache · Fresh</p>
+          <p id="mem-cache-fresh" class="text-2xl font-bold">—</p>
+          <p id="mem-cache-total" class="text-xs text-gray-500 mt-1">— total entries</p>
+        </div>
+      </div>
+
+      <!-- Detail panels -->
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">L2 Files</h3>
+          <div id="mem-l2-files" class="text-xs">
+            <p class="text-gray-500 py-2 text-center">Loading…</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">Captures by Tool</h3>
+          <div id="mem-by-tool" class="text-xs">
+            <p class="text-gray-500 py-2 text-center">Loading…</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">Captures by Type</h3>
+          <div id="mem-by-type" class="text-xs">
+            <p class="text-gray-500 py-2 text-center">Loading…</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-300 mb-2">Drain Trend (last 20 passes)</h3>
+          <div id="mem-drain-trend" class="text-xs">
+            <p class="text-gray-500 py-2 text-center">Loading…</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-gray-800 rounded-lg p-4 mt-4">
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">Orphan Files</h3>
+        <p class="text-xs text-gray-500 mb-2">Files in <code class="bg-gray-700 px-1 rounded">.forge/</code> not registered in the memory schema. Run <code class="bg-gray-700 px-1 rounded">pforge migrate-memory</code> to roll legacy <code>.json</code> ledgers into <code>.jsonl</code>.</p>
+        <div id="mem-orphans" class="text-xs">
+          <p class="text-gray-500 py-2 text-center">Loading…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Timeline Tab (Phase FORGE-SHOP-05 Slice 05.2) — unified chronological event view -->
+    <section id="tab-timeline" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-cyan-400">📅 Timeline</h2>
+          <p class="text-xs text-gray-500">Unified chronological view across all forge event sources.</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+            <input type="checkbox" id="timeline-auto-refresh" data-testid="timeline-auto-refresh" class="rounded">
+            Auto-refresh (10s)
+          </label>
+          <button onclick="loadTimelineData()" data-testid="timeline-refresh-btn" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="flex flex-wrap gap-2 mb-4 items-center" data-testid="timeline-filter-bar">
+        <!-- Time window presets -->
+        <span class="text-xs text-gray-500 mr-1">Window:</span>
+        <button class="timeline-window-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-window="15m" data-testid="timeline-window-15m">15m</button>
+        <button class="timeline-window-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-window="1h" data-testid="timeline-window-1h">1h</button>
+        <button class="timeline-window-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-window="6h" data-testid="timeline-window-6h">6h</button>
+        <button class="timeline-window-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-window="24h" data-testid="timeline-window-24h">24h</button>
+        <button class="timeline-window-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-window="7d" data-testid="timeline-window-7d">7d</button>
+        <button class="timeline-window-chip text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:text-white" data-window="30d" data-testid="timeline-window-30d">30d</button>
+
+        <!-- Source toggles -->
+        <span class="text-xs text-gray-500 ml-2 mr-1">Sources:</span>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="hub-event" data-testid="timeline-src-hub-event">hub-event</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="run" data-testid="timeline-src-run">run</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="memory" data-testid="timeline-src-memory">memory</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="openbrain" data-testid="timeline-src-openbrain">openbrain</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="watch" data-testid="timeline-src-watch">watch</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="tempering" data-testid="timeline-src-tempering">tempering</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="bug" data-testid="timeline-src-bug">bug</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="incident" data-testid="timeline-src-incident">incident</button>
+        <button class="timeline-source-chip tab-active text-xs px-2 py-0.5 rounded-full border border-cyan-500 text-cyan-400" data-source="forge-master" data-testid="timeline-src-forge-master">forge-master</button>
+      </div>
+
+      <!-- Correlation + view toggle row -->
+      <div class="flex flex-wrap gap-3 mb-4 items-center" data-testid="timeline-controls">
+        <span class="text-xs text-gray-500">Correlation:</span>
+        <input type="text" id="timeline-correlation-input" data-testid="timeline-correlation-input"
+          class="bg-gray-700 border border-gray-600 text-gray-100 text-xs rounded px-2 py-1 w-48 placeholder-gray-500
+                 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+          placeholder="Filter by correlationId…" />
+        <button id="timeline-correlation-clear" data-testid="timeline-correlation-clear" onclick="clearTimelineCorrelation()"
+          class="text-xs text-gray-500 hover:text-white" title="Clear correlation filter">✕</button>
+
+        <span class="text-xs text-gray-500 ml-3">View:</span>
+        <button id="timeline-view-flat" data-testid="timeline-view-flat"
+          class="timeline-view-btn tab-active text-xs px-2 py-0.5 rounded border border-cyan-500 text-cyan-400">Flat</button>
+        <button id="timeline-view-threaded" data-testid="timeline-view-threaded"
+          class="timeline-view-btn text-xs px-2 py-0.5 rounded border border-gray-600 text-gray-400 hover:text-white">Threaded</button>
+      </div>
+
+      <!-- Stats bar -->
+      <div class="flex gap-4 mb-3 text-xs text-gray-500" data-testid="timeline-stats">
+        <span>Events: <span id="timeline-total" data-testid="timeline-total">—</span></span>
+        <span>Window: <span id="timeline-window-label" data-testid="timeline-window-label">—</span></span>
+        <span>Duration: <span id="timeline-duration" data-testid="timeline-duration">—</span></span>
+        <span id="timeline-truncated-banner" data-testid="timeline-truncated-banner" class="hidden text-amber-400">⚠ Results truncated — narrow your time window or add filters</span>
+      </div>
+
+      <!-- Event stream -->
+      <div id="timeline-stream" data-testid="timeline-stream" class="bg-gray-800 rounded-lg p-4 max-h-[600px] overflow-y-auto">
+        <p class="text-gray-500 text-center py-8" data-testid="timeline-empty-state">No events found. Try widening the time window or removing filters.</p>
+      </div>
+
+      <!-- Error state -->
+      <div id="timeline-error" data-testid="timeline-error" class="hidden mt-2 text-red-400 text-xs text-center"></div>
+    </section>
+
+    <!-- Inner Loop Tab (Phase-26 Slice 13) — self-deterministic subsystems at a glance -->
+    <!--
+      Read-only projection over backend subsystems shipped in Phase-26. All six
+      panels are advisory; every subsystem is opt-in via `.forge.json`. Empty
+      states are the expected out-of-the-box UX because the defaults are OFF.
+    -->
+    <section id="tab-innerloop" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-emerald-400">🔁 Inner Loop</h2>
+          <p class="text-xs text-gray-500">Self-deterministic feedback subsystems — reviewer calibration, gate suggestions, cost anomalies, proposed fixes, federation.</p>
+        </div>
+        <button onclick="loadInnerLoop()" data-testid="innerloop-refresh-btn" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+      </div>
+
+      <!-- Summary row (from /api/innerloop/status) -->
+      <div id="innerloop-summary" data-testid="innerloop-summary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div class="bg-gray-800 rounded p-3">
+          <div class="text-xs text-gray-500">Reviewer calibration</div>
+          <div id="il-summary-reviewer" class="text-sm font-semibold text-gray-200">—</div>
+        </div>
+        <div class="bg-gray-800 rounded p-3">
+          <div class="text-xs text-gray-500">Auto-skills pending</div>
+          <div id="il-summary-skills" class="text-sm font-semibold text-gray-200">—</div>
+        </div>
+        <div class="bg-gray-800 rounded p-3">
+          <div class="text-xs text-gray-500">Federation</div>
+          <div id="il-summary-federation" class="text-sm font-semibold text-gray-200">—</div>
+        </div>
+        <div class="bg-gray-800 rounded p-3">
+          <div class="text-xs text-gray-500">Open fix proposals</div>
+          <div id="il-summary-autofix" class="text-sm font-semibold text-gray-200">—</div>
+        </div>
+      </div>
+
+      <!-- Six collapsible panels (<details>) -->
+      <div class="space-y-2">
+
+        <!-- Panel 1: Reviewer calibration -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-reviewer" open>
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            👁️ Reviewer calibration
+          </summary>
+          <div id="il-reviewer-body" class="px-4 pb-4 text-xs text-gray-400">Loading…</div>
+        </details>
+
+        <!-- Panel 2: Gate suggestions -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-gate-suggestions">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            💡 Gate suggestions
+          </summary>
+          <div id="il-gate-suggestions-body" class="px-4 pb-4 text-xs text-gray-400">Loading…</div>
+        </details>
+
+        <!-- Panel 3: Cost anomalies -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-cost-anomalies">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            📈 Cost anomalies
+          </summary>
+          <div id="il-cost-anomalies-body" class="px-4 pb-4 text-xs text-gray-400">Loading…</div>
+        </details>
+
+        <!-- Panel 4: Proposed fixes -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-proposed-fixes">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            🛠️ Proposed fixes
+          </summary>
+          <div id="il-proposed-fixes-body" class="px-4 pb-4 text-xs text-gray-400">Loading…</div>
+        </details>
+
+        <!-- Panel 5: Federation (trajectory sharing across repos) -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-federation">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            🌐 Federation
+          </summary>
+          <div id="il-federation-body" class="px-4 pb-4 text-xs text-gray-400">Loading…</div>
+        </details>
+
+        <!-- Panel 6: Docs / help -->
+        <details class="bg-gray-800 rounded-lg" data-testid="il-panel-help">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-gray-750 rounded-lg">
+            📚 About the Inner Loop
+          </summary>
+          <div class="px-4 pb-4 text-xs text-gray-400 space-y-2">
+            <p>The Inner Loop is a set of feedback subsystems that let Plan Forge improve without human intervention between slices.</p>
+            <ul class="list-disc pl-5 space-y-1">
+              <li><strong>Reviewer calibration</strong> — shows when local reviews become eligible to adjust grader confidence.</li>
+              <li><strong>Gate suggestions</strong> — counts of accepted validation-gate commands, ready for promotion.</li>
+              <li><strong>Cost anomalies</strong> — slices whose token spend drifted above the per-model median.</li>
+              <li><strong>Proposed fixes</strong> — patches produced by the auto-fix subsystem awaiting review.</li>
+              <li><strong>Federation</strong> — recent trajectories discovered in sibling repos configured under <code>brain.federation</code>.</li>
+            </ul>
+            <p>All subsystems are <em>advisory</em> by default. Enable or tune them in the <a href="#" onclick="document.querySelector('[data-tab=config]').click(); return false;" class="text-emerald-400 underline">Config</a> tab.</p>
+          </div>
+        </details>
+
+      </div>
+
+      <div id="innerloop-error" data-testid="innerloop-error" class="hidden mt-3 text-red-400 text-xs text-center"></div>
+    </section>
+
+    <!-- GitHub Metrics Tab — Phase GITHUB-D Slice 6 -->
+    <section id="tab-github-metrics" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-green-400">📊 GitHub × Plan-Forge</h2>
+          <p class="text-xs text-gray-500">Copilot adoption (org mode) or your account &amp; repo activity (personal mode).</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input id="gm-org-input" type="text" placeholder="org-name"
+            class="text-xs px-2 py-1 bg-gray-700 rounded border border-gray-600 text-gray-200 w-32"
+            title="GitHub organization slug" />
+          <button onclick="loadGithubMetrics()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div id="gm-readiness" class="mb-4"></div>
+      <div id="gm-adoption-panel" class="mb-4"></div>
+      <div id="gm-orchestration-panel" class="mb-4"></div>
+      <div id="gm-per-team-panel" class="mb-4"></div>
+      <div id="gm-personal-account-card" class="mb-4 hidden"></div>
+      <div id="gm-personal-repo-card" class="mb-4 hidden"></div>
+      <div id="gm-personal-ai-card" class="mb-4 hidden"></div>
+      <div id="gm-error" class="hidden text-red-400 text-xs text-center mt-2"></div>
+    </section>
+    <!-- Team Dashboard Tab (Phase-TEAM-DASHBOARD, v3.4.0) -->
+    <section id="tab-team-dashboard" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-cyan-400">👥 Team Dashboard</h2>
+          <p class="text-xs text-gray-500">Multi-developer plan coordination — per-operator stats and conflict-risk overview.</p>
+        </div>
+        <button onclick="loadTeamDashboard()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+      </div>
+      <div id="td-summary" class="mb-4"></div>
+      <div id="td-risk" class="mb-4"></div>
+      <div id="td-operators" class="mb-4"></div>
+      <div id="td-empty" class="hidden text-slate-500 text-sm p-6 text-center">
+        No team activity yet. Activity is recorded after the first plan run.<br/>
+        <code class="text-amber-400 text-xs">pforge run-plan &lt;plan-file&gt;</code>
+      </div>
+      <div id="td-error" class="hidden text-red-400 text-xs text-center mt-2"></div>
+    </section>
+
+
+    <!-- Anvil & Lattice Tab (Phase-LATTICE Slice 9) -->
+    <section id="tab-anvil-lattice" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-blue-400">🔨 Anvil &amp; Lattice</h2>
+          <p class="text-xs text-gray-500">Memoization cache stats and code-graph index summary.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="anvil-lattice.html" target="_blank" class="text-xs text-blue-600/60 hover:text-blue-400">Full page ↗</a>
+          <button onclick="window.loadAnvilLattice?.()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div id="al-error" class="hidden text-red-400 text-xs mb-3" role="alert"></div>
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <div id="al-anvil-card" data-card="anvil"></div>
+        <div id="al-lattice-card" data-card="lattice"></div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Health Tab -->
+    <section id="tab-lg-health" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Health</h2>
+        <div class="flex gap-2 items-center">
+          <a href="liveguard-dashboard.html" target="_blank" class="text-xs text-amber-600/60 hover:text-amber-400">Docs ↗</a>
+          <button onclick="loadLGHealth()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2 mb-4">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <p class="text-sm text-gray-400 mb-2">Drift Score</p>
+          <div class="flex items-center gap-4">
+            <p id="lg-drift-score" class="text-2xl font-bold text-amber-400">—</p>
+            <progress id="lg-drift-gauge" max="100" value="0" class="flex-1 h-3 rounded"></progress>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">100 = full alignment</p>
+        </div>
+        <div class="grid gap-4 grid-cols-2">
+          <div class="bg-gray-800 rounded-lg p-4">
+            <p class="text-sm text-gray-400">Open Incidents</p>
+            <p id="lg-open-incidents" class="text-2xl font-bold">—</p>
+          </div>
+          <div class="bg-gray-800 rounded-lg p-4">
+            <p class="text-sm text-gray-400">Last Scan</p>
+            <p id="lg-last-scan" class="text-sm text-gray-300 mt-1">—</p>
+          </div>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm text-gray-400">Drift History</h3>
+            <button onclick="runQuorumFromDashboard('health')" class="text-xs px-2 py-1 bg-amber-900/40 hover:bg-amber-900/70 text-amber-300 rounded">Run Quorum Analysis →</button>
+          </div>
+          <div id="lg-health-trend"><canvas id="lg-health-chart" height="180"></canvas></div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm text-gray-400 mb-2">Hotspot Analysis</h3>
+          <div id="lg-hotspot-container"><canvas id="lg-hotspot-chart" height="180"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Incidents Tab -->
+    <section id="tab-lg-incidents" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Incidents</h2>
+        <div class="flex gap-2 items-center">
+          <a href="liveguard-dashboard.html" target="_blank" class="text-xs text-amber-600/60 hover:text-amber-400">Docs ↗</a>
+          <button onclick="loadLGIncidents()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <!-- Fix Proposals Feed -->
+      <div class="bg-gray-800 rounded-lg p-4 mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-amber-300">🔧 Fix Proposals</h3>
+          <span class="text-xs text-gray-500">from <code>.forge/fix-proposals.json</code></span>
+        </div>
+        <div id="lg-fix-proposals-list">
+          <p class="text-gray-500 text-sm text-center py-4">No fix proposals yet. Run <code class="bg-gray-700 px-1 rounded">pforge fix-proposal --source regression</code> after a LiveGuard alert.</p>
+        </div>
+      </div>
+      <!-- Incident List -->
+      <div class="bg-gray-800 rounded-lg p-4">
+        <h3 class="text-sm font-semibold text-white mb-3">Open Incidents</h3>
+        <div id="lg-incidents-list">
+          <p class="text-gray-500 text-sm text-center py-8">No open incidents. Run <code class="bg-gray-700 px-1 rounded">pforge incident list</code> to populate.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Triage Tab -->
+    <section id="tab-lg-triage" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Alert Triage</h2>
+        <div class="flex gap-2 items-center">
+          <a href="liveguard-dashboard.html" target="_blank" class="text-xs text-amber-600/60 hover:text-amber-400">Docs ↗</a>
+          <button onclick="runQuorumFromDashboard('triage')" class="text-xs px-2 py-1 bg-amber-900/40 hover:bg-amber-900/70 text-amber-300 rounded">Run Quorum Analysis →</button>
+          <button onclick="loadLGTriage()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <div id="lg-triage-list" class="space-y-2">
+          <p class="text-gray-500 text-sm text-center py-8">No triage data yet. Run <code class="bg-gray-700 px-1 rounded">pforge alert-triage</code> to populate.</p>
+        </div>
+        <div id="lg-triage-summary" class="space-y-2">
+          <p class="text-gray-500 text-sm text-center py-8">Triage summary will appear after data loads.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Security Tab -->
+    <section id="tab-lg-security" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Security</h2>
+        <div class="flex gap-2 items-center">
+          <a href="liveguard-dashboard.html" target="_blank" class="text-xs text-amber-600/60 hover:text-amber-400">Docs ↗</a>
+          <button onclick="loadLGSecurity()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-white mb-3">Secret Scan Results</h3>
+          <div id="lg-security-results">
+            <p class="text-gray-500 text-sm text-center py-8">No scan results. Run <code class="bg-gray-700 px-1 rounded">pforge secret-scan</code> to populate.</p>
+          </div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-white mb-3">Security Overview</h3>
+          <div id="lg-security-overview">
+            <p class="text-gray-500 text-sm text-center py-8">No data yet — run <code class="bg-gray-700 px-1 rounded">pforge secret-scan</code></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LiveGuard Env Tab -->
+    <section id="tab-lg-env" class="tab-content hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-amber-400">🛡️ LiveGuard · Env Diff</h2>
+        <div class="flex gap-2 items-center">
+          <a href="liveguard-dashboard.html" target="_blank" class="text-xs text-amber-600/60 hover:text-amber-400">Docs ↗</a>
+          <button onclick="loadLGEnv()" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Refresh</button>
+        </div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4">
+        <p class="text-sm text-gray-400 mb-3">Keys only — values are never displayed.</p>
+        <div id="lg-env-diff">
+          <p class="text-gray-500 text-sm text-center py-8">No diff data yet. Run <code class="bg-gray-700 px-1 rounded">pforge env-diff</code> to populate.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- New Smelt Modal — Crucible idea capture -->
+  <div id="new-smelt-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onclick="if(event.target===this)closeNewSmeltModal()">
+    <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 w-[640px] max-w-[90vw] shadow-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-bold">🔥 New Smelt — describe your idea</h2>
+        <button onclick="closeNewSmeltModal()" class="text-gray-500 hover:text-white text-lg" title="Close">✕</button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label for="new-smelt-idea" class="block text-sm text-gray-300 mb-1">Idea <span class="text-gray-500">— a short paragraph works best (problem, desired outcome, constraints)</span></label>
+          <textarea id="new-smelt-idea" rows="8"
+            class="w-full bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 p-3 focus:outline-none focus:ring-1 focus:ring-orange-500 font-mono leading-relaxed"
+            placeholder="Example:&#10;We need a way for independent developers to skip the 4-session pipeline for tiny tweaks.&#10;Today every change, even a one-line fix, requires full planning ceremony.&#10;Goal: a fast path that still runs validation gates but compresses planning into minutes.&#10;Constraints: must reuse the existing orchestrator; no new CLI subcommand."></textarea>
+          <div class="flex justify-between mt-1">
+            <span class="text-xs text-gray-500">Ctrl/⌘ + Enter to submit · Esc to cancel</span>
+            <span id="new-smelt-char-count" class="text-xs text-gray-500">0 chars</span>
+          </div>
+        </div>
+        <div>
+          <label for="new-smelt-lane" class="block text-sm text-gray-300 mb-1">Lane <span class="text-gray-500">— leave as auto-detect unless you already know</span></label>
+          <select id="new-smelt-lane" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full" title="Smelt lane">
+            <option value="">auto-detect (recommended)</option>
+            <option value="tweak">tweak — trivial change, fast path</option>
+            <option value="feature">feature — standard scope</option>
+            <option value="full">full — arc-level change, full hardening</option>
+          </select>
+        </div>
+        <div id="new-smelt-error" class="hidden text-xs text-red-400 bg-red-900/30 border border-red-800 rounded px-3 py-2"></div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button onclick="closeNewSmeltModal()" class="bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm px-4 py-2 rounded">Cancel</button>
+          <button id="new-smelt-submit-btn" onclick="submitNewSmelt()" class="bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold px-4 py-2 rounded">Start smelting →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Launch Plan Modal  -->
+  <div id="launch-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onclick="if(event.target===this)closeLaunchPanel()">
+    <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 w-[420px] shadow-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-bold">🚀 Launch Plan</h2>
+        <button onclick="closeLaunchPanel()" class="text-gray-500 hover:text-white text-lg">✕</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Plan</label>
+          <select id="launch-plan" title="Select plan" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full"></select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Mode</label>
+            <select id="launch-mode" title="Execution mode" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
+              <option value="auto">Auto</option>
+              <option value="assisted">Assisted</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Model</label>
+            <select id="launch-model" title="Model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
+              <option value="auto">auto</option>
+              <option value="grok-4.20">grok-4.20</option>
+              <option value="grok-4">grok-4</option>
+              <option value="grok-3">grok-3</option>
+              <option value="claude-sonnet-4.6">claude-sonnet-4.6</option>
+              <option value="gpt-5.2-codex">gpt-5.2-codex</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Quorum</label>
+            <select id="launch-quorum" title="Quorum mode" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
+              <option value="false">Off</option>
+              <option value="auto" selected>Auto (threshold)</option>
+              <option value="power">Power (Opus + GPT-5.3 + Grok 4.20)</option>
+              <option value="speed">Speed (Sonnet + GPT-5.4-mini + Grok 4.1)</option>
+              <option value="true">All slices (custom models)</option>
+            </select>
+          </div>
+          <div>
+            <label for="launch-resume-from" class="block text-sm text-gray-400 mb-1" title="Maps to --resume-from N">Resume from slice</label>
+            <input id="launch-resume-from" type="number" min="1" placeholder="(start from beginning)" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full placeholder:text-gray-500">
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+          <label class="flex items-center gap-2 text-sm text-gray-400" title="Maps to --estimate">
+            <input id="launch-estimate" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0"> Estimate only
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-400" title="Maps to --dry-run — validate gates without executing">
+            <input id="launch-dry-run" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0"> Dry run (gate-only)
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-400" title="Maps to --no-tempering — skip post-slice tempering hook">
+            <input id="launch-no-tempering" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-0"> Skip tempering
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-400" title="Maps to --only-slices &lt;expr&gt; — run only the specified slices (e.g. 2,4-6)">
+            Only slices: <input id="launch-only-slices" type="text" placeholder="e.g. 2,4-6" class="bg-gray-700 text-white text-sm rounded px-2 py-1 w-24 placeholder:text-gray-500">
+          </label>
+        </div>
+        <div id="launch-workers" class="text-xs text-gray-500"></div>
+        <div class="flex gap-2 pt-2">
+          <button onclick="submitLaunch()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded text-sm font-semibold">Launch</button>
+          <button onclick="submitLaunch(true)" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Estimate First</button>
+        </div>
+        <div id="launch-status" class="text-xs text-gray-500"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Run Detail Drawer  -->
+  <div id="drawer-overlay" class="fixed inset-0 bg-black/50 z-40" onclick="closeRunDrawer()"></div>
+  <div id="run-detail-drawer" class="fixed top-0 right-0 h-full w-[480px] bg-gray-800 border-l border-gray-700 z-50 overflow-y-auto shadow-2xl">
+    <div class="sticky top-0 bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between z-10">
+      <h3 id="drawer-title" class="font-semibold text-white truncate"></h3>
+      <button onclick="closeRunDrawer()" class="text-gray-500 hover:text-white text-lg">✕</button>
+    </div>
+    <div id="drawer-content" class="p-4"></div>
+  </div>
+
+  <!-- Keyboard Shortcuts Modal  -->
+  <div id="shortcuts-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 w-96 shadow-2xl">
+      <h2 class="text-lg font-bold mb-3">Keyboard Shortcuts</h2>
+      <div class="space-y-1 text-sm">
+        <div class="flex justify-between"><span class="text-gray-400">Switch tabs</span><kbd class="bg-gray-700 px-2 py-0.5 rounded text-xs">1-9</kbd></div>
+        <div class="flex justify-between"><span class="text-gray-400">Navigate runs</span><kbd class="bg-gray-700 px-2 py-0.5 rounded text-xs">j / k</kbd></div>
+        <div class="flex justify-between"><span class="text-gray-400">Open detail</span><kbd class="bg-gray-700 px-2 py-0.5 rounded text-xs">Enter</kbd></div>
+        <div class="flex justify-between"><span class="text-gray-400">Close panel</span><kbd class="bg-gray-700 px-2 py-0.5 rounded text-xs">Esc</kbd></div>
+        <div class="flex justify-between"><span class="text-gray-400">Show shortcuts</span><kbd class="bg-gray-700 px-2 py-0.5 rounded text-xs">?</kbd></div>
+      </div>
+      <button onclick="this.closest('#shortcuts-modal').classList.add('hidden')" class="mt-4 w-full text-center text-sm text-gray-500 hover:text-white">Close</button>
+    </div>
+  </div>
+
+    <!-- ═══ Forge-Master Studio tab ═══════════════════════════════════ -->
+    <section id="tab-forge-master" class="tab-content hidden" data-testid="forge-master-tab-content">
+      <div id="forge-master-root">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-semibold text-cyan-400">🧠 Forge-Master Studio</h2>
+            <p class="text-xs text-gray-500">AI reasoning assistant — ask questions, run plans, analyze results.</p>
+          </div>
+          <button onclick="forgeMasterNewChat()" class="text-xs px-3 py-1 bg-cyan-700 hover:bg-cyan-600 rounded text-white">+ New Chat</button>
+        </div>
+        <div class="flex gap-4 h-[calc(100vh-12rem)]">
+          <!-- Left: Prompt gallery -->
+          <div id="fm-gallery-pane" class="w-64 flex-shrink-0 overflow-y-auto border-r border-gray-700 pr-3">
+            <div class="mb-2">
+              <input id="fm-gallery-search" type="search" placeholder="Search prompts…" class="w-full text-xs px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-300" oninput="forgeMasterFilterGallery(this.value)">
+            </div>
+            <div id="fm-gallery-list" class="space-y-3">
+              <p class="text-xs text-gray-500">Loading prompt catalog…</p>
+            </div>
+          </div>
+          <!-- Center: Chat -->
+          <div class="flex-1 flex flex-col min-w-0">
+            <div id="fm-chat-stream" class="flex-1 overflow-y-auto space-y-2 mb-3 text-sm text-gray-300" data-testid="fm-chat-stream">
+              <p class="text-xs text-gray-500 text-center mt-8">Select a prompt or type a message to start.</p>
+            </div>
+            <div class="flex gap-2 items-end">
+              <textarea id="fm-composer" placeholder="Ask Forge-Master…" rows="3"
+                class="flex-1 text-xs px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-200 resize-none"
+                onkeydown="if(event.ctrlKey&&event.key==='Enter'){forgeMasterSend();}"></textarea>
+              <button onclick="forgeMasterSend()" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-600 rounded text-white text-xs self-end">Send</button>
+            </div>
+          </div>
+          <!-- Right: Tool trace (collapsible) -->
+          <div id="fm-trace-pane" class="w-72 flex-shrink-0 overflow-y-auto border-l border-gray-700 pl-3">
+            <h3 class="text-xs font-semibold text-gray-400 mb-2">Tool Calls</h3>
+            <div id="fm-tool-trace" class="space-y-1 text-xs text-gray-500">
+              <p>No tool calls yet.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Phase-40: Observer Narrations · Cross-Run Anomalies · Auditor Latest Report -->
+        <div class="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          <!-- S4: Observer Narrations card -->
+          <details class="bg-gray-800 rounded-lg" open data-testid="observer-narrations-card">
+            <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-cyan-300 hover:bg-gray-750 flex items-center justify-between select-none">
+              <span>👁 Observer Narrations</span>
+              <button onclick="event.preventDefault();loadObserverNarrations()" class="text-gray-500 hover:text-white text-base" title="Refresh">↺</button>
+            </summary>
+            <div id="observer-narrations-list" data-event-type="observer:narration" class="px-4 pb-4 space-y-2 max-h-64 overflow-y-auto text-xs text-gray-400">
+              <p id="observer-narrations-empty" class="text-gray-600 text-center py-4">Observer disabled — <a href="#" onclick="event.preventDefault();document.querySelector('[data-tab=settings-forgemaster]').click()" class="text-cyan-400 underline">enable in Settings → Forge-Master</a>.</p>
+            </div>
+          </details>
+
+          <!-- S5: Cross-Run Watcher Anomalies card -->
+          <details class="bg-gray-800 rounded-lg" data-testid="cross-run-anomalies-card">
+            <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-amber-300 hover:bg-gray-750 flex items-center justify-between select-none">
+              <span>📈 Cross-Run Watcher Anomalies</span>
+              <button onclick="event.preventDefault();loadCrossRunAnomalies()" class="text-gray-500 hover:text-white text-base" title="Refresh">↺</button>
+            </summary>
+            <div id="cross-run-anomalies-list" class="px-4 pb-4 space-y-2 max-h-64 overflow-y-auto text-xs text-gray-400">
+              <p class="text-gray-600 text-center py-4">Loading…</p>
+            </div>
+          </details>
+
+          <!-- S6: Auditor Latest Report card -->
+          <details class="bg-gray-800 rounded-lg" data-testid="auditor-report-card">
+            <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-purple-300 hover:bg-gray-750 flex items-center justify-between select-none">
+              <span>🔍 Auditor Latest Report</span>
+              <button onclick="event.preventDefault();loadAuditorLatest()" class="text-gray-500 hover:text-white text-base" title="Refresh">↺</button>
+            </summary>
+            <div id="auditor-latest-report" class="px-4 pb-4 text-xs text-gray-400">
+              <p class="text-gray-600 text-center py-4">Loading…</p>
+            </div>
+          </details>
+
+        </div>
+
+      </div>
+    </section>
+
+  <footer class="text-center text-[11px] text-gray-500 py-3 border-t border-gray-800/60 mt-2" role="contentinfo">
+    Plan Forge <span id="footer-version"></span> · Press <kbd class="bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded text-[10px] font-mono border border-gray-600">?</kbd> for keyboard shortcuts
+  </footer>
+  </main>
+
+  <script src="app.js"></script>
+  <script src="live-session.js"></script>
+  <script src="forge-master.js" type="module"></script>
+  <script src="github-metrics-tab.mjs" type="module"></script>
+  <script src="github-personal-tab.mjs" type="module"></script>
+  <script src="github-readiness-widget.mjs" type="module"></script>
+  <script src="anvil-lattice.mjs" type="module"></script>
+</body>
+</html>
+
+
+

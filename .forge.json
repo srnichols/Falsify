@@ -1,0 +1,49 @@
+{
+  "agents": null,
+  "projectName": "Falsify",
+  "setupDate": "2026-06-15",
+  "brain": {
+    "federation": {
+      "enabled": false,
+      "repos": []
+    }
+  },
+  "stack": "TypeScript / React / Node.js",
+  "hooks": {
+    "preDeploy": {
+      "warnOnEnvGaps": true,
+      "scanSince": "HEAD~1",
+      "blockOnSecrets": true
+    },
+    "postSlice": {
+      "scoreFloor": 70,
+      "silentDeltaThreshold": 5,
+      "warnDeltaThreshold": 10
+    },
+    "preAgentHandoff": {
+      "cacheMaxAgeMinutes": 30,
+      "runRegressionGuard": true,
+      "injectContext": true,
+      "minAlertSeverity": "medium"
+    }
+  },
+  "templateVersion": "3.22.0-dev",
+  "modelRouting": {
+    "default": "claude-opus-4.6"
+  },
+  "preset": "typescript",
+  "innerLoop": {
+    "costAnomaly": {
+      "enabled": true,
+      "medianWindow": 20,
+      "ratio": 2.0
+    },
+    "competitive": {
+      "enabled": false
+    },
+    "autoFix": {
+      "enabled": true,
+      "applyWithoutReview": false
+    }
+  }
+}

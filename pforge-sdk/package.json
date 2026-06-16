@@ -1,0 +1,34 @@
+{
+  "name": "pforge-sdk",
+  "version": "0.12.0",
+  "description": "Plan Forge SDK — programmatic access to Plan Forge MCP tool metadata, Hallmark provenance, and the Lattice chunker contract",
+  "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./tools": "./src/tools.mjs",
+    "./hallmark": "./src/hallmark.mjs",
+    "./chunker": "./src/chunker.mjs",
+    "./client": "./src/client.mjs",
+    "./anvil": "./src/anvil.mjs",
+    "./lattice-query": "./src/lattice-query.mjs",
+    "./notifications/adapter-contract": "./src/notifications/adapter-contract.mjs",
+    "./run-reader": "./src/run-reader.mjs",
+    "./plan-reader": "./src/plan-reader.mjs",
+    "./thought-reader": "./src/thought-reader.mjs",
+    "./digest-reader": "./src/digest-reader.mjs",
+    "./session-reader": "./src/session-reader.mjs",
+    "./bug-reader": "./src/bug-reader.mjs",
+    "./trajectory-reader": "./src/trajectory-reader.mjs"
+  },
+  "scripts": {
+    "test": "npx vitest run"
+  },
+  "keywords": ["plan-forge", "mcp", "sdk", "ai-agent", "hallmark", "lattice"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

@@ -1,0 +1,487 @@
+﻿<#
+.SYNOPSIS
+    Validates that Plan Forge setup completed correctly.
+
+.DESCRIPTION
+    Checks that all required files exist, are non-empty, and contain no
+    unresolved placeholders. Returns exit code 0 on success, 1 on failure.
+
+.PARAMETER ProjectPath
+    Target project directory to validate. Defaults to current directory.
+
+.EXAMPLE
+    .\validate-setup.ps1 -ProjectPath "C:\Projects\MyApp"
+
+.EXAMPLE
+    .\validate-setup.ps1  # Validates current directory
+#>
+
+param(
+    [string]$ProjectPath = (Get-Location).Path
+)
+
+$ErrorActionPreference = 'Stop'
+
+$pass = 0
+$fail = 0
+$warn = 0
+
+function Check-FileExists([string]$RelPath, [bool]$Required = $true) {
+    $fullPath = Join-Path $ProjectPath $RelPath
+    if (Test-Path $fullPath) {
+        $size = (Get-Item $fullPath).Length
+        if ($size -eq 0) {
+            Write-Host "  FAIL  $RelPath (empty file)" -ForegroundColor Red
+            if ($Required) { $script:fail++ } else { $script:warn++ }
+            return $false
+        }
+        Write-Host "  PASS  $RelPath ($size bytes)" -ForegroundColor Green
+        $script:pass++
+        return $true
+    }
+    else {
+        if ($Required) {
+            Write-Host "  FAIL  $RelPath (missing)" -ForegroundColor Red
+            $script:fail++
+        }
+        else {
+            Write-Host "  WARN  $RelPath (missing — optional)" -ForegroundColor Yellow
+            $script:warn++
+        }
+        return $false
+    }
+}
+
+function Check-NoPlaceholders([string]$RelPath) {
+    $fullPath = Join-Path $ProjectPath $RelPath
+    if (-not (Test-Path $fullPath)) { return }
+    $content = Get-Content $fullPath -Raw
+    $placeholders = @('<YOUR PROJECT NAME>', '<YOUR TECH STACK>', '<YOUR BUILD COMMAND>', '<YOUR TEST COMMAND>', '<YOUR LINT COMMAND>')
+    foreach ($ph in $placeholders) {
+        if ($content -match [regex]::Escape($ph)) {
+            Write-Host "  TODO  $RelPath contains placeholder to fill in: $ph" -ForegroundColor Magenta
+            $script:warn++
+        }
+    }
+}
+
+# ─── Banner ────────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "║       Plan Forge — Setup Validator                   ║" -ForegroundColor Cyan
+Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Validating: $ProjectPath" -ForegroundColor Cyan
+Write-Host ""
+
+# ─── Required Files ────────────────────────────────────────────────────
+Write-Host "Required files:" -ForegroundColor Cyan
+
+Check-FileExists ".github/copilot-instructions.md"
+Check-FileExists ".github/instructions/architecture-principles.instructions.md"
+Check-FileExists ".github/instructions/git-workflow.instructions.md"
+Check-FileExists ".github/instructions/ai-plan-hardening-runbook.instructions.md"
+Check-FileExists "docs/plans/AI-Plan-Hardening-Runbook.md"
+Check-FileExists "docs/plans/AI-Plan-Hardening-Runbook-Instructions.md"
+Check-FileExists "docs/plans/DEPLOYMENT-ROADMAP.md"
+
+# ─── Preset-Dependent Files ───────────────────────────────────────────
+Write-Host ""
+Write-Host "Preset-dependent files:" -ForegroundColor Cyan
+
+$configPath = Join-Path $ProjectPath ".forge.json"
+if (Test-Path $configPath) {
+    $config = Get-Content $configPath -Raw | ConvertFrom-Json
+    $preset = $config.preset
+    # Treat missing/empty preset the same as 'custom' — projects that haven't
+    # declared a stack preset shouldn't trigger stack-specific file checks
+    # (e.g. requiring database.instructions.md on a tooling-only repo).
+    if (-not $preset) {
+        Write-Host "  INFO  No preset declared in .forge.json — treating as 'custom'" -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "  INFO  Detected preset: $preset" -ForegroundColor Cyan
+    }
+
+    if ($preset -and $preset -ne 'custom') {
+        Check-FileExists "AGENTS.md"
+        Check-FileExists ".github/instructions/testing.instructions.md"
+        Check-FileExists ".github/instructions/security.instructions.md"
+
+        if ($preset -eq 'azure-iac') {
+            # IaC-specific instruction files
+            Check-FileExists ".github/instructions/bicep.instructions.md"
+            Check-FileExists ".github/instructions/naming.instructions.md"
+            Check-FileExists ".github/instructions/deploy.instructions.md"
+        }
+        else {
+            # App-stack presets
+            Check-FileExists ".github/instructions/database.instructions.md"
+        }
+    }
+
+    # Check for agentic files (prompt templates, agent definitions, skills)
+    Write-Host ""
+    Write-Host "Agentic files (prompts, agents, skills):" -ForegroundColor Cyan
+
+    if ($preset -and $preset -ne 'custom') {
+        $promptsDir = Join-Path $ProjectPath ".github/prompts"
+        $agentsDir  = Join-Path $ProjectPath ".github/agents"
+        $skillsDir  = Join-Path $ProjectPath ".github/skills"
+
+        if (Test-Path $promptsDir) {
+            $promptCount = (Get-ChildItem -Path $promptsDir -Filter "*.prompt.md" -File).Count
+            Write-Host "  PASS  .github/prompts/ ($promptCount prompt templates)" -ForegroundColor Green
+            $pass++
+        }
+        else {
+            Write-Host "  WARN  .github/prompts/ (missing — optional)" -ForegroundColor Yellow
+            $warn++
+        }
+
+        if (Test-Path $agentsDir) {
+            $agentCount = (Get-ChildItem -Path $agentsDir -Filter "*.agent.md" -File).Count
+            Write-Host "  PASS  .github/agents/ ($agentCount agent definitions)" -ForegroundColor Green
+            $pass++
+        }
+        else {
+            Write-Host "  WARN  .github/agents/ (missing — optional)" -ForegroundColor Yellow
+            $warn++
+        }
+
+        if (Test-Path $skillsDir) {
+            $skillCount = (Get-ChildItem -Path $skillsDir -Recurse -Filter "SKILL.md" -File).Count
+            Write-Host "  PASS  .github/skills/ ($skillCount skills)" -ForegroundColor Green
+            $pass++
+        }
+        else {
+            Write-Host "  WARN  .github/skills/ (missing — optional)" -ForegroundColor Yellow
+            $warn++
+        }
+    }
+}
+else {
+    Write-Host "  WARN  .forge.json not found — skipping preset checks" -ForegroundColor Yellow
+    $warn++
+}
+
+# ─── Agent-Specific Files ─────────────────────────────────────────────
+if (Test-Path $configPath) {
+    $config = Get-Content $configPath -Raw | ConvertFrom-Json
+    $configuredAgents = @('copilot')
+    if ($config.agents) {
+        if ($config.agents -is [System.Array]) {
+            $configuredAgents = $config.agents
+        } elseif ($config.agents -is [string]) {
+            $configuredAgents = $config.agents -split ','
+        }
+    }
+
+    $extraAgents = $configuredAgents | Where-Object { $_ -ne 'copilot' }
+    if ($extraAgents.Count -gt 0) {
+        Write-Host ""
+        Write-Host "Agent-specific files:" -ForegroundColor Cyan
+
+        foreach ($ag in $extraAgents) {
+            switch ($ag.Trim()) {
+                'claude' {
+                    Check-FileExists "CLAUDE.md" $false
+                    if (Test-Path (Join-Path $ProjectPath ".claude/skills")) {
+                        $claudeSkills = (Get-ChildItem -Path (Join-Path $ProjectPath ".claude/skills") -Recurse -Filter "SKILL.md" -File).Count
+                        Write-Host "  PASS  .claude/skills/ ($claudeSkills Claude skills)" -ForegroundColor Green
+                        $pass++
+                    } else {
+                        Write-Host "  WARN  .claude/skills/ (missing)" -ForegroundColor Yellow
+                        $warn++
+                    }
+                }
+                'cursor' {
+                    Check-FileExists ".cursor/rules" $false
+                    if (Test-Path (Join-Path $ProjectPath ".cursor/commands")) {
+                        $cursorCmds = (Get-ChildItem -Path (Join-Path $ProjectPath ".cursor/commands") -Filter "*.md" -File).Count
+                        Write-Host "  PASS  .cursor/commands/ ($cursorCmds Cursor commands)" -ForegroundColor Green
+                        $pass++
+                    } else {
+                        Write-Host "  WARN  .cursor/commands/ (missing)" -ForegroundColor Yellow
+                        $warn++
+                    }
+                }
+                'codex' {
+                    if (Test-Path (Join-Path $ProjectPath ".agents/skills")) {
+                        $codexSkills = (Get-ChildItem -Path (Join-Path $ProjectPath ".agents/skills") -Recurse -Filter "SKILL.md" -File).Count
+                        Write-Host "  PASS  .agents/skills/ ($codexSkills Codex skills)" -ForegroundColor Green
+                        $pass++
+                    } else {
+                        Write-Host "  WARN  .agents/skills/ (missing)" -ForegroundColor Yellow
+                        $warn++
+                    }
+                }
+            }
+        }
+    }
+}
+
+# ─── Preset File Counts ───────────────────────────────────────────────
+Write-Host ""
+Write-Host "Preset file counts:" -ForegroundColor Cyan
+
+if (Test-Path $configPath) {
+    $countConfig = Get-Content $configPath -Raw | ConvertFrom-Json
+    $rawPreset   = $countConfig.preset
+    $presetArr   = if ($rawPreset -is [System.Array]) { $rawPreset } else { @($rawPreset) }
+    $primaryPreset = ($presetArr | Where-Object { $_ -ne 'custom' } | Select-Object -First 1)
+
+    $minCountsTable = @{
+        'typescript' = @{ instructions = 18; prompts = 15; skills = 9; agents = 6 }
+        'python'     = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'dotnet'     = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'go'         = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'java'       = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'rust'       = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'swift'      = @{ instructions = 16; prompts = 13; skills = 9; agents = 6 }
+        'php'        = @{ instructions = 17; prompts = 15; skills = 9; agents = 6 }
+        'azure-iac'  = @{ instructions = 12; prompts = 6;  skills = 3; agents = 5 }
+    }
+
+    if ($primaryPreset -and $minCountsTable.ContainsKey($primaryPreset)) {
+        $mins = $minCountsTable[$primaryPreset]
+
+        $instrCount  = (Get-ChildItem -Path (Join-Path $ProjectPath ".github/instructions") -Filter "*.instructions.md" -File -ErrorAction SilentlyContinue).Count
+        $promptCount = (Get-ChildItem -Path (Join-Path $ProjectPath ".github/prompts") -Filter "*.prompt.md" -File -ErrorAction SilentlyContinue).Count
+        $skillCount  = (Get-ChildItem -Path (Join-Path $ProjectPath ".github/skills") -Recurse -Filter "SKILL.md" -File -ErrorAction SilentlyContinue).Count
+        $agentCount  = (Get-ChildItem -Path (Join-Path $ProjectPath ".github/agents") -Filter "*.agent.md" -File -ErrorAction SilentlyContinue).Count
+
+        foreach ($chk in @(
+            [pscustomobject]@{ label = '.github/instructions/'; actual = $instrCount;  min = $mins.instructions; name = 'instruction files' }
+            [pscustomobject]@{ label = '.github/prompts/';      actual = $promptCount; min = $mins.prompts;      name = 'prompt templates'  }
+            [pscustomobject]@{ label = '.github/skills/';       actual = $skillCount;  min = $mins.skills;       name = 'skills'            }
+            [pscustomobject]@{ label = '.github/agents/';       actual = $agentCount;  min = $mins.agents;       name = 'agent definitions' }
+        )) {
+            if ($chk.actual -ge $chk.min) {
+                Write-Host "  PASS  $($chk.label) — $($chk.actual) $($chk.name) (min: $($chk.min))" -ForegroundColor Green
+                $script:pass++
+            }
+            else {
+                Write-Host "  FAIL  $($chk.label) — $($chk.actual) $($chk.name) (expected ≥ $($chk.min) for '$primaryPreset' preset)" -ForegroundColor Red
+                $script:fail++
+            }
+        }
+
+        if ($presetArr.Count -gt 1) {
+            Write-Host "  INFO  Multi-preset ($($presetArr -join ', ')) — counts validated against primary preset '$primaryPreset'" -ForegroundColor Cyan
+        }
+    }
+    elseif (-not $primaryPreset -or $primaryPreset -eq 'custom') {
+        Write-Host "  INFO  Custom preset — skipping minimum count checks" -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "  WARN  Unknown preset '$primaryPreset' — skipping minimum count checks" -ForegroundColor Yellow
+        $script:warn++
+    }
+}
+else {
+    Write-Host "  WARN  .forge.json not found — skipping minimum count checks" -ForegroundColor Yellow
+    $script:warn++
+}
+
+# ─── Optional Files ───────────────────────────────────────────────────
+Write-Host ""
+Write-Host "Optional files:" -ForegroundColor Cyan
+
+Check-FileExists ".vscode/settings.json" $false
+Check-FileExists "docs/COPILOT-VSCODE-GUIDE.md" $false
+Check-FileExists ".forge.json" $false
+
+# ─── New Capabilities (Optional) ──────────────────────────────────────
+Write-Host ""
+Write-Host "Optional capabilities:" -ForegroundColor Cyan
+
+# Project Principles
+$ppPath = Join-Path $ProjectPath "docs/plans/PROJECT-PRINCIPLES.md"
+if (Test-Path $ppPath) {
+    $principleCount = (Select-String -Path $ppPath -Pattern '^\|\s*\d+\s*\|' -AllMatches).Count
+    Write-Host "  PASS  Project Principles: found ($principleCount principles)" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  Project Principles: not created (optional — run project-principles.prompt.md)" -ForegroundColor Yellow
+    $warn++
+}
+
+# Extensions
+$extJsonPath = Join-Path $ProjectPath ".forge/extensions/extensions.json"
+if (Test-Path $extJsonPath) {
+    $extData = Get-Content $extJsonPath -Raw | ConvertFrom-Json
+    $extCount = if ($extData.extensions) { $extData.extensions.Count } else { 0 }
+    if ($extCount -gt 0) {
+        Write-Host "  PASS  Extensions: $extCount installed" -ForegroundColor Green
+        $pass++
+    }
+    else {
+        Write-Host "  WARN  Extensions: none installed (optional)" -ForegroundColor Yellow
+        $warn++
+    }
+}
+else {
+    Write-Host "  WARN  Extensions: not configured (optional)" -ForegroundColor Yellow
+    $warn++
+}
+
+# CLI
+$cliPath = Join-Path $ProjectPath "pforge.ps1"
+if (Test-Path $cliPath) {
+    Write-Host "  PASS  CLI: pforge.ps1 found" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  CLI: pforge.ps1 not installed (optional)" -ForegroundColor Yellow
+    $warn++
+}
+
+# ─── Plan Forge Runtime (Optional) ────────────────────────────────────
+Write-Host ""
+Write-Host "Plan Forge runtime:" -ForegroundColor Cyan
+
+# VERSION file
+$versionPath = Join-Path $ProjectPath "VERSION"
+if (Test-Path $versionPath) {
+    $verStr = (Get-Content $versionPath -Raw).Trim()
+    Write-Host "  PASS  VERSION: v$verStr" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  VERSION: not found (optional — only required in Plan Forge source repo)" -ForegroundColor Yellow
+    $warn++
+}
+
+# Bash CLI companion
+$shCliPath = Join-Path $ProjectPath "pforge.sh"
+if (Test-Path $shCliPath) {
+    Write-Host "  PASS  CLI: pforge.sh found (bash companion)" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  CLI: pforge.sh not installed (optional — needed for macOS/Linux/WSL)" -ForegroundColor Yellow
+    $warn++
+}
+
+# MCP server
+$mcpServerPath  = Join-Path $ProjectPath "pforge-mcp/server.mjs"
+$mcpPackagePath = Join-Path $ProjectPath "pforge-mcp/package.json"
+if ((Test-Path $mcpServerPath) -and (Test-Path $mcpPackagePath)) {
+    $mcpPkg = Get-Content $mcpPackagePath -Raw | ConvertFrom-Json
+    $mcpModules = Join-Path $ProjectPath "pforge-mcp/node_modules"
+    if (Test-Path $mcpModules) {
+        Write-Host "  PASS  MCP server: pforge-mcp v$($mcpPkg.version) (deps installed)" -ForegroundColor Green
+    } else {
+        Write-Host "  WARN  MCP server: pforge-mcp v$($mcpPkg.version) — run 'npm install' in pforge-mcp/" -ForegroundColor Yellow
+        $warn++
+    }
+    $pass++
+}
+else {
+    Write-Host "  WARN  MCP server: pforge-mcp/ not found (optional — only required in Plan Forge source repo)" -ForegroundColor Yellow
+    $warn++
+}
+
+# Forge-Master Studio (Phase-29 chat bridge — imported by pforge-mcp via
+# relative paths and registered as second MCP server in .vscode/mcp.json)
+$fmServerPath = Join-Path $ProjectPath "pforge-master/server.mjs"
+$fmPackagePath = Join-Path $ProjectPath "pforge-master/package.json"
+if ((Test-Path $fmServerPath) -and (Test-Path $fmPackagePath)) {
+    $fmPkg = Get-Content $fmPackagePath -Raw | ConvertFrom-Json
+    $fmModules = Join-Path $ProjectPath "pforge-master/node_modules"
+    if (Test-Path $fmModules) {
+        Write-Host "  PASS  Forge-Master: pforge-master v$($fmPkg.version) (deps installed)" -ForegroundColor Green
+    } else {
+        Write-Host "  WARN  Forge-Master: pforge-master v$($fmPkg.version) — run 'npm install' in pforge-master/" -ForegroundColor Yellow
+        $warn++
+    }
+    $pass++
+}
+else {
+    Write-Host "  WARN  Forge-Master: pforge-master/ not found (optional — chat bridge unavailable)" -ForegroundColor Yellow
+    $warn++
+}
+
+# pforge-sdk (shared helper library — NO runtime deps, imported via
+# relative paths from pforge-mcp; missing files crash opt-in features)
+$sdkClientPath = Join-Path $ProjectPath "pforge-sdk/src/client.mjs"
+if (Test-Path $sdkClientPath) {
+    Write-Host "  PASS  pforge-sdk: src/client.mjs found" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  pforge-sdk: src/client.mjs not found (deep imports from pforge-mcp will fail)" -ForegroundColor Yellow
+    $warn++
+}
+
+# .vscode/mcp.json with plan-forge entry
+$vscodeMcpPath = Join-Path $ProjectPath ".vscode/mcp.json"
+if (Test-Path $vscodeMcpPath) {
+    try {
+        $mcpConfig = Get-Content $vscodeMcpPath -Raw | ConvertFrom-Json
+        $hasEntry = $false
+        if ($mcpConfig.servers) {
+            foreach ($key in $mcpConfig.servers.PSObject.Properties.Name) {
+                if ($key -match 'plan-forge|pforge') { $hasEntry = $true; break }
+            }
+        }
+        if ($hasEntry) {
+            Write-Host "  PASS  .vscode/mcp.json: plan-forge server configured" -ForegroundColor Green
+            $pass++
+        }
+        else {
+            Write-Host "  WARN  .vscode/mcp.json: no plan-forge server entry (run setup.ps1 to wire)" -ForegroundColor Yellow
+            $warn++
+        }
+    }
+    catch {
+        Write-Host "  WARN  .vscode/mcp.json: invalid JSON" -ForegroundColor Yellow
+        $warn++
+    }
+}
+else {
+    Write-Host "  WARN  .vscode/mcp.json: not configured (optional)" -ForegroundColor Yellow
+    $warn++
+}
+
+# Dashboard (served by MCP server on :3100/dashboard)
+$dashboardPath = Join-Path $ProjectPath "pforge-mcp/dashboard/index.html"
+if (Test-Path $dashboardPath) {
+    Write-Host "  PASS  Dashboard: pforge-mcp/dashboard/ found" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  Dashboard: pforge-mcp/dashboard/ not found (optional)" -ForegroundColor Yellow
+    $warn++
+}
+
+# ─── Placeholder Scan ─────────────────────────────────────────────────
+Write-Host ""
+Write-Host "Placeholder scan:" -ForegroundColor Cyan
+
+Check-NoPlaceholders ".github/copilot-instructions.md"
+Check-NoPlaceholders "AGENTS.md"
+Check-NoPlaceholders "docs/plans/DEPLOYMENT-ROADMAP.md"
+
+# ─── Summary ──────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "────────────────────────────────────────────────────" -ForegroundColor Gray
+Write-Host "  Results:  $pass passed  |  $fail failed  |  $warn warnings" -ForegroundColor $(if ($fail -gt 0) { 'Red' } else { 'Green' })
+Write-Host "────────────────────────────────────────────────────" -ForegroundColor Gray
+
+if ($fail -gt 0) {
+    Write-Host ""
+    Write-Host "VALIDATION FAILED" -ForegroundColor Red
+    Write-Host "Fix the $fail failed check(s) above before proceeding." -ForegroundColor Red
+    exit 1
+}
+else {
+    Write-Host ""
+    Write-Host "VALIDATION PASSED" -ForegroundColor Green
+    if ($warn -gt 0) {
+        Write-Host "$warn warning(s) — review optional items above." -ForegroundColor Yellow
+    }
+    exit 0
+}
