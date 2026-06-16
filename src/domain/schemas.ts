@@ -45,7 +45,7 @@ export const FactEntrySchema = z.object({
   falsifiable: FalsifiableFlagSchema,
   falsified_if: z.string().min(1),
   status: z.string().min(1),
-  confidence: z.string().min(1),
+  confidence: z.string().min(1).optional(),
   domain_of_validity: z.string().min(1).optional(),
   confirmations: z.array(z.string().min(1)).optional(),
   sources: z.array(z.string().min(1)).min(1),
@@ -55,11 +55,10 @@ export const FactEntrySchema = z.object({
 export const PositionSchema = z.object({
   label: z.string().min(1),
   claim: z.string().min(1),
-  falsifiable: FalsifiableFlagSchema,
-  falsified_if: z.string().min(1),
   falsifiability_status: z.string().min(1),
+  falsifiable: FalsifiableFlagSchema.optional(),
+  falsified_if: z.string().min(1).optional(),
   evidence_pointers: z.array(z.string().min(1)).optional(),
-  positions_note: z.string().min(1).optional(),
   note: z.string().min(1).optional(),
 });
 
@@ -68,6 +67,7 @@ export const ContestedEntrySchema = z.object({
   id: z.string().min(1),
   question: z.string().min(1),
   domain: z.string().min(1),
+  note: z.string().min(1).optional(),
   positions: z.array(PositionSchema).min(2),
   engine_directive: z.string().min(1),
 });

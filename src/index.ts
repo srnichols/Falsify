@@ -12,3 +12,6 @@ export const VERSION = '0.1.0';
 export * from './domain/schemas.js';
 export type * from './domain/types.js';
 export * from './cycle/stateMachine.js';
+export * from './knowledge/loader.js';
+export * from './rules/claimScore.js';
+export * from './rules/quantitative.js';
