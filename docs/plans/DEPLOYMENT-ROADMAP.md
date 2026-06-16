@@ -18,16 +18,23 @@
 
 ## Phases
 
-### Phase 1: <Your First Feature>
-**Goal**: (one-line description of what this phase delivers)  
-**Plan**: [Phase-1-YOUR-FEATURE-PLAN.md](./Phase-1-YOUR-FEATURE-PLAN.md)  
+### Phase 1: Core Engine + Memory Client
+**Goal**: Pure reasoning core — Cycle state machine, typed/validated knowledge + hypothesis contracts, tiered rules engine with consensus-minimized `claim_score`, and an OpenBrain client with offline fallback. No MCP/UI.  
+**Plan**: [Phase-1-CORE-ENGINE-PLAN.md](./Phase-1-CORE-ENGINE-PLAN.md)  
 **Status**: 📋 Planned
 
 ---
 
-### Phase 2: <Your Second Feature>
-**Goal**: (one-line description)  
-**Plan**: [Phase-2-YOUR-FEATURE-PLAN.md](./Phase-2-YOUR-FEATURE-PLAN.md)  
+### Phase 2: MCP Server (`falsify_*` tools)
+**Goal**: Expose the core engine as an MCP server (`falsify_intake`, `falsify_hypothesize`, `falsify_experiment`, `falsify_analyze`, `falsify_review`, `falsify_recall`).  
+**Plan**: Phase-2-MCP-SERVER-PLAN.md (not yet written)  
+**Status**: 📋 Planned
+
+---
+
+### Phase 3: Web UI
+**Goal**: Hypothesis card + notebook view over the same transport-agnostic core.  
+**Plan**: Phase-3-WEB-UI-PLAN.md (not yet written)  
 **Status**: 📋 Planned
 
 ---

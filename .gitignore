@@ -23,6 +23,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Falsify local runtime (offline memory queue, scratch scripts)
+.falsify/
+
 # >>> plan-forge managed (do not edit between markers) >>>
 # Runtime / cache / telemetry produced by pforge — never commit.
 # This block is refreshed by setup + 'pforge self-update'. Issue #211.
