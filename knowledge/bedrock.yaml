@@ -1,0 +1,104 @@
+# Falsify knowledge seed — BEDROCK tier
+# ----------------------------------------------------------------------------
+# Established scientific laws and observed / natural regularities.
+# Highest weight in the rules engine. Cannot be overridden by a lower tier.
+#
+# THIS FILE IS THE SOURCE OF TRUTH (version-controlled). It is mirrored into
+# OpenBrain for semantic recall by the seed-sync step — never hand-edited there.
+#
+# STARTER SET: curated and intentionally small. Expand via pull request so the
+# git history becomes an audit trail of what we admit as "bedrock" and why.
+# Honesty rule: where a "law" is really a domain-limited approximation, say so
+# in `domain_of_validity`. We do not inflate certainty.
+# ----------------------------------------------------------------------------
+tier: bedrock
+weight: 1.0
+entries:
+  - id: bedrock.energy.conservation
+    statement: >-
+      Energy is neither created nor destroyed in an isolated system; total
+      energy stays constant over time.
+    domain: physics/thermodynamics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      A reproducible isolated system gains or loses total energy with no
+      external exchange.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      Stated for laboratory and engineering regimes. "Total energy" is subtle
+      at cosmological scale in general relativity.
+    sources: ["First law of thermodynamics", "Noether's theorem (time symmetry)"]
+
+  - id: bedrock.thermo.entropy
+    statement: >-
+      The total entropy of an isolated system never decreases; it tends toward
+      a maximum.
+    domain: physics/thermodynamics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      A reproducible isolated system is observed to spontaneously decrease its
+      total entropy without external work.
+    status: unrefuted
+    confidence: high
+    sources: ["Second law of thermodynamics", "Clausius 1865", "Boltzmann"]
+
+  - id: bedrock.momentum.conservation
+    statement: >-
+      The total linear momentum of a closed system is constant absent external
+      forces.
+    domain: physics/mechanics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      A closed system changes total momentum with no external force acting.
+    status: unrefuted
+    confidence: high
+    sources: ["Newton's laws", "Noether's theorem (spatial translation symmetry)"]
+
+  - id: bedrock.charge.conservation
+    statement: >-
+      Electric charge is conserved; the net charge of an isolated system does
+      not change.
+    domain: physics/electromagnetism
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Net charge of an isolated system is observed to change in a reproducible
+      experiment.
+    status: unrefuted
+    confidence: high
+    sources: ["Maxwell's equations (continuity equation)"]
+
+  - id: bedrock.lightspeed.invariance
+    statement: >-
+      The speed of light in vacuum is the same for all inertial observers,
+      independent of the motion of source or observer.
+    domain: physics/relativity
+    type: observed-constant
+    falsifiable: true
+    falsified_if: >-
+      A reproducible measurement finds the vacuum speed of light differing
+      between inertial frames.
+    status: unrefuted
+    confidence: high
+    sources: ["Michelson-Morley 1887", "foundation of special relativity"]
+
+  - id: bedrock.chem.definite_proportions
+    statement: >-
+      A given chemical compound always contains its constituent elements in a
+      fixed mass ratio.
+    domain: chemistry
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      A pure compound is shown to form in continuously variable element mass
+      ratios.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      Holds for stoichiometric compounds; non-stoichiometric (berthollide)
+      solids are a known, bounded exception.
+    sources: ["Proust's law of definite proportions"]

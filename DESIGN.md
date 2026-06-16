@@ -154,6 +154,42 @@ claim_score =
 > The honest move is to demand the receipts — *which experiment, and could it have
 > failed?* — not to assume the consensus is wrong.
 
+### Knowledge storage — two stores, one truth
+
+The tiered knowledge is stored with a **truth-in-git / index-in-the-brain** split
+(mirroring Plan Forge's own L2-files / L3-OpenBrain pattern):
+
+| Role | Where | Why |
+|---|---|---|
+| **Source of truth** | `knowledge/*.yaml` in this repo — one file per tier (`bedrock`, `established`, `contested`, `quantitative`). | Diff-able, PR-reviewable, never drifts. The git history *is* a falsification audit trail of what we admit to each tier and why. |
+| **Semantic index** | OpenBrain (`project: "falsify"`, tier in metadata). | Fast fuzzy recall during the cycle; also accumulates new survived-test facts. |
+
+- A **seed-sync step** reads the YAML and pushes each entry into OpenBrain as a
+  memory with `metadata: { tier, falsifiable, falsified_if, source_id }`. The YAML
+  is canonical; OpenBrain is a searchable copy, never hand-edited.
+- **Why not store the laws only in OpenBrain?** A vector store is mutable and
+  returns approximate matches — wrong for an *authoritative* Bedrock tier. Bedrock
+  must be exact and auditable, so it lives in version control.
+
+#### Seed entry schema (per tier)
+
+- **Bedrock / Established:** `{ id, statement, domain, type, falsifiable,
+  falsified_if, status, confidence, domain_of_validity?, sources[] }`.
+- **Contested:** `{ id, question, domain, positions[] }` where each position is
+  `{ label, claim, falsifiable, falsified_if, falsifiability_status, ... }` plus an
+  `engine_directive` that forbids picking a winner.
+- **Quantitative:** `{ id, principle, statement, formula?, triggers[],
+  failure_guarded }` — a cross-cutting lens, not a fact.
+
+#### Honesty rules baked into the seed
+
+- Where a "law" is really a domain-limited approximation, the entry says so in
+  `domain_of_validity` — we never inflate certainty.
+- Contested entries carry **every** position with its falsifiability status; any
+  position whose central claim admits no conceivable falsifier is flagged
+  *outside the scientific method* (Popper), applied **symmetrically** to all sides.
+- The starter set is intentionally small and curated; it grows by pull request.
+
 ---
 
 ## 5. Memory (lab notebook + accumulated facts)
@@ -179,9 +215,15 @@ The Corpus tier is backed by the **already-running OpenBrain instance** at
   threshold }` → returns records ranked by cosine `similarity`.
 - **Scope:** everything Falsify writes uses `project: "falsify"` so it never mixes
   with other tenants of the brain.
-- **Auth:** the public deployment is expected to require an `x-brain-key` header for
-  writes — store it as `FALSIFY_BRAIN_KEY` (env var, never committed). Reads may be
-  open; confirm at integration time.
+- **Auth:** reuses the **existing `OPENBRAIN_KEY` environment variable** already set
+  on the dev machine (64-char hex, User scope) — the same key Plan Forge uses. The
+  secret is **never committed**; Falsify reads it from `process.env` at runtime, just
+  like Plan Forge does (`x-brain-key` header).
+- **Endpoints (both authorized by the same key):**
+  - Public REST/MCP: `https://brain.planforge.software` (portable; used by deployed
+    Falsify and for REST `POST /memories`).
+  - Private MCP-SSE: `https://openbrain.tailfb4202.ts.net/sse` (from `OPENBRAIN_URL`;
+    Tailscale-only, used for local dev).
 - **Falsify-specific metadata:** every Corpus record also carries
   `{ tier: bedrock|established|contested|quantitative, falsifiable: bool,
   falsified_if, survived_test: bool }` so a recalled fact never re-enters at a higher
@@ -222,8 +264,12 @@ picks — because the whole point is to surface disagreement, not bury it.
 - [x] **Tech stack:** ~~UI, providers, local vs hosted, rules-engine impl.~~
       **Decided** — Node + TypeScript, MCP-core + web UI, OpenBrain backend, built
       with Plan Forge. See §9.
-- [ ] **Brain auth:** confirm whether `brain.planforge.software` needs `x-brain-key`
-      for reads as well as writes; obtain the key as `FALSIFY_BRAIN_KEY`.
+- [x] **Brain auth:** ~~confirm key requirement.~~ **Resolved** — reuse existing
+      `OPENBRAIN_KEY` env var (64-char hex, User scope); never committed. Same key
+      works for both the public and Tailscale endpoints.
+- [ ] **Seed-sync tool:** build the script that pushes `knowledge/*.yaml` into
+      OpenBrain (`project: "falsify"`). Likely a Plan Forge build slice.
+- [ ] **Knowledge expansion:** grow the starter seed sets per tier via PR.
 - [ ] **Tier tagging:** manual curation vs. model-assisted classification of which
       tier a claim belongs to.
 - [ ] **Output format:** the exact "hypothesis + falsification condition" card the
@@ -285,7 +331,8 @@ flowchart TD
 ### Decision 3 — Memory backend: **OpenBrain (live, hosted)**
 
 Use `https://brain.planforge.software` as the Corpus tier (see §5). Local files for
-the Notebook tier; RAM for Working.
+the Notebook tier; RAM for Working. **Auth reuses the existing `OPENBRAIN_KEY`
+env var** — secret never committed (see §5 → Corpus backend).
 
 ### Decision 4 — Build with **Plan Forge**
 

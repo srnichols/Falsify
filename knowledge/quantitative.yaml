@@ -1,0 +1,72 @@
+# Falsify knowledge seed — QUANTITATIVE tier
+# ----------------------------------------------------------------------------
+# Math, statistics, and probability. NOT a shelf of "facts" — these are a
+# CROSS-CUTTING LENS the engine applies to every claim from every other tier
+# before reporting it. They are unbiased tools; the failure mode they guard
+# against is people ignoring them to drive a narrative.
+#
+# Each entry is a principle the engine must check against when evaluating a
+# claim's evidence. `triggers` hint when the principle is most relevant.
+#
+# SOURCE OF TRUTH (version-controlled). Mirrored into OpenBrain by seed-sync.
+# STARTER SET: expand via pull request.
+# ----------------------------------------------------------------------------
+tier: quantitative
+weight: cross-cutting   # applied to every tier; not ranked against them
+entries:
+  - id: quant.bayes
+    principle: "Bayesian updating"
+    statement: >-
+      A claim's credibility must combine the evidence with the prior
+      probability, not the evidence alone.
+    formula: "P(H|E) = P(E|H) * P(H) / P(E)"
+    triggers: ["strong claim from weak prior", "surprising result", "rare event"]
+    failure_guarded: "ignoring how unlikely the hypothesis was to begin with"
+
+  - id: quant.base_rate
+    principle: "Base-rate neglect"
+    statement: >-
+      For a rare condition, even an accurate test produces mostly false
+      positives; the base rate dominates the posterior.
+    triggers: ["diagnostic test", "screening", "rare event detection"]
+    failure_guarded: "quoting test accuracy while ignoring prevalence"
+
+  - id: quant.correlation_causation
+    principle: "Correlation is not causation"
+    statement: >-
+      An association does not establish that one variable causes the other;
+      confounders or reverse causation must be ruled out.
+    triggers: ["observational study", "X linked to Y", "trend comparison"]
+    failure_guarded: "inferring a causal mechanism from a correlation alone"
+
+  - id: quant.significance
+    principle: "Statistical significance is not effect size or truth"
+    statement: >-
+      A small p-value does not mean a large, important, or real effect; it is
+      sensitive to sample size and to multiple comparisons.
+    triggers: ["p-value cited", "'significant' result", "many outcomes tested"]
+    failure_guarded: "p-hacking, treating p<0.05 as proof"
+
+  - id: quant.regression_mean
+    principle: "Regression to the mean"
+    statement: >-
+      Extreme measurements tend to be followed by less extreme ones, which can
+      masquerade as a treatment effect.
+    triggers: ["before/after on extreme group", "intervention after a bad spell"]
+    failure_guarded: "crediting an intervention for natural reversion"
+
+  - id: quant.large_numbers
+    principle: "Law of large numbers / sample size"
+    statement: >-
+      Small samples are noisy; apparent effects in small samples often vanish
+      at scale.
+    triggers: ["small n", "anecdote", "early results"]
+    failure_guarded: "generalizing from too few observations"
+
+  - id: quant.selection_bias
+    principle: "Selection / survivorship bias"
+    statement: >-
+      Conclusions drawn from a non-representative sample (including only the
+      'survivors') systematically mislead.
+    triggers: ["self-selected data", "missing failures", "convenience sample"]
+    failure_guarded: "ignoring the cases that never made it into the data"

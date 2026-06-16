@@ -1,0 +1,100 @@
+# Falsify knowledge seed — ESTABLISHED tier
+# ----------------------------------------------------------------------------
+# Well-supported scientific theories that are not (yet) called "law" but are
+# largely undisputed within the scientific method: they make risky predictions,
+# remain falsifiable, and have survived repeated honest tests.
+# High weight — below Bedrock, above Contested.
+#
+# SOURCE OF TRUTH (version-controlled). Mirrored into OpenBrain by seed-sync.
+# STARTER SET: expand via pull request.
+# ----------------------------------------------------------------------------
+tier: established
+weight: 0.8
+entries:
+  - id: established.relativity.special
+    statement: >-
+      Special relativity: the laws of physics are the same in all inertial
+      frames and the vacuum speed of light is invariant; space and time are
+      observer-dependent.
+    domain: physics/relativity
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible faster-than-light signaling, or frame-dependent physics in
+      inertial frames.
+    status: well-supported
+    confirmations: ["time dilation in particle lifetimes", "GPS clock corrections"]
+    sources: ["Einstein 1905"]
+
+  - id: established.relativity.general
+    statement: >-
+      General relativity: gravity is the curvature of spacetime by mass-energy.
+    domain: physics/relativity
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Confirmed deviations from its predictions (e.g. wrong light bending,
+      no gravitational waves) without a relativistic explanation.
+    status: well-supported
+    confirmations:
+      ["light bending (1919)", "gravitational waves (LIGO 2015)", "black-hole imaging"]
+    sources: ["Einstein 1915"]
+
+  - id: established.quantum.mechanics
+    statement: >-
+      Quantum mechanics: physical systems are described by wavefunctions whose
+      squared amplitudes give probabilities of measurement outcomes.
+    domain: physics/quantum
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible violation of its statistical predictions (e.g. results
+      inconsistent with the Born rule / Bell inequalities under valid tests).
+    status: well-supported
+    confirmations: ["Bell-test violations of local hidden variables", "semiconductor physics"]
+    note: >-
+      The mathematical framework is established and undisputed; its *interpretation*
+      is genuinely contested — see contested.yaml (quantum interpretations).
+    sources: ["Born, Heisenberg, Schrodinger, Dirac"]
+
+  - id: established.geology.plate_tectonics
+    statement: >-
+      Earth's lithosphere is divided into plates that move over the
+      asthenosphere, explaining earthquakes, volcanism, and mountain building.
+    domain: geology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Continents shown not to move, or seafloor spreading / paleomagnetic
+      striping absent.
+    status: well-supported
+    confirmations: ["seafloor spreading", "GPS-measured plate motion", "magnetic striping"]
+    sources: ["Wegener (continental drift)", "1960s seafloor-spreading synthesis"]
+
+  - id: established.biology.germ_theory
+    statement: >-
+      Many diseases are caused by microorganisms that infect a host.
+    domain: biology/medicine
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Infectious diseases shown to occur with no transmissible microbial agent
+      and no other identifiable cause.
+    status: well-supported
+    confirmations: ["Koch's postulates", "antibiotics", "vaccination"]
+    sources: ["Pasteur", "Koch"]
+
+  - id: established.cosmology.big_bang
+    statement: >-
+      The observable universe expanded from a hot, dense early state ~13.8
+      billion years ago.
+    domain: cosmology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Absence of predicted relics (e.g. cosmic microwave background) or
+      observations requiring no expansion.
+    status: well-supported
+    confirmations:
+      ["cosmic microwave background", "Hubble expansion", "light-element abundances"]
+    sources: ["Lemaitre", "Penzias & Wilson 1965"]

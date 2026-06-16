@@ -1,0 +1,97 @@
+# Falsify knowledge seed — CONTESTED tier
+# ----------------------------------------------------------------------------
+# "Our best explanation at present" where more than one position is defensible.
+# Medium weight, and the weight is SPLIT across positions — the engine never
+# picks a winner here.
+#
+# RULES FOR THIS TIER (enforced by the engine):
+#   1. Present EVERY position, each with its falsifiability status.
+#   2. A position whose central claim admits no conceivable observation that
+#      could falsify it is FLAGGED as "outside the scientific method" (Popper) —
+#      regardless of which side it favors. This is applied symmetrically.
+#   3. Consensus is recorded as a low-weight signal only; it never settles a
+#      contested entry by itself (see DESIGN.md weighting).
+#   4. The output is "here are the positions and what would decide between
+#      them," never "the answer is X."
+#
+# SOURCE OF TRUTH (version-controlled). Mirrored into OpenBrain by seed-sync.
+# STARTER SET: expand via pull request.
+# ----------------------------------------------------------------------------
+tier: contested
+weight: 0.5
+entries:
+  - id: contested.origins.biodiversity
+    question: "What best explains the present diversity and complexity of life?"
+    domain: biology/origins
+    positions:
+      - label: "evolutionary biology"
+        claim: >-
+          Life diversified by common descent with modification, driven by
+          mechanisms including natural selection, mutation, drift, and gene flow.
+        falsifiable: true
+        falsified_if: >-
+          Reproducible findings that break the nested hierarchy (e.g. well-dated
+          fossils grossly out of order, such as mammals in Precambrian strata),
+          or demonstration that heritable variation cannot accumulate.
+        falsifiability_status: scientific
+        evidence_pointers:
+          ["fossil succession", "shared genetic code & ERVs", "observed speciation", "biogeography"]
+        note: >-
+          As a scientific theory this position is itself well-supported and
+          falsifiable; it is placed here because the *origins question* as the
+          user frames it has more than one side in public debate.
+      - label: "design / creation"
+        claim: >-
+          The diversity and complexity of life is best explained by an
+          intelligent or supernatural cause.
+        falsifiable: depends
+        falsified_if: >-
+          Depends entirely on formulation. A specific claim (e.g. "a structure
+          could not arise by any stepwise natural pathway") can be tested and
+          potentially falsified by demonstrating such a pathway. A claim framed
+          so that no conceivable observation could count against it is, by rule
+          2, outside the scientific method — not "false," but not a scientific
+          hypothesis.
+        falsifiability_status: conditional
+        note: >-
+          The engine must ask the user to state the claim in a testable form
+          before scoring it. Untestable framings are reported as outside-method,
+          symmetrically with any other tier.
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.physics.quantum_interpretation
+    question: "What does the quantum wavefunction physically represent?"
+    domain: physics/quantum
+    note: >-
+      The mathematics and predictions are not in dispute (see established.yaml).
+      Only the interpretation is contested — a clean example of legitimate,
+      non-political scientific disagreement.
+    positions:
+      - label: "Copenhagen / collapse"
+        claim: "The wavefunction represents knowledge and collapses on measurement."
+        falsifiability_status: "currently interpretation-equivalent"
+      - label: "Many-worlds"
+        claim: "The wavefunction is real and never collapses; all outcomes occur in branches."
+        falsifiability_status: "currently interpretation-equivalent"
+      - label: "Pilot-wave (de Broglie-Bohm)"
+        claim: "Particles have definite positions guided by a real wave."
+        falsifiability_status: "currently interpretation-equivalent"
+    engine_directive: >-
+      Most interpretations make identical predictions today, so this is decided
+      by evidence only where they diverge; otherwise present as open.
+
+  - id: contested.cosmology.dark_matter_vs_mond
+    question: "Why do galaxies rotate faster than visible mass predicts?"
+    domain: cosmology
+    positions:
+      - label: "particle dark matter"
+        claim: "Unseen non-baryonic matter supplies the missing gravity."
+        falsifiable: true
+        falsified_if: "Direct detection persistently fails AND structure/lensing is fully explained without it."
+        falsifiability_status: scientific
+      - label: "modified gravity (MOND / relativistic variants)"
+        claim: "Gravity departs from Newton/GR at very low accelerations."
+        falsifiable: true
+        falsified_if: "Systems (e.g. bullet-cluster lensing) require mass where no gravity-modification fits."
+        falsifiability_status: scientific
+    engine_directive: "both_falsifiable; present_evidence_for_each; do_not_pick_winner"
