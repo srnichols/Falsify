@@ -219,3 +219,58 @@ entries:
       pairings (wobble in RNA, Hoogsteen, mismatches) are known, bounded
       exceptions in specific contexts.
     sources: ["Chargaff 1950", "Watson & Crick 1953"]
+
+  - id: bedrock.chem.periodic_law
+    statement: >-
+      When the elements are ordered by atomic number, their chemical and
+      physical properties recur at periodic intervals.
+    domain: chemistry
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      A reproducible discovery of an element whose properties break the periodic
+      recurrence predicted by its atomic number, with no nuclear or relativistic
+      explanation.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      The empirical regularity. Its explanation in terms of electron shell
+      structure is quantum mechanics (see established.yaml). Relativistic effects
+      perturb the heaviest elements in known, bounded ways.
+    sources: ["Mendeleev 1869", "Moseley 1913 (ordering by atomic number)"]
+
+  - id: bedrock.geology.superposition
+    statement: >-
+      In an undisturbed sequence of sedimentary rock layers, each layer is
+      younger than the one beneath it and older than the one above it.
+    domain: geology/stratigraphy
+    type: observed-regularity
+    falsifiable: true
+    falsified_if: >-
+      A reproducibly undisturbed sedimentary sequence is shown to deposit younger
+      layers beneath older ones.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      Stated for undisturbed deposition. Tectonic folding, overthrusts, and
+      intrusions can invert or interleave layers — these are detectable
+      disturbances, not exceptions to the rule.
+    sources: ["Steno 1669 (law of superposition)"]
+
+  - id: bedrock.physics.landauer
+    statement: >-
+      Erasing one bit of information in a computation has a minimum thermodynamic
+      cost: it must dissipate at least kT ln 2 of energy as heat.
+    domain: physics/computation
+    type: principle
+    falsifiable: true
+    falsified_if: >-
+      A reproducible logically irreversible bit erasure is measured to dissipate
+      less than kT ln 2 of heat to its environment.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      Sets a lower bound on logically irreversible computation; logically
+      reversible operations are not subject to it. Confirmed in single-bit
+      experiments (2012 onward) approaching the bound.
+    sources: ["Landauer 1961", "Berut et al. 2012 (experimental confirmation)"]

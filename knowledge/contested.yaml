@@ -181,3 +181,35 @@ entries:
           The engine must ask for a testable formulation before scoring. The
           untestable framing is reported as outside-method, symmetrically.
     engine_directive: "present_all_positions_with_falsifiability; flag_untestable_framings; do_not_pick_winner"
+
+  - id: contested.cs.p_vs_np
+    question: "Can every problem whose solution is quickly verifiable also be quickly solved?"
+    domain: computer-science/complexity
+    note: >-
+      A genuinely open mathematical question, not a political one — included as a
+      clean example of an unresolved problem where the engine must report the
+      open positions rather than assert an answer. Most experts expect P != NP,
+      but expectation is not proof.
+    positions:
+      - label: "P != NP"
+        claim: >-
+          Some problems are fundamentally harder to solve than to verify; no
+          polynomial-time algorithm exists for NP-complete problems.
+        falsifiable: true
+        falsified_if: >-
+          Exhibition of a polynomial-time algorithm for any NP-complete problem,
+          which would collapse the distinction and prove P = NP.
+        falsifiability_status: scientific
+        evidence_pointers: ["decades of failed attempts to find polynomial algorithms for NP-complete problems", "natural-proofs and relativization barriers"]
+      - label: "P = NP"
+        claim: >-
+          Every efficiently verifiable problem is also efficiently solvable; a
+          polynomial-time algorithm for NP-complete problems exists but has not
+          yet been found.
+        falsifiable: true
+        falsified_if: >-
+          A proof that no such algorithm can exist (a proven super-polynomial
+          lower bound for an NP-complete problem).
+        falsifiability_status: scientific
+        evidence_pointers: ["no proof of separation exists yet", "some problems once believed hard have yielded to clever algorithms"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"

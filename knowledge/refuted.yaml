@@ -144,3 +144,64 @@ entries:
       with a measurable pushing force both explained the old cases and predicted
       new ones the maxim could not.
     sources: ["Torricelli 1643", "Pascal 1648"]
+
+  - id: refuted.biology.lamarckism
+    claim: >-
+      Traits acquired through use or disuse during an organism's lifetime are
+      directly inherited by its offspring (e.g. a giraffe stretching its neck
+      passes a longer neck to its young).
+    domain: biology
+    type: refuted-theory
+    era: "1809–early 20th century"
+    falsified_by: >-
+      Weismann's germ-plasm experiments and the chromosomal theory of
+      inheritance: somatic changes do not alter the germ line. Cutting the tails
+      of mice for generations never shortened their offspring's tails.
+    superseded_by: "Mendelian genetics and the modern evolutionary synthesis."
+    lesson: >-
+      A mechanism that feels intuitive must still survive a direct test. Note the
+      honest boundary: epigenetic inheritance transmits some gene-expression
+      marks across generations, but this is a narrow, bounded channel — not the
+      inheritance of acquired anatomical traits Lamarck proposed.
+    sources: ["Lamarck 1809", "Weismann 1889", "Mendelian synthesis"]
+
+  - id: refuted.cosmology.steady_state
+    claim: >-
+      The universe has no beginning and no end; it looks the same at all times,
+      with matter continuously created to keep density constant as it expands
+      (the perfect cosmological principle).
+    domain: cosmology
+    type: refuted-theory
+    era: "1948–1965"
+    falsified_by: >-
+      The 1965 discovery of the cosmic microwave background — a relic of a hot,
+      dense early state the steady-state model forbids — together with the
+      observed evolution of galaxy populations with look-back time (quasars were
+      more common in the past).
+    superseded_by: "Big Bang cosmology (see established.yaml)."
+    lesson: >-
+      A theory motivated by an appealing principle (an eternal, unchanging
+      cosmos) still made a risky prediction — no relic radiation — and that
+      prediction was decisively wrong. The losing side was held by leading
+      cosmologists of the day.
+    sources: ["Hoyle, Bondi & Gold 1948", "Penzias & Wilson 1965"]
+
+  - id: refuted.engineering.perpetual_motion
+    claim: >-
+      A machine can be built that runs forever and/or delivers more work than the
+      energy put into it, without an external energy source (perpetual motion of
+      the first or second kind).
+    domain: engineering/physics
+    type: refuted-claim
+    era: "Middle Ages–present (still recurring)"
+    falsified_by: >-
+      Every constructed device has failed, and the first and second laws of
+      thermodynamics forbid both forms: energy cannot be created, and no cyclic
+      process can convert heat entirely into work. Patent offices now reject such
+      claims on sight.
+    superseded_by: "The laws of thermodynamics (see bedrock.yaml)."
+    lesson: >-
+      A claim that contradicts a conservation law carries an extraordinary burden
+      of proof. Centuries of confident, failed prototypes show that wanting a
+      thing to work is not evidence that it can.
+    sources: ["history of perpetual-motion patents", "first and second laws of thermodynamics"]

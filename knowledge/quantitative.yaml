@@ -122,3 +122,22 @@ entries:
       so claims of complete, self-contained certainty deserve scrutiny.
     triggers: ["'provably complete'", "claim of absolute certainty", "self-validating system"]
     failure_guarded: "treating a formal system as able to certify its own completeness or total truth"
+
+  - id: quant.central_limit_theorem
+    principle: "Central limit theorem"
+    statement: >-
+      The sum or mean of many independent random variables tends toward a normal
+      distribution regardless of the underlying distribution — which is why
+      normal approximations are so widely valid, and why they fail when
+      observations are dependent or heavy-tailed.
+    triggers: ["averaging many measurements", "normal distribution assumed", "confidence intervals", "'the data are roughly bell-shaped'"]
+    failure_guarded: "assuming normality when samples are dependent, few, or drawn from a heavy-tailed distribution"
+
+  - id: quant.parsimony
+    principle: "Parsimony (Occam's razor)"
+    statement: >-
+      Among hypotheses that explain the evidence equally well, prefer the one
+      introducing the fewest unsupported assumptions — as a guide to investigate,
+      not a proof of truth. Simplicity breaks ties; it does not settle them.
+    triggers: ["competing explanations fit equally", "ad hoc assumptions added", "elaborate mechanism proposed", "'the simplest explanation'"]
+    failure_guarded: "treating the simpler hypothesis as proven, or adding unfalsifiable epicycles to rescue a failing one"

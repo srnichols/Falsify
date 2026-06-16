@@ -217,3 +217,151 @@ entries:
       Does not include gravity and does not explain dark matter or neutrino
       masses fully; it is known to be incomplete, not refuted, within its domain.
     sources: ["Glashow-Weinberg-Salam", "ATLAS & CMS 2012"]
+
+  - id: established.physics.ohms_law
+    statement: >-
+      For many conductors the current through them is directly proportional to
+      the voltage across them, with resistance as the constant of proportionality
+      (V = IR).
+    domain: physics/electromagnetism
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      An ohmic material under stated conditions is shown to carry current not
+      proportional to applied voltage with no change in its physical state.
+    status: well-supported
+    confirmations: ["circuit measurements across metals and resistors"]
+    domain_of_validity: >-
+      An empirical, material-specific approximation, not a fundamental law. It
+      fails for non-ohmic devices (diodes, semiconductors, plasmas, filaments)
+      and for ohmic materials at extreme fields or temperatures.
+    sources: ["Ohm 1827"]
+
+  - id: established.physics.hookes_law
+    statement: >-
+      The force needed to extend or compress an elastic body is proportional to
+      the displacement (F = -kx).
+    domain: physics/mechanics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      An elastic material within its elastic range is shown to deform
+      non-proportionally to applied force with no change in conditions.
+    status: well-supported
+    confirmations: ["springs, beams, and elastic solids under small strain"]
+    domain_of_validity: >-
+      Holds only below the elastic limit; beyond it materials yield, deform
+      plastically, and the linear relation breaks down. A first-order
+      approximation, not a universal law.
+    sources: ["Hooke 1678"]
+
+  - id: established.astronomy.kepler_laws
+    statement: >-
+      Planets move in ellipses with the Sun at one focus; a planet sweeps equal
+      areas in equal times; and the square of a planet's orbital period is
+      proportional to the cube of its semi-major axis.
+    domain: astronomy
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible orbital observations inconsistent with elliptical orbits or
+      the period-distance relation, not attributable to additional masses or
+      relativistic correction.
+    status: well-supported
+    confirmations: ["planetary ephemerides", "exoplanet transit timing", "satellite orbits"]
+    domain_of_validity: >-
+      Exact for an idealized two-body system; perturbed by other masses and by
+      general relativity (e.g. Mercury's perihelion precession). Derivable from
+      Newtonian gravitation.
+    sources: ["Kepler 1609, 1619"]
+
+  - id: established.geology.uniformitarianism
+    statement: >-
+      The geological processes observed operating today (erosion, deposition,
+      volcanism, plate motion) are the same processes that shaped Earth's past;
+      the present is the key to the past.
+    domain: geology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Evidence that past geological features required processes with no
+      present-day analogue operating under different physical laws.
+    status: well-supported
+    confirmations: ["observed sedimentation and erosion rates", "radiometric dating consistency", "ongoing plate motion"]
+    domain_of_validity: >-
+      Process uniformity, not strict rate uniformity: catastrophic events
+      (impacts, megafloods, large eruptions) are admitted as real and are
+      themselves present-day processes operating at higher intensity.
+    sources: ["Hutton 1788", "Lyell 1830"]
+
+  - id: established.biology.mendelian_inheritance
+    statement: >-
+      Heritable traits are carried by discrete factors (genes) that segregate so
+      each parent passes one of two copies to offspring (segregation), and genes
+      for different traits are inherited independently (independent assortment).
+    domain: biology/genetics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible inheritance ratios that cannot be reconciled with discrete
+      segregating factors, with no linkage, epigenetic, or cytoplasmic
+      explanation.
+    status: well-supported
+    confirmations: ["dihybrid cross ratios", "chromosome theory of inheritance", "molecular identification of genes"]
+    domain_of_validity: >-
+      Independent assortment holds for genes on different chromosomes or far
+      apart; linked genes are a known, bounded exception that founded gene
+      mapping. Polygenic, epigenetic, and cytoplasmic inheritance extend the
+      picture without overturning segregation.
+    sources: ["Mendel 1866", "rediscovery 1900 (de Vries, Correns, Tschermak)"]
+
+  - id: established.biology.endosymbiosis
+    statement: >-
+      Mitochondria and chloroplasts originated as free-living bacteria that were
+      engulfed by and became permanent symbionts within ancestral eukaryotic
+      cells.
+    domain: biology/cell
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Demonstration that these organelles arose by invagination of the host cell
+      membrane rather than from a bacterial ancestor — e.g. absence of their own
+      circular DNA or no phylogenetic link to bacteria.
+    status: well-supported
+    confirmations: ["organelles have their own circular DNA and ribosomes", "double membranes", "bacterial phylogeny of organelle genes"]
+    sources: ["Mereschkowski 1905", "Margulis 1967"]
+
+  - id: established.cs.shannon_information
+    statement: >-
+      Information can be quantified in bits; a message source has a definable
+      entropy that sets the minimum average code length (source coding), and a
+      noisy channel has a maximum capacity below which error-free communication
+      is possible and above which it is not (channel coding).
+    domain: computer-science/information
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      A reproducible coding scheme that compresses a source below its entropy
+      without loss, or that communicates error-free above a channel's Shannon
+      capacity.
+    status: well-supported
+    confirmations: ["modern data compression approaching entropy", "error-correcting codes approaching capacity (LDPC, polar codes)"]
+    sources: ["Shannon 1948"]
+
+  - id: established.cs.computability_limits
+    statement: >-
+      No algorithm can decide, for every possible program and input, whether that
+      program will eventually halt; the halting problem is undecidable.
+    domain: computer-science/computability
+    type: theorem
+    falsifiable: true
+    falsified_if: >-
+      Exhibition of a single algorithm that correctly decides halting for every
+      program-input pair (a constructive counterexample to Turing's diagonal
+      argument).
+    status: well-supported
+    domain_of_validity: >-
+      A proven theorem about idealized Turing-equivalent computation, not an
+      empirical claim. Specific programs can of course be analyzed; what is
+      impossible is a single general decider for all of them.
+    sources: ["Turing 1936", "Church 1936"]
