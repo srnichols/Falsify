@@ -621,3 +621,85 @@ entries:
       Establishes mass differences and flavor mixing, though the absolute mass
       scale and possible CP-violating phase remain active research questions.
     sources: ["Super-Kamiokande 1998", "SNO 2001-2002", "Pontecorvo", "Maki-Nakagawa-Sakata"]
+
+  - id: established.materials.dislocations
+    statement: >-
+      Plastic deformation in crystalline materials is primarily mediated by the
+      motion of dislocations, and material strength can be increased by blocking
+      or impeding that motion through alloying, work hardening, precipitation,
+      grain refinement, or other microstructural barriers.
+    domain: materials-science
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible deformation of crystalline solids is shown to occur without
+      dislocation motion or other known defect mechanisms, or strengthening is
+      found not to correlate with impeded defect motion in the stated regime.
+    status: well-supported
+    confirmations: ["electron microscopy of dislocations", "Hall-Petch strengthening", "work-hardening behavior", "slip systems in metals and crystals"]
+    domain_of_validity: >-
+      Most applicable to crystalline solids. Amorphous materials, polymers,
+      ceramics, and high-temperature creep can involve different dominant
+      mechanisms, though defects still matter broadly.
+    sources: ["Taylor, Orowan, and Polanyi 1934", "materials dislocation theory"]
+
+  - id: established.biology.fluid_mosaic_membrane
+    statement: >-
+      Biological membranes are dynamic lipid bilayers with embedded proteins;
+      membrane structure is fluid rather than rigid, enabling selective
+      permeability, signaling, transport, and compartmentalization.
+    domain: biology/cell-biology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible evidence shows cell membranes are not bilayers, lack lateral
+      fluidity, or cannot account for observed membrane-protein mobility and
+      transport behavior.
+    status: well-supported
+    confirmations: ["freeze-fracture electron microscopy", "fluorescence recovery after photobleaching", "membrane-protein diffusion measurements"]
+    domain_of_validity: >-
+      A core organizing model, not a claim that all membranes are uniform.
+      Membrane domains, cytoskeletal anchoring, and specialized lipid rafts add
+      structure without overturning the bilayer-and-protein framework.
+    sources: ["Singer and Nicolson 1972", "modern membrane biophysics"]
+
+  - id: established.physics.ferromagnetism
+    statement: >-
+      In ferromagnetic materials, quantum exchange interactions align electron
+      spins into domains, producing spontaneous magnetization below a critical
+      temperature and hysteretic magnetic behavior under applied fields.
+    domain: physics/magnetism
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible measurements of ferromagnets fail to show domain behavior,
+      spontaneous magnetization below the Curie temperature, or exchange-based
+      alignment consistent with observed magnetization curves.
+    status: well-supported
+    confirmations: ["magnetic domain imaging", "Curie temperature transitions", "hysteresis loops", "neutron scattering and solid-state models"]
+    domain_of_validity: >-
+      Describes ferromagnets specifically. Paramagnetism, diamagnetism,
+      antiferromagnetism, ferrimagnetism, and spin glasses are related but
+      distinct magnetic regimes.
+    sources: ["Weiss molecular-field theory", "Heisenberg exchange", "modern solid-state magnetism"]
+
+  - id: established.meteorology.weather_systems
+    statement: >-
+      Large-scale weather arises from differential solar heating, pressure
+      gradients, Earth's rotation, and the water cycle; air masses, fronts,
+      cyclones, anticyclones, and latent heat release organize winds,
+      precipitation, and storm development.
+    domain: meteorology/weather
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible atmospheric observations show that pressure fields,
+      temperature gradients, moisture, and rotation do not govern the formation
+      and motion of fronts, storms, and prevailing weather patterns.
+    status: well-supported
+    confirmations: ["synoptic weather maps", "radiosonde profiles", "satellite observations", "numerical weather prediction skill"]
+    domain_of_validity: >-
+      A physical framework for weather systems, not a claim of perfect
+      predictability. Forecast skill is limited by chaos, model resolution,
+      and uncertainty in initial conditions.
+    sources: ["Bjerknes and the Bergen School", "modern dynamical meteorology"]

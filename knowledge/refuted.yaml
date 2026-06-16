@@ -205,3 +205,77 @@ entries:
       of proof. Centuries of confident, failed prototypes show that wanting a
       thing to work is not evidence that it can.
     sources: ["history of perpetual-motion patents", "first and second laws of thermodynamics"]
+
+  - id: refuted.biology.vitalism
+    claim: >-
+      Living organisms possess a special non-physical "vital force" that is
+      required to make organic compounds or to explain life's chemistry, beyond
+      ordinary physical and chemical laws.
+    domain: biology/cell-biology
+    type: refuted-theory
+    era: "18th–19th century"
+    falsified_by: >-
+      Wöhler's synthesis of urea from inorganic precursors (1828) and the later
+      rise of biochemistry showed that compounds associated with life obey the
+      same chemistry as non-living matter. No separate life-force was needed.
+    superseded_by: "Biochemistry, cell theory, and molecular biology."
+    lesson: >-
+      A placeholder force that explains everything explains nothing. Once a
+      phenomenon is reproduced under ordinary chemistry, the extra essence is
+      doing no scientific work.
+    sources: ["Wohler 1828", "rise of organic chemistry and biochemistry"]
+
+  - id: refuted.physics.n_rays
+    claim: >-
+      A new form of radiation, "N-rays," emitted by many substances and even by
+      the human nervous system, subtly brightens dim visual targets and reveals
+      new physical effects.
+    domain: physics
+    type: refuted-claim
+    era: "1903–1905"
+    falsified_by: >-
+      Controlled demonstrations showed the claimed effect vanished when observers
+      were blinded to the apparatus state; Robert Wood secretly removed a prism
+      from the setup and the experimenter still reported seeing the effect.
+    superseded_by: "Observer-blinded experimental controls; no such radiation exists."
+    lesson: >-
+      Expectation can manufacture a signal. Weak, subjective effects demand
+      blinding and controls before they count as evidence.
+    sources: ["Blondlot 1903", "Robert W. Wood 1904"]
+
+  - id: refuted.chemistry.polywater
+    claim: >-
+      Water can exist in a novel polymerized form, "polywater," with unusual
+      density, boiling point, viscosity, and freezing behavior unlike ordinary
+      H2O.
+    domain: chemistry/materials-science
+    type: refuted-claim
+    era: "1960s–early 1970s"
+    falsified_by: >-
+      Improved analysis showed the anomalous samples were contaminated by salts,
+      silica, and biological impurities from glass capillaries and handling.
+      Pure water did not exhibit the claimed new phase.
+    superseded_by: "Ordinary water chemistry plus contamination analysis."
+    lesson: >-
+      Exotic new phases should disappear, not strengthen, under tighter purity
+      controls. Contamination is often the first rival hypothesis to kill.
+    sources: ["Deryagin's polywater reports", "later contamination studies"]
+
+  - id: refuted.physics.cold_fusion
+    claim: >-
+      Electrochemical cells using palladium and heavy water can produce
+      sustained nuclear fusion at room temperature, with large excess heat and
+      fusion products but without the expected high-energy signatures.
+    domain: physics/chemistry
+    type: refuted-claim
+    era: "1989–present fringe persistence"
+    falsified_by: >-
+      Independent laboratories repeatedly failed to reproduce the claimed excess
+      heat and nuclear products under controlled conditions, and the proposed
+      reactions lacked the accompanying radiation required by established nuclear
+      physics.
+    superseded_by: "Conventional nuclear fusion physics and replication standards."
+    lesson: >-
+      Extraordinary claims need robust, independent replication before public
+      announcement. A dramatic press conference is not evidence.
+    sources: ["Fleischmann and Pons 1989", "DOE reviews", "failed replication studies"]
