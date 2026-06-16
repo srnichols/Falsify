@@ -11,16 +11,18 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { VERSION } from '../index.js';
 import type { FalsifyServerDeps } from './deps.js';
 import { registerIntake } from './tools/intake.js';
+import { registerHypothesize } from './tools/hypothesize.js';
 
 /**
  * Build a configured Falsify MCP server with all `falsify_*` tools registered.
  * Dependencies (memory, knowledge lens) are injected for testability and default
  * to live resources only when actually used.
  */
-export function createFalsifyServer(_deps: FalsifyServerDeps = {}): McpServer {
+export function createFalsifyServer(deps: FalsifyServerDeps = {}): McpServer {
   const server = new McpServer({ name: 'falsify', version: VERSION });
 
   registerIntake(server);
+  registerHypothesize(server, deps);
 
   return server;
 }
