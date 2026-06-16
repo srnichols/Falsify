@@ -37,3 +37,6 @@ pforge-mcp/.vitest-results.json
 pforge-master/node_modules/
 pforge-sdk/node_modules/
 # <<< plan-forge managed <<<
+
+# Test coverage output
+coverage/
