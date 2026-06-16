@@ -33,9 +33,9 @@
 ---
 
 ### Phase 3: Web UI
-**Goal**: Hypothesis card + notebook view over the same transport-agnostic core.  
-**Plan**: Phase-3-WEB-UI-PLAN.md (not yet written)  
-**Status**: 📋 Planned
+**Goal**: Hypothesis card + visible-mistakes notebook over the same transport-agnostic core, served by a local HTTP/JSON API.  
+**Plan**: [Phase-3-WEB-UI-PLAN.md](./Phase-3-WEB-UI-PLAN.md)  
+**Status**: ✅ Complete — 5/5 slices, 135 tests, 0 vulnerabilities; localhost `node:http` API (no new runtime deps) + thin static front-end; `falsify-web` bin
 
 ---
 
@@ -51,6 +51,7 @@
 |-------|------|------|-----------|
 | 1 | Core Engine + Memory Client | [Phase-1-CORE-ENGINE-PLAN.md](./Phase-1-CORE-ENGINE-PLAN.md) | 2026-06-15 |
 | 2 | MCP Server (`falsify_*` tools) | [Phase-2-MCP-SERVER-PLAN.md](./Phase-2-MCP-SERVER-PLAN.md) | 2026-06-15 |
+| 3 | Web UI (HTTP API + static front-end) | [Phase-3-WEB-UI-PLAN.md](./Phase-3-WEB-UI-PLAN.md) | 2026-06-15 |
 
 ---
 

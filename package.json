@@ -10,7 +10,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "falsify-mcp": "dist/src/mcp/server.js"
+    "falsify-mcp": "dist/src/mcp/server.js",
+    "falsify-web": "dist/src/web/server.js"
   },
   "exports": {
     ".": {
@@ -26,6 +27,7 @@
     "test": "vitest run",
     "dev": "vitest",
     "lint": "eslint src tests",
+    "web": "node dist/src/web/server.js",
     "seed-sync": "node dist/src/cli/seedSync.js"
   },
   "dependencies": {

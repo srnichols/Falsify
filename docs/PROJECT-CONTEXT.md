@@ -144,7 +144,13 @@ only serve as the engine's exhibit of what a successful falsification looks like
   - [x] Slice 3: `falsify_experiment` (could-fail) + `falsify_analyze` (No branch + mandatory review-on-Yes)
   - [x] Slice 4: `falsify_review` (three questions in order; revise-loop vs. confirm-finalize)
   - [x] Slice 5: `falsify_recall` (graceful offline, no key leak) + stdio entrypoint + full-cycle integration test
-- [ ] Phase 3: Web UI (hypothesis card + notebook view)
+- [x] Crucible-hardened Phase 3 plan (`docs/plans/Phase-3-WEB-UI-PLAN.md`), gate-linter 0/0
+- [x] **Phase 3 — WEB UI: COMPLETE** (all 5 slices, 135 tests, 0 vulns; localhost `node:http` API + thin static front-end; `falsify-web` bin)
+  - [x] Slice 1: Notebook tier (`.falsify/notebook/*.jsonl`) — append-only, struck-not-deleted
+  - [x] Slice 2: transport-neutral `cycle/operations.ts` extracted; MCP tools delegate (Phase 2 tests unchanged)
+  - [x] Slice 3: localhost HTTP/JSON API (`node:http`, no new deps; body cap, traversal guard, no key leak)
+  - [x] Slice 4: thin static front-end (hypothesis card + visible-mistakes notebook), no framework/bundler
+  - [x] Slice 5: `falsify-web` bin + full-cycle HTTP integration test + README
 - [ ] Knowledge seed expansion (more entries per tier, via PR)
 
 ### Module map (Phase 1 — `src/`)
@@ -167,7 +173,7 @@ only serve as the engine's exhibit of what a successful falsification looks like
 |--------|----------------|
 | `mcp/server.ts` | `createFalsifyServer(deps?)` builds the `McpServer` and registers the six `falsify_*` tools; the core never imports a transport. `main()` connects stdio only when run directly (entry-point guard). Shebang → `falsify-mcp` bin. |
 | `mcp/result.ts` | `ok` / `fail(error, rule, guidance)` / `withState` helpers (the single `CallToolResult` shape) and `advance()` — converts an illegal cycle move into a structured `cycle:illegal-transition` failure instead of a throw. |
-| `mcp/deps.ts` | `FalsifyServerDeps` (injected `memory`, `quantPrinciples`) and the narrow `MemoryReader` interface (matches `OpenBrainMcpClient.recall`). |
+| `mcp/deps.ts` | `FalsifyServerDeps` (injected `memory`, `quantPrinciples`) and a re-export of the `MemoryReader` interface (defined in `memory/openbrainClient.ts` so both transports share it neutrally). |
 | `mcp/tools/intake.ts` | `falsify_intake` — deterministic falsifiability checklist + consensus-appeal detection answered with the DESIGN.md challenge. |
 | `mcp/tools/hypothesize.ts` | `falsify_hypothesize` — enforces ≥1 falsification condition (`honesty:*`) at the tool boundary; applies the quantitative lens. |
 | `mcp/tools/experiment.ts` | `falsify_experiment` — refuses a test that cannot fail (`couldFail` literal true). |
@@ -175,9 +181,21 @@ only serve as the engine's exhibit of what a successful falsification looks like
 | `mcp/tools/review.ts` | `falsify_review` — three questions in order; `revise`→Hypothesis, `confirm`→Theory (the only place a Theory finalizes). |
 | `mcp/tools/recall.ts` | `falsify_recall` — semantic recall via the injected `MemoryReader`; degrades to `recall:brain-unreachable`, never leaks the key. |
 
+> **Phase 3 refactor note**: the discipline logic moved out of the `mcp/tools/*` handlers into `cycle/operations.ts` (below). Each tool is now a thin adapter: declare the input schema, call the matching `op*`, map the neutral `OpResult` → `CallToolResult` via `toCallToolResult`. Behavior is unchanged (Phase 2 tests pass as-is). `mcp/result.ts` lost its `advance()` (operations owns transition handling) and gained `toCallToolResult`.
+
+### Module map (Phase 3 — `src/cycle/operations.ts`, `src/web/`, `src/memory/notebook.ts`)
+| Module | Responsibility |
+|--------|----------------|
+| `cycle/operations.ts` | **The single source of truth for the discipline.** Pure `opIntake/opHypothesize/opExperiment/opAnalyze/opReview/opRecall` returning a transport-neutral `OpResult` (`ok \| error{error,rule,guidance}`). Holds the honesty rules, consensus challenge, quant lens, mandatory review-on-Yes, and cycle routing. Imports no transport. Both MCP and web delegate here. |
+| `memory/notebook.ts` | **Notebook tier (visible mistakes).** Append-only JSONL at `.falsify/notebook/<project>.jsonl`; `record` / `strikeThrough` (a struck entry is a new event, original line never removed) / `list` (folds the event log). |
+| `web/api.ts` | Pure `handleRequest(method, path, body, deps)` → `{status, json}`. zod-validates the body (permissive on honesty fields so a violation is a 422 `honesty:*`, not a 400), dispatches to `op*` / the notebook. No `node:http` import (unit-testable). `WebDeps` = `{ memory?, quantPrinciples?, notebook? }`. |
+| `web/server.ts` | Thin `node:http` shell over `handleRequest` + static file server. Binds `127.0.0.1`, port `FALSIFY_WEB_PORT` (default 4319), 1 MB body cap, serves `public/` with a path-traversal guard + `nosniff`. Shebang → `falsify-web` bin; entry-guarded `main()`. |
+| `public/{index.html,app.js,styles.css}` | Hand-authored static front-end (no framework/bundler): a guided hypothesis card and the visible-mistakes notebook (struck entries dimmed + lined-through, kept legible). Threads `cycleState` across steps. Not in the TS/lint scope by design (keeps the core `tsc` build DOM-free). |
+
 ### Commands
 - `npm run build` (tsc) · `npm test` (vitest run) · `npm run dev` (watch) · `npm run lint` (eslint src tests)
 - `node dist/src/mcp/server.js` (run the MCP server over stdio; also the `falsify-mcp` bin)
+- `npm run web` → `node dist/src/web/server.js` (run the web UI; `falsify-web` bin; binds `127.0.0.1`, port `FALSIFY_WEB_PORT` default 4319)
 - Coverage: `npx vitest run --coverage` (v8 provider).
 - **Gate runner allowlist = `node` / `npm` / `npx` only** (no pnpm). TS imports require `.js` extensions (NodeNext).
 
@@ -257,3 +275,23 @@ only serve as the engine's exhibit of what a successful falsification looks like
   smoke-tested) and a full-cycle integration test driving intake→…→theory through a real MCP `Client`
   over `InMemoryTransport`. **96 tests pass, lint clean, 0 vulns.** **Phase 2 complete.** Next: Phase 3
   (Web UI).
+- **2026-06-15 (Phase 3 — Web UI)** — Drafted + gate-linted (0/0, 5 slices) the Crucible-hardened
+  `docs/plans/Phase-3-WEB-UI-PLAN.md`, then built **all 5 slices TDD**, each committed green. (1) A
+  **Notebook tier** (`src/memory/notebook.ts`) — append-only JSONL at `.falsify/notebook/`, a refuted
+  hypothesis is struck-through + dated via a new event and the original line is **never deleted**
+  (DESIGN §5 "mistakes stay visible"). (2) **Extracted `src/cycle/operations.ts`** — the discipline
+  logic (honesty rules, consensus challenge, quant lens, mandatory review-on-Yes, cycle routing)
+  lifted out of the MCP tool handlers into pure `op*` functions returning a transport-neutral
+  `OpResult`; the MCP tools became thin adapters that map `OpResult` → `CallToolResult`. **Phase 2
+  tests passed unchanged** — behavior-preserving refactor, so neither transport can ever drift or
+  weaken a rule. (3) A localhost **HTTP/JSON API** (`src/web/api.ts` pure handler + `src/web/server.ts`
+  `node:http` shell) — **zero new runtime deps**; binds `127.0.0.1`, 1 MB body cap, static serving from
+  `public/` with a path-traversal guard; honesty violations surface as HTTP 422 with the named rule, a
+  bad body as 400; recall degrades to 422 and never leaks the key (all tested over real HTTP). (4) A
+  **thin static front-end** (`public/{index.html,app.js,styles.css}`) — no framework/bundler: a guided
+  hypothesis card + the visible-mistakes notebook (struck entries dimmed + lined-through); kept out of
+  the TS/lint scope so the core `tsc` build stays DOM-free. (5) `falsify-web` bin (shebang preserved,
+  launch smoke-tested — binds localhost, logs the URL, serves the page) + a full-cycle HTTP integration
+  test (intake→…→**No-branch revise loop**→…→**review-on-Yes**→confirm→theory, with a struck-but-present
+  notebook entry) + a README "Run the Falsify web UI" section. **135 tests pass, lint clean, 0 vulns.**
+  **Phase 3 complete.** Next: knowledge seed expansion, or a multi-model Quorum (DESIGN §6).

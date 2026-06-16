@@ -57,6 +57,32 @@ VS Code (`.vscode/mcp.json`) or any MCP host:
 the OpenBrain corpus); the reasoning tools work without it. The key is read from the
 environment and is never stored in the repo.
 
+## Run the Falsify web UI
+
+The same transport-free core is also exposed over a thin, local web UI: a guided
+hypothesis card and a **visible-mistakes notebook** (a refuted hypothesis is struck
+through and dated, never deleted — the falsification loop made visible). It talks to
+the *same* `op*` operations the MCP tools call, so neither transport can weaken the
+honesty rules.
+
+```bash
+npm install
+npm run build
+npm run web
+```
+
+Then open the printed URL (default <http://127.0.0.1:4319>). The server binds to
+`127.0.0.1` only — it is a single-user local tool, with no authentication. Override
+the port with `FALSIFY_WEB_PORT`:
+
+```bash
+FALSIFY_WEB_PORT=8080 npm run web
+```
+
+As with the MCP server, `OPENBRAIN_KEY` is optional and only enables recall. No web
+framework or bundler is used: the API is plain `node:http` and the front-end is
+hand-authored static assets served from `public/`.
+
 ---
 
 > "The first principle is that you must not fool yourself — and you are the easiest
