@@ -166,6 +166,28 @@ entries:
     confirmations: ["Brownian motion (Einstein/Perrin)", "direct atomic imaging", "the periodic table"]
     sources: ["Dalton 1808", "Perrin 1908"]
 
+  - id: established.biology.chemiosmosis_atp_synthesis
+    statement: >-
+      Cells couple electron transport or light-driven charge separation to the
+      pumping of protons or other ions across membranes, storing free energy in
+      electrochemical gradients that ATP synthase uses to make ATP.
+    domain: biology/cell-biology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible mitochondrial, chloroplast, or bacterial systems are shown to
+      synthesize ATP independently of membrane electrochemical gradients where
+      the chemiosmotic mechanism predicts dependence, with no alternative energy
+      coupling mechanism explaining the result.
+    status: well-supported
+    confirmations: ["oxidative phosphorylation", "photophosphorylation", "ATP synthase rotation and proton-coupling experiments"]
+    domain_of_validity: >-
+      A core framework for biological energy transduction, not a claim that all
+      ATP synthesis uses identical ion species or membrane architecture. Some
+      systems use sodium gradients or variant coupling details without
+      overturning the chemiosmotic principle.
+    sources: ["Mitchell 1961", "Boyer binding-change mechanism", "Walker ATP synthase structure"]
+
   - id: established.physics.universal_gravitation
     statement: >-
       Every mass attracts every other mass with a force proportional to the
@@ -771,6 +793,29 @@ entries:
       systems far from equilibrium or with coupled kinetic constraints.
     sources: ["Le Chatelier 1884", "van't Hoff"]
 
+  - id: established.chemistry.law_of_mass_action
+    statement: >-
+      For many reactions, the rate or equilibrium tendency depends on the
+      active concentrations of reactants raised to powers set by the reaction
+      stoichiometry or effective mechanism; at equilibrium this supports the
+      standard equilibrium-constant form.
+    domain: chemistry/equilibrium
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible well-characterized reaction systems in the stated regime fail
+      to show the predicted concentration dependence of rates or equilibrium
+      expressions, with no non-ideal activity, hidden mechanism, or transport
+      limitation explaining the discrepancy.
+    status: well-supported
+    confirmations: ["equilibrium constant measurements", "elementary reaction kinetics", "buffer and solubility equilibria"]
+    domain_of_validity: >-
+      Most direct for idealized activities and elementary or effectively modeled
+      reactions. Real systems can require activities instead of raw
+      concentrations, and multi-step mechanisms can alter observed rate laws
+      without overturning the equilibrium framework.
+    sources: ["Guldberg and Waage 1864", "chemical thermodynamics", "modern kinetics"]
+
   - id: established.cosmology.hubble_law
     statement: >-
       On large scales, the recessional velocity of a galaxy is proportional to
@@ -953,6 +998,28 @@ entries:
       occur for barrierless reactions, quantum tunneling, enzyme catalysis, or
       when the reaction mechanism changes.
     sources: ["Arrhenius 1889", "transition-state theory"]
+
+  - id: established.biology.michaelis_menten_kinetics
+    statement: >-
+      Many single-substrate enzyme-catalyzed reactions show saturating kinetics:
+      reaction velocity rises with substrate concentration and approaches a
+      maximum rate as enzyme active sites become occupied, often approximated by
+      the Michaelis-Menten relation.
+    domain: biology/biochemistry
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible single-substrate enzyme systems under stated assumptions fail
+      to show the predicted saturation behavior or parameter relations, with no
+      allostery, cooperativity, inhibition, reverse flux, or assay artifact
+      explaining the discrepancy.
+    status: well-supported
+    confirmations: ["enzyme rate curves", "substrate saturation experiments", "lineweaver-burk and modern nonlinear kinetic fits"]
+    domain_of_validity: >-
+      A useful approximation for many, not all, enzymes. Multi-substrate,
+      allosteric, cooperative, diffusion-limited, and strongly regulated enzyme
+      systems often require fuller kinetic models.
+    sources: ["Michaelis and Menten 1913", "Briggs and Haldane 1925", "modern enzymology"]
 
   - id: established.physics.ideal_gas_law
     statement: >-
@@ -1173,6 +1240,71 @@ entries:
       Membrane domains, cytoskeletal anchoring, and specialized lipid rafts add
       structure without overturning the bilayer-and-protein framework.
     sources: ["Singer and Nicolson 1972", "modern membrane biophysics"]
+
+  - id: established.physics.ficks_law_diffusion
+    statement: >-
+      Diffusive flux moves down a concentration gradient and, in many continuum
+      regimes, is proportional to that gradient, so solute spreading and mixing
+      follow predictable diffusion equations over time.
+    domain: physics/transport
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible diffusive transport in stated continuum regimes fails to
+      scale with concentration gradient and diffusivity, with no convection,
+      crowding, anomalous transport, or measurement artifact explaining the
+      deviation.
+    status: well-supported
+    confirmations: ["dye-diffusion experiments", "gas mixing", "membrane and bulk transport modeling"]
+    domain_of_validity: >-
+      A continuum approximation that works broadly in ordinary diffusive
+      regimes. Strong advection, active transport, anomalous diffusion, porous
+      media complexity, or nanoscale crowding can require fuller transport
+      models.
+    sources: ["Fick 1855", "diffusion equation", "continuum transport theory"]
+
+  - id: established.biology.osmosis
+    statement: >-
+      Water moves across a semipermeable membrane toward the side of higher
+      solute activity or osmotic pressure, producing predictable swelling,
+      shrinking, and pressure effects in cells and tissues.
+    domain: biology/cell-biology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible semipermeable membrane systems under stated conditions fail
+      to show the predicted net water movement or osmotic pressure relations,
+      with no hydrostatic counterpressure, membrane defect, or active transport
+      explanation.
+    status: well-supported
+    confirmations: ["red blood cell swelling and crenation", "plant turgor", "osmometer measurements", "aquaporin-mediated water transport studies"]
+    domain_of_validity: >-
+      Applies to semipermeable systems where water can move more freely than the
+      relevant solutes. Real cells add active ion pumping, elastic walls, and
+      channel regulation without overturning the osmotic principle.
+    sources: ["van't Hoff osmotic pressure relation", "Pfeffer experiments", "modern membrane physiology"]
+
+  - id: established.biology.membrane_transport
+    statement: >-
+      Biological membranes regulate exchange through passive diffusion,
+      facilitated diffusion via channels or carriers, and active transport that
+      uses stored or direct energy to move solutes against electrochemical
+      gradients.
+    domain: biology/cell-biology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible transport studies show cells cannot distinguish passive,
+      facilitated, and energy-coupled transport behaviors, or that gradients
+      and channel or pump identities fail to predict observed membrane fluxes.
+    status: well-supported
+    confirmations: ["ion-channel electrophysiology", "carrier saturation curves", "sodium-potassium pump studies", "transporter genetics and pharmacology"]
+    domain_of_validity: >-
+      A general framework rather than one single transport equation. Specific
+      transporters differ in stoichiometry, gating, selectivity, and regulation,
+      and whole-cell flux also depends on membrane potential and compartmental
+      context.
+    sources: ["Hodgkin and Huxley ion transport era", "Skou Na+/K+-ATPase", "modern membrane transport physiology"]
 
   - id: established.physics.ferromagnetism
     statement: >-
