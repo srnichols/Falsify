@@ -21,7 +21,7 @@
 ### Phase 1: Core Engine + Memory Client
 **Goal**: Pure reasoning core — Cycle state machine, typed/validated knowledge + hypothesis contracts, tiered rules engine with consensus-minimized `claim_score`, and an OpenBrain client with offline fallback. No MCP/UI.  
 **Plan**: [Phase-1-CORE-ENGINE-PLAN.md](./Phase-1-CORE-ENGINE-PLAN.md)  
-**Status**: 📋 Planned
+**Status**: ✅ Complete — 5/5 slices, 48 tests, 95.27% line coverage, 0 vulnerabilities (HEAD `2ad662e`)
 
 ---
 
@@ -49,7 +49,7 @@
 
 | Phase | Goal | Plan | Completed |
 |-------|------|------|-----------|
-| — | — | — | — |
+| 1 | Core Engine + Memory Client | [Phase-1-CORE-ENGINE-PLAN.md](./Phase-1-CORE-ENGINE-PLAN.md) | 2026-06-15 |
 
 ---
 

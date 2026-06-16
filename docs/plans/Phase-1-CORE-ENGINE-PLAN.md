@@ -1,10 +1,11 @@
 ---
 plan: Phase-1-CORE-ENGINE
-status: draft
+status: complete
 owner: srnichols
 preset: typescript
 package_manager: npm
 created: 2026-06-15
+completed: 2026-06-15
 ---
 
 # Phase 1 — Core Engine + Memory Client

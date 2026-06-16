@@ -114,10 +114,34 @@ state contracts.
 - [x] Brain key resolved as env-var reuse; `.env.example` added
 - [x] `docs/` handoff created
 - [x] Plan Forge onboarding (`setup.ps1`, typescript preset) — validation 29/29 PASS
-- [ ] Crucible interview → hardened slices (IN PROGRESS)
-- [ ] Seed-sync script (push `knowledge/*.yaml` → OpenBrain)
-- [ ] Slice 1: Core types + Cycle state machine
+- [x] Crucible interview → hardened Phase 1 plan (`docs/plans/Phase-1-CORE-ENGINE-PLAN.md`), linter 0/0
+- [x] **Phase 1 — CORE ENGINE: COMPLETE** (all 5 slices, 48 tests, 95% line coverage, 0 vulns)
+  - [x] Slice 1: scaffold (npm + TS strict ESM + vitest v4 + eslint v9 flat)
+  - [x] Slice 2: domain types + zod schemas (honesty rule: ≥1 falsification condition enforced)
+  - [x] Slice 3: Cycle state machine (`Intake→Hypothesis→Experiment→Analysis→Review→Theory`)
+  - [x] Slice 4: knowledge loader + rules engine (`claim_score` — consensus structurally barred from flipping verdicts, proven by test)
+  - [x] Slice 5: OpenBrain client + typed config (offline `.falsify/queue` fallback, drain-on-recovery, key never leaks)
+- [ ] Seed-sync script (push `knowledge/*.yaml` → OpenBrain with tier metadata)
+- [ ] Phase 2: MCP server (`falsify_*` tools)
+- [ ] Phase 3: Web UI (hypothesis card + notebook view)
 - [ ] Knowledge seed expansion (more entries per tier, via PR)
+
+### Module map (Phase 1 — `src/`)
+| Module | Responsibility |
+|--------|----------------|
+| `domain/schemas.ts` | All zod schemas (knowledge YAML + cycle domain). Honesty rule via `.min(1)` on falsification conditions. |
+| `domain/types.ts` | `z.infer` type aliases for every schema. |
+| `cycle/stateMachine.ts` | Legal transitions; `transition()` throws `CycleTransitionError` on illegal moves. |
+| `knowledge/loader.ts` | Loads + validates the 4 tier YAMLs; `allEntries()` flattens. |
+| `rules/claimScore.ts` | **Consensus-minimization core.** `compareClaims()` returns `decidedBy: evidence \| consensus-tiebreak \| tie`; consensus only consulted on exact non-consensus tie. |
+| `rules/quantitative.ts` | Cross-cutting validator lens (trigger-substring match → guarded flags). |
+| `config.ts` | `loadConfig()` from env; `ConfigError` references field names, never the key value. |
+| `memory/openbrainClient.ts` | `save`/`recall` via `fetch`; offline queue + FIFO drain; `BrainHttpError` carries status only. |
+
+### Commands
+- `npm run build` (tsc) · `npm test` (vitest run) · `npm run dev` (watch) · `npm run lint` (eslint src tests)
+- Coverage: `npx vitest run --coverage` (v8 provider).
+- **Gate runner allowlist = `node` / `npm` / `npx` only** (no pnpm). TS imports require `.js` extensions (NodeNext).
 
 ### Plan Forge layout (added by onboarding)
 - `docs/plans/` — plan pipeline (`AI-Plan-Hardening-Runbook*.md`, `DEPLOYMENT-ROADMAP.md`).
@@ -135,3 +159,12 @@ state contracts.
   knowledge seed YAMLs + two-store storage design in DESIGN.md. Added `.env.example`.
   Created this `docs/` handoff. Ran Plan Forge onboarding (typescript preset, 874 files,
   validation 29/29 PASS). Next: Crucible hardening interview → first phase plan in `docs/plans/`.
+- **2026-06-15 (cont.)** — Hardened Phase 1 plan via Crucible (8 decisions resolved, linter
+  0/0). Built **all 5 Phase 1 slices TDD**, each committed with green build/test/lint:
+  scaffold → schemas → state machine → loader+rules → OpenBrain client. Switched pnpm→npm
+  (gate allowlist); vitest v2→v4 (cleared 5 esbuild vulns → 0). `claim_score` consensus-
+  minimization proven by test (consensus cannot flip a verdict, only break exact ties).
+  OpenBrain client degrades gracefully to a local `.falsify/queue` when offline and drains
+  on recovery; the `x-brain-key` never appears in any error/log (tested). **48 tests,
+  95.27% line coverage, 100% functions, 0 vulnerabilities.** HEAD `2ad662e`.
+  **Phase 1 CORE ENGINE complete.** Next: seed-sync script, then Phase 2 (MCP server).
