@@ -302,6 +302,90 @@ entries:
       power.
     sources: ["Joule heating relation", "electrical circuit theory", "classical electromagnetism"]
 
+  - id: established.physics.capacitance_charge_voltage_relation
+    statement: >-
+      For a capacitor in its linear regime, stored charge is proportional to
+      voltage difference across its plates, Q = CV, and the stored energy
+      follows the corresponding electrostatic relation.
+    domain: physics/electromagnetism
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible capacitor measurements in the stated linear regime fail to
+      show proportionality between stored charge and voltage, with no leakage,
+      dielectric nonlinearity, geometry change, or measurement artifact
+      explaining the discrepancy.
+    status: well-supported
+    confirmations: ["parallel-plate capacitor measurements", "circuit charge-storage experiments", "agreement with electrostatic field theory"]
+    domain_of_validity: >-
+      Applies to linear capacitive regimes with well-defined capacitance.
+      Ferroelectric, strongly voltage-dependent, lossy, breakdown, or
+      nanoscale regimes can require fuller dielectric models.
+    sources: ["electrostatics", "capacitor theory", "classical circuit analysis"]
+
+  - id: established.physics.inductor_self_induction_relation
+    statement: >-
+      A changing current in an inductor generates an emf that opposes that
+      change, and in the linear regime the induced voltage is proportional to
+      the rate of change of current, V = L dI/dt in sign convention form.
+    domain: physics/electromagnetism
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible inductive elements in the stated linear regime fail to show
+      the predicted opposition to changing current or the expected
+      current-derivative voltage relation, with no parasitic capacitance,
+      nonlinearity, or measurement artifact explaining the discrepancy.
+    status: well-supported
+    confirmations: ["coil transient measurements", "RL step-response experiments", "agreement with Faraday-Lenz induction"]
+    domain_of_validity: >-
+      Applies to inductors with approximately constant inductance in lumped
+      circuit regimes. Saturation, core hysteresis, distributed effects,
+      parasitic capacitance, and high-frequency radiation require fuller models.
+    sources: ["Faraday 1831", "Lenz 1834", "classical circuit theory"]
+
+  - id: established.physics.first_order_rc_transients
+    statement: >-
+      In a linear first-order RC circuit, charging and discharging toward a new
+      steady state follow exponential time dependence set by the time constant
+      tau = RC.
+    domain: physics/electromagnetism
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible step-response measurements of linear RC circuits fail to
+      follow the predicted exponential approach or decay with the stated time
+      constant, with no leakage, source impedance, parasitic element, or
+      nonlinearity explaining the discrepancy.
+    status: well-supported
+    confirmations: ["capacitor charging curves", "oscilloscope step-response measurements", "first-order circuit analysis"]
+    domain_of_validity: >-
+      Applies to linear lumped RC circuits. Distributed lines, nonlinear
+      dielectrics, strong leakage, and higher-order networks require fuller
+      models with multiple time constants or non-exponential behavior.
+    sources: ["classical circuit theory", "first-order differential-equation models", "laboratory RC transient experiments"]
+
+  - id: established.physics.first_order_rl_transients
+    statement: >-
+      In a linear first-order RL circuit, current growth and decay after a step
+      change follow exponential time dependence set by the time constant
+      tau = L/R.
+    domain: physics/electromagnetism
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible step-response measurements of linear RL circuits fail to
+      follow the predicted exponential current evolution with the stated time
+      constant, with no saturation, parasitic element, source impedance, or
+      measurement artifact explaining the discrepancy.
+    status: well-supported
+    confirmations: ["inductor current step-response measurements", "coil energizing and decay experiments", "first-order circuit analysis"]
+    domain_of_validity: >-
+      Applies to linear lumped RL circuits. Core saturation, parasitic
+      capacitance, distributed effects, and higher-order networks require more
+      detailed models.
+    sources: ["classical circuit theory", "lumped-element transient analysis", "laboratory RL experiments"]
+
   - id: established.physics.hookes_law
     statement: >-
       The force needed to extend or compress an elastic body is proportional to
@@ -402,6 +486,72 @@ entries:
       dissipative losses. Real machines always depart from equality because of
       inefficiency, compliance, and transient energy storage.
     sources: ["work-energy principle", "virtual work in statics", "classical mechanics and engineering texts"]
+
+  - id: established.engineering.ideal_inclined_plane_mechanical_advantage
+    statement: >-
+      An ideal inclined plane reduces the input force needed to raise a load by
+      trading force for distance; in the frictionless case the mechanical
+      advantage is set by the ratio of ramp length to height, consistent with
+      work conservation.
+    domain: engineering/statics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible frictionless or corrected inclined-plane experiments fail to
+      show the predicted force-distance tradeoff and geometric mechanical
+      advantage, with no unaccounted friction, rolling effect, or measurement
+      error explaining the discrepancy.
+    status: well-supported
+    confirmations: ["inclined-plane demonstrations", "work-energy calculations", "engineering statics problems and experiments"]
+    domain_of_validity: >-
+      An idealization assuming negligible friction and quasi-static motion.
+      Real ramps depart from the ideal because of friction, rolling resistance,
+      compliance, and dynamic effects.
+    sources: ["classical mechanics", "engineering statics", "simple machine analysis"]
+
+  - id: established.engineering.screw_force_distance_tradeoff
+    statement: >-
+      A screw converts rotational input into linear force and motion; in the
+      ideal case its mechanical advantage is set by circumference-to-pitch
+      geometry, so higher force is obtained at the cost of greater input
+      turning distance.
+    domain: engineering/machines
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible screw-drive systems with known geometry fail to show the
+      predicted rotation-to-translation and force-distance relation, with no
+      thread friction, backlash, deformation, or measurement artifact
+      explaining the discrepancy.
+    status: well-supported
+    confirmations: ["screw jack demonstrations", "lead-screw machine design", "power-screw force calculations"]
+    domain_of_validity: >-
+      An idealization assuming rigid geometry and negligible friction. Real
+      screws can self-lock, lose efficiency, or deviate because of thread
+      friction, wear, compliance, and dynamic loading.
+    sources: ["classical machine design", "power screw analysis", "simple machine theory"]
+
+  - id: established.engineering.wedge_force_distance_tradeoff
+    statement: >-
+      A wedge transforms force applied over a longer distance into a larger
+      normal separating force over a shorter distance; in the ideal case its
+      action follows geometric force-distance tradeoffs equivalent to an
+      inclined plane in translational form.
+    domain: engineering/statics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible wedge systems in the stated idealized regime fail to show
+      the predicted geometric tradeoff between input displacement and output
+      separating force, with no friction, deformation, or material failure
+      explaining the discrepancy.
+    status: well-supported
+    confirmations: ["splitting and lifting wedge demonstrations", "statics derivations", "mechanical design calculations"]
+    domain_of_validity: >-
+      An idealization assuming rigid bodies and negligible friction. Real wedge
+      behavior depends strongly on friction, edge geometry, compliance, and the
+      fracture or yielding behavior of the material being separated.
+    sources: ["classical statics", "simple machine analysis", "engineering mechanics texts"]
 
   - id: established.astronomy.kepler_laws
     statement: >-
