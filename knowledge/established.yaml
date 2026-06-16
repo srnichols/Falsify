@@ -365,3 +365,105 @@ entries:
       empirical claim. Specific programs can of course be analyzed; what is
       impossible is a single general decider for all of them.
     sources: ["Turing 1936", "Church 1936"]
+
+  - id: established.biology.hardy_weinberg
+    statement: >-
+      In a large randomly mating population with no selection, mutation,
+      migration, or genetic drift, allele and genotype frequencies remain
+      constant from generation to generation, with genotype frequencies given by
+      p^2, 2pq, and q^2.
+    domain: biology/population-genetics
+    type: principle
+    falsifiable: true
+    falsified_if: >-
+      A population satisfying the model assumptions is shown to change allele or
+      genotype frequencies across generations without sampling error or any
+      violating force acting on it.
+    status: well-supported
+    confirmations: ["population-genetics surveys", "use as the null model for detecting selection and non-random mating"]
+    domain_of_validity: >-
+      A null-model equilibrium, not a claim that real populations never evolve.
+      Real populations depart from it when selection, drift, mutation,
+      migration, assortative mating, or finite size matter — which is why the
+      principle is diagnostically useful.
+    sources: ["Hardy 1908", "Weinberg 1908"]
+
+  - id: established.geology.radiometric_dating
+    statement: >-
+      The ages of rocks and minerals can be determined from the measured ratios
+      of radioactive parent and daughter isotopes, because radioactive decay
+      proceeds at stable, quantifiable rates characterized by half-lives.
+    domain: geology/geochronology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible isotope systems with known closed histories yield inconsistent
+      ages, or decay constants are shown to vary in ordinary geological
+      conditions.
+    status: well-supported
+    confirmations: ["independent agreement across U-Pb, K-Ar, Rb-Sr and other isotope systems", "consistency with ice cores, tree rings, and stratigraphy"]
+    domain_of_validity: >-
+      Requires correct system choice and accounting for open-system behavior,
+      metamorphism, contamination, and initial daughter products. Different
+      isotope systems suit different materials and timescales.
+    sources: ["Rutherford 1905", "Boltwood 1907", "modern isotope geochronology"]
+
+  - id: established.chemistry.le_chatelier
+    statement: >-
+      When a chemical system at equilibrium is disturbed by a change in
+      concentration, pressure, volume, or temperature, the system shifts in the
+      direction that partially opposes the disturbance.
+    domain: chemistry/equilibrium
+    type: principle
+    falsifiable: true
+    falsified_if: >-
+      A reproducible equilibrium system responds to a perturbation in a way that
+      systematically amplifies rather than opposes the disturbance, with no
+      kinetic or non-equilibrium explanation.
+    status: well-supported
+    confirmations: ["acid-base equilibria", "gas-phase reaction shifts under pressure", "industrial Haber-Bosch optimization"]
+    domain_of_validity: >-
+      Applies to systems near thermodynamic equilibrium. It predicts the
+      direction of shift, not the rate, and can be misleading when invoked for
+      systems far from equilibrium or with coupled kinetic constraints.
+    sources: ["Le Chatelier 1884", "van't Hoff"]
+
+  - id: established.cosmology.hubble_law
+    statement: >-
+      On large scales, the recessional velocity of a galaxy is proportional to
+      its distance from us, indicating that space itself is expanding.
+    domain: cosmology
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible large-scale distance-redshift measurements fail to show an
+      approximately linear relation once local peculiar velocities are accounted
+      for.
+    status: well-supported
+    confirmations: ["galaxy redshift surveys", "distance ladder measurements", "supernova cosmology"]
+    domain_of_validity: >-
+      A large-scale relation. Nearby galaxies can deviate strongly because of
+      local motions; at high redshift the exact relation depends on the
+      cosmological model rather than remaining purely linear.
+    sources: ["Hubble 1929", "Lemaitre 1927"]
+
+  - id: established.physics.bernoulli_principle
+    statement: >-
+      For steady, incompressible, non-viscous flow along a streamline, an
+      increase in a fluid's speed is accompanied by a decrease in its pressure
+      or gravitational potential energy, such that total mechanical energy per
+      unit volume is conserved along the streamline.
+    domain: physics/fluid-dynamics
+    type: principle
+    falsifiable: true
+    falsified_if: >-
+      A reproducible flow satisfying Bernoulli's assumptions shows mechanical
+      energy along a streamline not balancing between pressure, speed, and
+      height.
+    status: well-supported
+    confirmations: ["Venturi tubes", "pitot-static measurements", "ideal-flow approximations in hydraulics and aerodynamics"]
+    domain_of_validity: >-
+      Applies only to steady, incompressible, non-viscous flow along a
+      streamline. Viscosity, turbulence, compressibility, pumps, and shocks add
+      losses or energy inputs that require fuller fluid-dynamics treatment.
+    sources: ["Bernoulli 1738", "Euler equations"]
