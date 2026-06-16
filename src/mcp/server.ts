@@ -14,6 +14,7 @@ import { registerIntake } from './tools/intake.js';
 import { registerHypothesize } from './tools/hypothesize.js';
 import { registerExperiment } from './tools/experiment.js';
 import { registerAnalyze } from './tools/analyze.js';
+import { registerReview } from './tools/review.js';
 
 /**
  * Build a configured Falsify MCP server with all `falsify_*` tools registered.
@@ -27,6 +28,7 @@ export function createFalsifyServer(deps: FalsifyServerDeps = {}): McpServer {
   registerHypothesize(server, deps);
   registerExperiment(server);
   registerAnalyze(server);
+  registerReview(server);
 
   return server;
 }
