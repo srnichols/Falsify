@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Falsify</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <h1>Falsify</h1>
+      <p class="tagline">
+        It won't hand you an answer. It runs your question through the Cycle of
+        Scientific Enterprise and gives you a <em>falsifiable hypothesis with its
+        test conditions</em>.
+      </p>
+    </header>
+
+    <main>
+      <section class="panel" id="cyclePanel">
+        <h2>The Cycle</h2>
+        <p class="state-line">
+          Current step: <span id="stateBadge" class="badge">intake</span>
+        </p>
+
+        <!-- The single guided step form is rebuilt here as the cycle advances. -->
+        <div id="stepForm"></div>
+
+        <!-- The hypothesis card: the output the user sees at each step. -->
+        <article id="card" class="card hidden" aria-live="polite">
+          <h3 class="card-title">Hypothesis card</h3>
+          <div id="cardBody" class="card-body"></div>
+        </article>
+
+        <p id="errorBox" class="error hidden" role="alert"></p>
+      </section>
+
+      <section class="panel" id="notebookPanel">
+        <h2>Notebook <span class="subtle">— mistakes stay visible</span></h2>
+        <p class="subtle">
+          A refuted hypothesis is struck through and dated, never deleted. This is
+          the falsification loop made visible.
+        </p>
+        <form id="notebookForm" class="inline-form">
+          <input id="notebookText" type="text" placeholder="Record a claim or mistake…" />
+          <button type="submit">Add</button>
+        </form>
+        <ul id="notebookList" class="notebook-list"></ul>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
