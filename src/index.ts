@@ -20,3 +20,6 @@ export * from './config.js';
 export * from './memory/openbrainClient.js';
 export * from './memory/offlineQueue.js';
 export * from './memory/openbrainMcpClient.js';
+export type * from './mcp/deps.js';
+export * from './mcp/result.js';
+export * from './mcp/server.js';
