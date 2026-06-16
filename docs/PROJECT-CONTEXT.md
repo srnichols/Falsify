@@ -137,7 +137,13 @@ only serve as the engine's exhibit of what a successful falsification looks like
   - [x] Slice 4: knowledge loader + rules engine (`claim_score` — consensus structurally barred from flipping verdicts, proven by test)
   - [x] Slice 5: OpenBrain client + typed config (offline `.falsify/queue` fallback, drain-on-recovery, key never leaks)
 - [x] Seed-sync script (push `knowledge/*.yaml` → OpenBrain) — **live-verified over MCP (51/51)**
-- [ ] Phase 2: MCP server (`falsify_*` tools)
+- [x] Crucible-hardened Phase 2 plan (`docs/plans/Phase-2-MCP-SERVER-PLAN.md`), gate-linter 0/0
+- [x] **Phase 2 — MCP SERVER: COMPLETE** (all 5 slices, 96 tests, 0 vulns; stdio `falsify-mcp` bin)
+  - [x] Slice 1: server harness + result helpers + `falsify_intake` (consensus-appeal challenge)
+  - [x] Slice 2: `falsify_hypothesize` (honesty rule enforced at the tool boundary + quant lens)
+  - [x] Slice 3: `falsify_experiment` (could-fail) + `falsify_analyze` (No branch + mandatory review-on-Yes)
+  - [x] Slice 4: `falsify_review` (three questions in order; revise-loop vs. confirm-finalize)
+  - [x] Slice 5: `falsify_recall` (graceful offline, no key leak) + stdio entrypoint + full-cycle integration test
 - [ ] Phase 3: Web UI (hypothesis card + notebook view)
 - [ ] Knowledge seed expansion (more entries per tier, via PR)
 
@@ -156,8 +162,22 @@ only serve as the engine's exhibit of what a successful falsification looks like
 | `memory/offlineQueue.ts` | Transport-agnostic on-disk FIFO queue (`.falsify/queue/`); replays through a caller-supplied `send`, stops at first failure. |
 | `cli/seedSync.ts` | `npm run seed-sync` runner (`--dry-run` builds + reports offline; live mode pushes via the MCP client with a 400 ms throttle). |
 
+### Module map (Phase 2 — `src/mcp/`)
+| Module | Responsibility |
+|--------|----------------|
+| `mcp/server.ts` | `createFalsifyServer(deps?)` builds the `McpServer` and registers the six `falsify_*` tools; the core never imports a transport. `main()` connects stdio only when run directly (entry-point guard). Shebang → `falsify-mcp` bin. |
+| `mcp/result.ts` | `ok` / `fail(error, rule, guidance)` / `withState` helpers (the single `CallToolResult` shape) and `advance()` — converts an illegal cycle move into a structured `cycle:illegal-transition` failure instead of a throw. |
+| `mcp/deps.ts` | `FalsifyServerDeps` (injected `memory`, `quantPrinciples`) and the narrow `MemoryReader` interface (matches `OpenBrainMcpClient.recall`). |
+| `mcp/tools/intake.ts` | `falsify_intake` — deterministic falsifiability checklist + consensus-appeal detection answered with the DESIGN.md challenge. |
+| `mcp/tools/hypothesize.ts` | `falsify_hypothesize` — enforces ≥1 falsification condition (`honesty:*`) at the tool boundary; applies the quantitative lens. |
+| `mcp/tools/experiment.ts` | `falsify_experiment` — refuses a test that cannot fail (`couldFail` literal true). |
+| `mcp/tools/analyze.ts` | `falsify_analyze` — routes the No branch to Review; a Yes is NOT final (`reviewRequired`). |
+| `mcp/tools/review.ts` | `falsify_review` — three questions in order; `revise`→Hypothesis, `confirm`→Theory (the only place a Theory finalizes). |
+| `mcp/tools/recall.ts` | `falsify_recall` — semantic recall via the injected `MemoryReader`; degrades to `recall:brain-unreachable`, never leaks the key. |
+
 ### Commands
 - `npm run build` (tsc) · `npm test` (vitest run) · `npm run dev` (watch) · `npm run lint` (eslint src tests)
+- `node dist/src/mcp/server.js` (run the MCP server over stdio; also the `falsify-mcp` bin)
 - Coverage: `npx vitest run --coverage` (v8 provider).
 - **Gate runner allowlist = `node` / `npm` / `npx` only** (no pnpm). TS imports require `.js` extensions (NodeNext).
 
@@ -222,3 +242,18 @@ only serve as the engine's exhibit of what a successful falsification looks like
   `project: falsify`** (verified via `thought_stats`; earlier duplicate/probe rows purged with a
   resilient `scripts/purge-project.mjs`). **73 tests pass, lint clean, 0 vulns.** Next: Phase 2 (MCP
   server exposing `falsify_*` tools).
+- **2026-06-15 (Phase 2 — MCP server)** — Drafted + gate-linted (0/0) the Crucible-hardened
+  `docs/plans/Phase-2-MCP-SERVER-PLAN.md`, then built **all 5 slices TDD**, each committed green.
+  Shipped an `McpServer` (`src/mcp/`) exposing the six `falsify_*` tools as **discipline-enforcing
+  adapters** over the transport-free core — no tool calls an LLM, none holds session state (the cycle
+  is threaded statelessly via `cycleState` in / `cycleState` + `legalNext` out). Enforcement proven by
+  tests: `falsify_hypothesize` refuses a hypothesis with no falsification condition
+  (`honesty:falsification-condition-required`); `falsify_experiment` refuses a test that cannot fail;
+  `falsify_analyze` takes the mandatory No branch and **does not finalize a Yes** (review required);
+  `falsify_review` requires the three questions in order and is the only path to a Theory;
+  `falsify_intake` flags consensus appeals with the DESIGN.md challenge. `falsify_recall` reaches
+  OpenBrain via an injected `MemoryReader`, degrades to `recall:brain-unreachable` offline, and never
+  leaks the key (tested). Added a stdio entrypoint + `falsify-mcp` bin (shebang preserved, launch
+  smoke-tested) and a full-cycle integration test driving intake→…→theory through a real MCP `Client`
+  over `InMemoryTransport`. **96 tests pass, lint clean, 0 vulns.** **Phase 2 complete.** Next: Phase 3
+  (Web UI).

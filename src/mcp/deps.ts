@@ -8,13 +8,15 @@
  */
 
 import type { QuantEntry } from '../domain/types.js';
+import type { RecallQuery } from '../memory/openbrainClient.js';
 
 /**
- * The narrow read surface `falsify_recall` depends on. Satisfied by
- * `OpenBrainMcpClient` in production and by a fake in tests.
+ * The narrow read surface `falsify_recall` depends on. Its signature matches
+ * `OpenBrainMcpClient.recall`, so the live client satisfies it directly and a
+ * fake satisfies it in tests.
  */
 export interface MemoryReader {
-  recall(query: string): Promise<unknown>;
+  recall(query: RecallQuery): Promise<unknown[]>;
 }
 
 /** Resources injected into the server at construction time. All optional. */

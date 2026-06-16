@@ -50,6 +50,21 @@ describe('Falsify MCP server — Slice 1', () => {
     expect(intake?.inputSchema).toBeDefined();
   });
 
+  it('registers exactly the six falsify_* tools', async () => {
+    const { tools } = await ctx.client.listTools();
+    const names = tools.map((t) => t.name).sort();
+    expect(names).toEqual(
+      [
+        'falsify_analyze',
+        'falsify_experiment',
+        'falsify_hypothesize',
+        'falsify_intake',
+        'falsify_recall',
+        'falsify_review',
+      ].sort(),
+    );
+  });
+
   it('passes a plain empirical question and advances to hypothesis', async () => {
     const res = await ctx.client.callTool({
       name: 'falsify_intake',

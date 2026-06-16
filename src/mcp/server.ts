@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * The Falsify MCP server — a thin transport shell over the transport-free core.
  *
@@ -15,6 +16,7 @@ import { registerHypothesize } from './tools/hypothesize.js';
 import { registerExperiment } from './tools/experiment.js';
 import { registerAnalyze } from './tools/analyze.js';
 import { registerReview } from './tools/review.js';
+import { registerRecall } from './tools/recall.js';
 
 /**
  * Build a configured Falsify MCP server with all `falsify_*` tools registered.
@@ -29,6 +31,7 @@ export function createFalsifyServer(deps: FalsifyServerDeps = {}): McpServer {
   registerExperiment(server);
   registerAnalyze(server);
   registerReview(server);
+  registerRecall(server, deps);
 
   return server;
 }

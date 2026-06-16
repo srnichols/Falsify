@@ -28,7 +28,7 @@
 ### Phase 2: MCP Server (`falsify_*` tools)
 **Goal**: Expose the core engine as an MCP server (`falsify_intake`, `falsify_hypothesize`, `falsify_experiment`, `falsify_analyze`, `falsify_review`, `falsify_recall`).  
 **Plan**: [Phase-2-MCP-SERVER-PLAN.md](./Phase-2-MCP-SERVER-PLAN.md)  
-**Status**: 📋 Planned — plan drafted, pending lint + execution
+**Status**: ✅ Complete — 5/5 slices, 96 tests, 0 vulnerabilities; stdio `falsify-mcp` bin
 
 ---
 
@@ -50,6 +50,7 @@
 | Phase | Goal | Plan | Completed |
 |-------|------|------|-----------|
 | 1 | Core Engine + Memory Client | [Phase-1-CORE-ENGINE-PLAN.md](./Phase-1-CORE-ENGINE-PLAN.md) | 2026-06-15 |
+| 2 | MCP Server (`falsify_*` tools) | [Phase-2-MCP-SERVER-PLAN.md](./Phase-2-MCP-SERVER-PLAN.md) | 2026-06-15 |
 
 ---
 
