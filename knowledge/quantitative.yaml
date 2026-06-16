@@ -141,3 +141,22 @@ entries:
       not a proof of truth. Simplicity breaks ties; it does not settle them.
     triggers: ["competing explanations fit equally", "ad hoc assumptions added", "elaborate mechanism proposed", "'the simplest explanation'"]
     failure_guarded: "treating the simpler hypothesis as proven, or adding unfalsifiable epicycles to rescue a failing one"
+
+  - id: quant.randomized_controls
+    principle: "Randomization and control groups"
+    statement: >-
+      Strong causal claims from interventions require comparison against an
+      appropriate control, and random assignment is the cleanest way to balance
+      hidden confounders across groups.
+    triggers: ["treatment claimed effective", "before/after comparison", "intervention study", "policy or drug claim"]
+    failure_guarded: "inferring a causal treatment effect from uncontrolled or non-randomized comparisons that leave confounding unresolved"
+
+  - id: quant.selection_vs_drift
+    principle: "Selection must be distinguished from drift"
+    statement: >-
+      Changes in trait or allele frequency are not automatically evidence of
+      adaptation; population size, sampling noise, linkage, migration, and
+      generation time must be considered before attributing change to natural
+      selection.
+    triggers: ["adaptive story told", "rapid evolution claim", "allele frequency changed", "fitness advantage inferred"]
+    failure_guarded: "telling an adaptation story without showing that the observed change exceeds what drift, migration, or linkage could plausibly produce"

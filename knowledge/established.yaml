@@ -467,3 +467,157 @@ entries:
       streamline. Viscosity, turbulence, compressibility, pumps, and shocks add
       losses or energy inputs that require fuller fluid-dynamics treatment.
     sources: ["Bernoulli 1738", "Euler equations"]
+
+  - id: established.astronomy.stellar_nucleosynthesis
+    statement: >-
+      The chemical elements heavier than primordial hydrogen, helium, and trace
+      lithium were forged by nuclear reactions inside stars, in supernovae, and
+      in neutron-star mergers.
+    domain: astronomy/astrophysics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible abundance patterns of elements and isotopes are shown to be
+      incompatible with stellar and explosive nucleosynthesis, or stars are
+      shown unable to produce the observed fusion products.
+    status: well-supported
+    confirmations: ["stellar spectra", "solar neutrinos and fusion models", "supernova nucleosynthesis yields", "r-process signatures from neutron-star mergers"]
+    domain_of_validity: >-
+      Explains the origin of most elements beyond primordial nucleosynthesis.
+      The exact astrophysical site of some isotopes remains an active research
+      question without overturning the core picture.
+    sources: ["Burbidge, Burbidge, Fowler & Hoyle 1957", "Bethe 1939", "GW170817 kilonova observations"]
+
+  - id: established.chemistry.bronsted_lowry_acid_base
+    statement: >-
+      In Brønsted-Lowry acid-base chemistry, acids donate protons and bases
+      accept them; acid-base reactions are proton-transfer equilibria whose
+      direction and extent can be quantified.
+    domain: chemistry/acid-base
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible proton-transfer reactions are found that systematically
+      violate acid-base equilibrium predictions with no alternative framework or
+      solvent effect accounting for them.
+    status: well-supported
+    confirmations: ["titration curves", "buffer behavior", "equilibrium constants and pKa scales"]
+    domain_of_validity: >-
+      Covers proton-transfer chemistry. Lewis acid-base theory is broader,
+      extending acid-base behavior beyond proton transfer rather than refuting
+      Brønsted-Lowry within its domain.
+    sources: ["Bronsted 1923", "Lowry 1923"]
+
+  - id: established.chemistry.arrhenius_kinetics
+    statement: >-
+      Reaction rates generally increase with temperature because molecules more
+      often exceed an activation-energy barrier; for many reactions the rate
+      constant follows the Arrhenius relation k = A exp(-Ea/RT).
+    domain: chemistry/kinetics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible rate measurements over a stated temperature range fail to
+      show the predicted temperature dependence for reactions expected to obey
+      Arrhenius behavior, with no mechanistic change explaining the deviation.
+    status: well-supported
+    confirmations: ["temperature-dependent rate measurements", "activation-energy extraction from Arrhenius plots", "collision and transition-state models"]
+    domain_of_validity: >-
+      A widely useful approximation over limited temperature ranges. Deviations
+      occur for barrierless reactions, quantum tunneling, enzyme catalysis, or
+      when the reaction mechanism changes.
+    sources: ["Arrhenius 1889", "transition-state theory"]
+
+  - id: established.physics.ideal_gas_law
+    statement: >-
+      For a dilute gas of non-interacting particles, pressure, volume,
+      temperature, and amount are related by PV = nRT.
+    domain: physics/thermodynamics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      A gas in the dilute, high-temperature limit is reproducibly shown to
+      violate PV = nRT with no measurement or interaction-based explanation.
+    status: well-supported
+    confirmations: ["gas-law measurements across many gases in near-ideal regimes", "derivation from kinetic theory"]
+    domain_of_validity: >-
+      An approximation that becomes accurate for low-density gases far from
+      condensation. Real gases deviate at high pressure, low temperature, or
+      when intermolecular forces matter.
+    sources: ["Boyle", "Charles", "Avogadro", "Clapeyron 1834", "kinetic theory"]
+
+  - id: established.physics.wave_interference
+    statement: >-
+      Waves superpose linearly in their valid regime, producing constructive and
+      destructive interference, diffraction, and standing-wave patterns that are
+      predictable from phase relationships.
+    domain: physics/optics
+    type: principle
+    falsifiable: true
+    falsified_if: >-
+      Reproducible wave experiments in the linear regime fail to exhibit the
+      interference patterns predicted by superposition and phase difference.
+    status: well-supported
+    confirmations: ["double-slit interference", "thin-film interference", "diffraction gratings", "standing waves on strings and in cavities"]
+    domain_of_validity: >-
+      Applies in linear media and linear response regimes. Strong nonlinearities,
+      decoherence, or dissipative effects can suppress or alter interference
+      without falsifying the principle.
+    sources: ["Young 1801", "Fresnel", "superposition principle"]
+
+  - id: established.biology.genetic_linkage
+    statement: >-
+      Genes located on the same chromosome are inherited together more often
+      than expected by independent assortment, while recombination during meiosis
+      breaks linkage at rates that reflect chromosomal distance and enable gene
+      mapping.
+    domain: biology/genetics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible inheritance data for genes on the same chromosome show no
+      excess co-inheritance and no distance-dependent recombination pattern.
+    status: well-supported
+    confirmations: ["Morgan's Drosophila crosses", "linkage maps", "meiotic recombination observed cytologically and molecularly"]
+    domain_of_validity: >-
+      Linkage strength depends on physical distance and local recombination
+      landscape. Very distant loci on the same chromosome can appear nearly
+      unlinked because multiple crossovers randomize inheritance.
+    sources: ["Morgan 1910", "Sturtevant 1913"]
+
+  - id: established.geology.deep_time
+    statement: >-
+      Earth's geological history spans billions of years, as shown by mutually
+      consistent radiometric ages, stratigraphic order, plate motion, fossil
+      succession, and astronomical constraints on solar-system formation.
+    domain: geology/deep-time
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Independent dating methods and stratigraphic records are reproducibly shown
+      to collapse to a short timescale or to be systematically inconsistent with
+      one another absent ad hoc rescue assumptions.
+    status: well-supported
+    confirmations: ["radiometric dating across multiple isotope systems", "annual layers in ice cores and lake varves", "plate-motion timescales", "meteorite and lunar ages"]
+    domain_of_validity: >-
+      Exact numeric ages continue to be refined, but the core conclusion that
+      Earth history is immensely old does not depend on any single dating method.
+    sources: ["Hutton", "Lyell", "modern geochronology", "meteorite dating"]
+
+  - id: established.physics.neutrino_oscillation
+    statement: >-
+      Neutrinos change flavor as they propagate, implying that neutrino flavor
+      states are mixtures of mass states and that neutrinos have nonzero mass.
+    domain: physics/particle
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible long-baseline, solar, atmospheric, or reactor experiments fail
+      to show flavor-changing probabilities with distance and energy dependence
+      consistent with oscillation.
+    status: well-supported
+    confirmations: ["solar neutrino deficit resolved by SNO", "atmospheric neutrino oscillations in Super-Kamiokande", "reactor and accelerator long-baseline experiments"]
+    domain_of_validity: >-
+      Establishes mass differences and flavor mixing, though the absolute mass
+      scale and possible CP-violating phase remain active research questions.
+    sources: ["Super-Kamiokande 1998", "SNO 2001-2002", "Pontecorvo", "Maki-Nakagawa-Sakata"]
