@@ -237,6 +237,71 @@ entries:
       and for ohmic materials at extreme fields or temperatures.
     sources: ["Ohm 1827"]
 
+  - id: established.physics.kirchhoffs_current_law
+    statement: >-
+      In a lumped electrical circuit, the algebraic sum of currents at a node
+      is zero: total current flowing into a junction equals total current
+      flowing out, reflecting conservation of charge.
+    domain: physics/electromagnetism
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible circuit measurements at a node in the lumped-element regime
+      show persistent current imbalance with no charge storage, parasitic path,
+      or measurement artifact accounting for the discrepancy.
+    status: well-supported
+    confirmations: ["circuit-network measurements", "nodal analysis", "consistency with charge conservation in electronic systems"]
+    domain_of_validity: >-
+      Applies to lumped circuits where charge accumulation at the node is
+      negligible on the timescale of interest. Distributed electromagnetic,
+      high-frequency, or strongly time-varying systems require fuller field
+      treatment without negating the circuit-law limit.
+    sources: ["Kirchhoff 1845", "charge conservation", "circuit theory"]
+
+  - id: established.physics.kirchhoffs_voltage_law
+    statement: >-
+      In a lumped electrical circuit, the algebraic sum of potential
+      differences around any closed loop is zero: voltage rises and drops
+      balance in accordance with energy conservation.
+    domain: physics/electromagnetism
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible loop measurements in the lumped-element regime show net
+      nonzero voltage around a closed path with no time-varying magnetic flux,
+      parasitic coupling, or measurement artifact explaining the result.
+    status: well-supported
+    confirmations: ["loop analysis in circuits", "battery-resistor network measurements", "consistency with energy conservation in circuit models"]
+    domain_of_validity: >-
+      Applies to lumped circuits with negligible induced emf from changing
+      magnetic flux through the loop. At high frequency or in distributed
+      electromagnetic systems, Maxwell-Faraday effects require fuller field
+      treatment.
+    sources: ["Kirchhoff 1845", "energy conservation", "circuit theory"]
+
+  - id: established.physics.electrical_power_relation
+    statement: >-
+      Electrical power delivered to or dissipated by a circuit element equals
+      the product of voltage across it and current through it (P = IV); in
+      ohmic resistive regimes this yields the equivalent forms P = I^2R and
+      P = V^2/R.
+    domain: physics/electromagnetism
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible measurements of voltage, current, and rate of energy
+      transfer in stated circuit elements fail to satisfy the predicted power
+      relation with no reactive storage, transient effect, or measurement error
+      accounting for the discrepancy.
+    status: well-supported
+    confirmations: ["resistive load measurements", "joule-heating experiments", "power calculations in circuits and electrical engineering"]
+    domain_of_validity: >-
+      The general relation P = IV is local and broad, but the resistor-specific
+      forms assume ohmic behavior. AC circuits, reactive components, and
+      transients require distinguishing instantaneous, average, and apparent
+      power.
+    sources: ["Joule heating relation", "electrical circuit theory", "classical electromagnetism"]
+
   - id: established.physics.hookes_law
     statement: >-
       The force needed to extend or compress an elastic body is proportional to
@@ -647,6 +712,68 @@ entries:
       decoherence, or dissipative effects can suppress or alter interference
       without falsifying the principle.
     sources: ["Young 1801", "Fresnel", "superposition principle"]
+
+  - id: established.physics.snells_law
+    statement: >-
+      When light crosses an interface between two isotropic media, the angles
+      of incidence and refraction satisfy n1 sin(theta1) = n2 sin(theta2), so
+      refraction is determined by the refractive indices of the media.
+    domain: physics/optics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible refraction measurements at smooth interfaces in the geometric
+      optics regime systematically violate the predicted angle relation with no
+      anisotropy, inhomogeneity, or wave-optics correction explaining the
+      discrepancy.
+    status: well-supported
+    confirmations: ["air-glass and air-water refraction measurements", "geometric-optics experiments", "optical design calculations"]
+    domain_of_validity: >-
+      Applies to smooth interfaces in isotropic media within geometric optics.
+      Anisotropic crystals, graded-index media, metamaterials, strong
+      diffraction, and near-field wave effects require fuller treatment.
+    sources: ["Snell", "Descartes", "geometric optics"]
+
+  - id: established.physics.thin_lens_equation
+    statement: >-
+      For an ideal thin lens in the paraxial regime, object distance, image
+      distance, and focal length satisfy 1/f = 1/do + 1/di, determining image
+      formation and magnification in first-order optics.
+    domain: physics/optics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible imaging with thin lenses under paraxial conditions fails to
+      satisfy the predicted focal relation with no thickness, aberration, or
+      sign-convention error explaining the discrepancy.
+    status: well-supported
+    confirmations: ["bench-top lens imaging", "camera and microscope first-order optics", "ray-tracing in paraxial systems"]
+    domain_of_validity: >-
+      A paraxial thin-lens approximation. Thick lenses, wide-angle rays,
+      strong aberrations, diffraction limits, and complex multi-element optics
+      require fuller models.
+    sources: ["Gaussian optics", "paraxial ray theory", "classical lens design"]
+
+  - id: established.physics.prism_dispersion
+    statement: >-
+      Prisms separate white light into colors because refractive index depends
+      on wavelength, so different wavelengths refract by different amounts and
+      follow different paths through the optical medium.
+    domain: physics/optics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible prism experiments with polychromatic light fail to show
+      wavelength-dependent deviation in media known to be dispersive, with no
+      alignment, absorption, or material-homogeneity issue explaining the
+      result.
+    status: well-supported
+    confirmations: ["Newton prism experiments", "spectroscopy", "measured refractive-index dispersion curves"]
+    domain_of_validity: >-
+      Applies in transparent dispersive media over stated wavelength ranges.
+      Absorbing bands, anisotropy, nonlinear optics, and engineered materials
+      can require more detailed dispersion models.
+    sources: ["Newton 1666", "dispersion theory", "spectroscopy"]
 
   - id: established.biology.genetic_linkage
     statement: >-
