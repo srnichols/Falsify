@@ -70,3 +70,55 @@ entries:
       'survivors') systematically mislead.
     triggers: ["self-selected data", "missing failures", "convenience sample"]
     failure_guarded: "ignoring the cases that never made it into the data"
+
+  - id: quant.deterministic_chaos
+    principle: "Deterministic chaos (sensitive dependence)"
+    statement: >-
+      A system can be fully deterministic yet practically unpredictable: tiny
+      differences in initial conditions grow exponentially, so determinism does
+      not imply predictability and unpredictability does not imply randomness.
+    triggers: ["long-range prediction", "weather/climate forecast", "'it's deterministic so we can predict it'", "feedback loops"]
+    failure_guarded: "conflating determinism with predictability, or treating chaotic divergence as proof of randomness or of a hidden cause"
+
+  - id: quant.simpsons_paradox
+    principle: "Simpson's paradox"
+    statement: >-
+      A trend that appears in aggregated data can reverse when the data are
+      split into relevant subgroups; the right level of aggregation depends on
+      the causal question.
+    triggers: ["pooled groups", "overall rate cited", "comparing rates across populations"]
+    failure_guarded: "drawing a conclusion from aggregate data without checking confounded subgroups"
+
+  - id: quant.multiple_comparisons
+    principle: "Multiple comparisons / look-elsewhere effect"
+    statement: >-
+      Testing many hypotheses inflates the chance of a false positive; a
+      'significant' result found among many tests needs correction or
+      out-of-sample confirmation.
+    triggers: ["many variables tested", "subgroup hunting", "data dredging", "'we found a signal'"]
+    failure_guarded: "reporting the one significant result out of many tests as if it stood alone"
+
+  - id: quant.prosecutors_fallacy
+    principle: "Prosecutor's fallacy (conditional swap)"
+    statement: >-
+      The probability of the evidence given the hypothesis is not the
+      probability of the hypothesis given the evidence; P(E|H) != P(H|E).
+    triggers: ["'the odds of this by chance are tiny'", "DNA/forensic match", "rare coincidence cited as proof"]
+    failure_guarded: "treating a small P(evidence | innocent) as a small probability of innocence"
+
+  - id: quant.dimensional_analysis
+    principle: "Dimensional analysis"
+    statement: >-
+      Physical quantities have units that must balance across an equation; a
+      result whose units do not match the quantity it claims to be is wrong.
+    triggers: ["a formula or numeric claim", "unit-bearing quantity", "back-of-envelope estimate"]
+    failure_guarded: "accepting a quantitative claim whose units are inconsistent or unstated"
+
+  - id: quant.formal_limits
+    principle: "Limits of formal certainty (Godel)"
+    statement: >-
+      Any sufficiently powerful consistent formal system contains true
+      statements it cannot prove; no finite formal system captures all truths,
+      so claims of complete, self-contained certainty deserve scrutiny.
+    triggers: ["'provably complete'", "claim of absolute certainty", "self-validating system"]
+    failure_guarded: "treating a formal system as able to certify its own completeness or total truth"

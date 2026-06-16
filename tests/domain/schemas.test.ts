@@ -8,6 +8,7 @@ import {
   FactEntrySchema,
   ContestedEntrySchema,
   QuantEntrySchema,
+  RefutedEntrySchema,
 } from '../../src/domain/schemas.js';
 
 describe('HypothesisSchema — honesty rule', () => {
@@ -80,8 +81,8 @@ describe('enums', () => {
     expect(CycleStateSchema.safeParse('done').success).toBe(false);
   });
 
-  it('TierSchema covers the four knowledge tiers', () => {
-    for (const t of ['bedrock', 'established', 'contested', 'quantitative']) {
+  it('TierSchema covers the knowledge tiers', () => {
+    for (const t of ['bedrock', 'established', 'contested', 'quantitative', 'refuted']) {
       expect(TierSchema.safeParse(t).success).toBe(true);
     }
     expect(TierSchema.safeParse('opinion').success).toBe(false);
@@ -153,5 +154,32 @@ describe('knowledge entry schemas', () => {
       failure_guarded: 'ignoring the prior',
     });
     expect(result.success).toBe(true);
+  });
+
+  it('validates a refuted (graveyard) entry that records what falsified it', () => {
+    const result = RefutedEntrySchema.safeParse({
+      id: 'refuted.physics.aether',
+      claim: 'Light travels through a stationary luminiferous aether.',
+      domain: 'physics/electromagnetism',
+      type: 'refuted-hypothesis',
+      era: 'until ~1905',
+      falsified_by: 'Michelson-Morley found no aether wind.',
+      superseded_by: 'Special relativity.',
+      lesson: 'A decisive null result can falsify a long-held consensus.',
+      sources: ['Michelson-Morley 1887'],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a refuted entry missing falsified_by', () => {
+    const result = RefutedEntrySchema.safeParse({
+      id: 'refuted.x',
+      claim: 'c',
+      domain: 'd',
+      type: 'refuted-theory',
+      lesson: 'l',
+      sources: ['s'],
+    });
+    expect(result.success).toBe(false);
   });
 });

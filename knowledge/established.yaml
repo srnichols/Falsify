@@ -98,3 +98,122 @@ entries:
     confirmations:
       ["cosmic microwave background", "Hubble expansion", "light-element abundances"]
     sources: ["Lemaitre", "Penzias & Wilson 1965"]
+
+  - id: established.biology.evolution_natural_selection
+    statement: >-
+      Populations evolve over generations through differential reproduction of
+      heritable variation; natural selection, together with mutation, drift, and
+      gene flow, accounts for adaptation and common descent.
+    domain: biology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible findings that break the nested hierarchy of life (e.g.
+      well-dated fossils grossly out of sequence), or a demonstration that
+      heritable variation cannot accumulate to produce new forms.
+    status: well-supported
+    confirmations:
+      ["fossil succession", "observed speciation", "shared genetic code & ERVs", "antibiotic resistance"]
+    note: >-
+      This is the scientific theory, which is itself well-supported and
+      falsifiable. The broader *origins* question as framed in public debate is
+      handled separately under contested.yaml, by project rule.
+    sources: ["Darwin 1859", "modern evolutionary synthesis"]
+
+  - id: established.biology.cell_theory
+    statement: >-
+      All living organisms are composed of one or more cells, the cell is the
+      basic unit of life, and all cells arise from pre-existing cells.
+    domain: biology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible discovery of a living organism not made of cells, or of cells
+      arising de novo from non-cellular matter under ordinary conditions.
+    status: well-supported
+    confirmations: ["microscopy across all known life", "cell division observed directly"]
+    sources: ["Schleiden & Schwann 1839", "Virchow 1855"]
+
+  - id: established.biology.central_dogma
+    statement: >-
+      Genetic information generally flows from DNA to RNA to protein; sequence
+      information transferred into protein cannot flow back out of protein into
+      nucleic acid or protein.
+    domain: biology/molecular
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible demonstration of sequence information flowing from protein
+      back into nucleic acid (true reverse translation).
+    status: well-supported
+    confirmations: ["transcription & translation machinery", "genetic code is near-universal"]
+    domain_of_validity: >-
+      Reverse transcription (RNA -> DNA) is a known, bounded part of the dogma,
+      not a violation of it; the barred step is protein -> sequence.
+    sources: ["Crick 1958, 1970"]
+
+  - id: established.chemistry.atomic_theory
+    statement: >-
+      Matter is composed of discrete atoms that combine in fixed whole-number
+      ratios to form compounds.
+    domain: chemistry
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible evidence that matter is continuously divisible without limit,
+      or that elements combine in continuously variable atomic ratios.
+    status: well-supported
+    confirmations: ["Brownian motion (Einstein/Perrin)", "direct atomic imaging", "the periodic table"]
+    sources: ["Dalton 1808", "Perrin 1908"]
+
+  - id: established.physics.universal_gravitation
+    statement: >-
+      Every mass attracts every other mass with a force proportional to the
+      product of their masses and inversely proportional to the square of the
+      distance between them.
+    domain: physics/gravitation
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible gravitational behavior inconsistent with the inverse-square
+      law in its valid regime and not attributable to additional masses.
+    status: well-supported
+    confirmations: ["planetary orbits", "prediction of Neptune", "tides"]
+    domain_of_validity: >-
+      An excellent approximation at low mass and low speed. Superseded by general
+      relativity near large masses and high velocities (Mercury's perihelion,
+      light bending, GPS).
+    sources: ["Newton 1687"]
+
+  - id: established.physics.mass_energy_equivalence
+    statement: >-
+      Mass and energy are equivalent and interconvertible, related by E = mc^2.
+    domain: physics/relativity
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible mass-energy conversions that systematically violate
+      E = mc^2 with no other explanation.
+    status: well-supported
+    confirmations:
+      ["nuclear binding energy / fission & fusion yields", "particle-antiparticle annihilation", "mass defect measurements"]
+    sources: ["Einstein 1905"]
+
+  - id: established.physics.standard_model
+    statement: >-
+      Matter is built from quarks and leptons interacting via the
+      electromagnetic, weak, and strong forces, mediated by gauge bosons, with
+      mass arising through the Higgs mechanism.
+    domain: physics/particle
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible particles or interactions that cannot be accommodated by the
+      model's gauge structure (clear, confirmed beyond-Standard-Model physics).
+    status: well-supported
+    confirmations:
+      ["predicted W and Z bosons", "predicted Higgs boson (2012)", "precision electroweak tests"]
+    domain_of_validity: >-
+      Does not include gravity and does not explain dark matter or neutrino
+      masses fully; it is known to be incomplete, not refuted, within its domain.
+    sources: ["Glashow-Weinberg-Salam", "ATLAS & CMS 2012"]

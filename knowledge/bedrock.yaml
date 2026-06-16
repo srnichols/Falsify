@@ -102,3 +102,120 @@ entries:
       Holds for stoichiometric compounds; non-stoichiometric (berthollide)
       solids are a known, bounded exception.
     sources: ["Proust's law of definite proportions"]
+
+  - id: bedrock.angular_momentum.conservation
+    statement: >-
+      The total angular momentum of a closed system is constant absent an
+      external torque.
+    domain: physics/mechanics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      A closed system changes total angular momentum with no external torque
+      acting.
+    status: unrefuted
+    confidence: high
+    sources: ["Newtonian mechanics", "Noether's theorem (rotational symmetry)"]
+
+  - id: bedrock.mass.conservation
+    statement: >-
+      Matter is neither created nor destroyed in an ordinary chemical reaction;
+      the total mass of reactants equals the total mass of products.
+    domain: chemistry
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      A reproducible closed-system chemical reaction is shown to change total
+      mass with no matter entering or leaving.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      Holds for chemical reactions. In nuclear reactions and at relativistic
+      energies, mass and energy interconvert (E=mc^2) and only total
+      mass-energy is conserved.
+    sources: ["Lavoisier (conservation of mass)"]
+
+  - id: bedrock.equivalence.principle
+    statement: >-
+      Inertial mass (resistance to acceleration) and gravitational mass (the
+      source of weight) are equal, so all bodies fall with the same acceleration
+      in a given gravitational field regardless of composition.
+    domain: physics/gravitation
+    type: observed-regularity
+    falsifiable: true
+    falsified_if: >-
+      A reproducible test finds bodies of different composition falling with
+      different accelerations in the same field (a non-zero Eotvos ratio beyond
+      experimental bounds).
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      The empirical bedrock under gravity. Its elevation to a geometric
+      principle is general relativity (see established.yaml).
+    sources: ["Eotvos experiments", "Lunar laser ranging", "MICROSCOPE 2017"]
+
+  - id: bedrock.quantum.pauli_exclusion
+    statement: >-
+      No two identical fermions (e.g. electrons) can occupy the same quantum
+      state simultaneously.
+    domain: physics/quantum
+    type: principle
+    falsifiable: true
+    falsified_if: >-
+      A reproducible observation of two identical fermions sharing all quantum
+      numbers in the same system.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      Applies to fermions (half-integer spin); bosons are explicitly exempt and
+      can share states.
+    sources: ["Pauli 1925", "structure of the periodic table", "electron-degeneracy pressure"]
+
+  - id: bedrock.quantum.uncertainty
+    statement: >-
+      Certain pairs of properties (e.g. position and momentum) cannot both be
+      known to arbitrary precision; the product of their uncertainties has a
+      nonzero lower bound.
+    domain: physics/quantum
+    type: principle
+    falsifiable: true
+    falsified_if: >-
+      A reproducible measurement determines a conjugate pair more precisely than
+      the bound h-bar/2 permits.
+    status: unrefuted
+    confidence: high
+    sources: ["Heisenberg 1927", "Fourier-conjugate structure of quantum states"]
+
+  - id: bedrock.thermo.zeroth_law
+    statement: >-
+      If two systems are each in thermal equilibrium with a third, they are in
+      thermal equilibrium with each other — which is what makes temperature a
+      well-defined quantity.
+    domain: physics/thermodynamics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      A reproducible violation of the transitivity of thermal equilibrium.
+    status: unrefuted
+    confidence: high
+    sources: ["Zeroth law of thermodynamics"]
+
+  - id: bedrock.dna.base_pairing
+    statement: >-
+      In double-stranded DNA, adenine pairs specifically with thymine and
+      guanine with cytosine, so across the genome the amount of A equals T and
+      G equals C (Chargaff's rules), and the two strands are complementary.
+    domain: biology/molecular
+    type: observed-regularity
+    falsifiable: true
+    falsified_if: >-
+      Reproducible sequencing of canonical double-stranded DNA showing
+      systematic non-complementary pairing, or A != T / G != C beyond sampling
+      error in a complete genome.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      Stated for canonical Watson-Crick double-stranded DNA. Non-canonical
+      pairings (wobble in RNA, Hoogsteen, mismatches) are known, bounded
+      exceptions in specific contexts.
+    sources: ["Chargaff 1950", "Watson & Crick 1953"]

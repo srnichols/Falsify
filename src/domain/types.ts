@@ -11,6 +11,7 @@ import type {
   PositionSchema,
   ContestedEntrySchema,
   QuantEntrySchema,
+  RefutedEntrySchema,
   KnowledgeEntrySchema,
   CycleStateSchema,
   ClaimSchema,
@@ -27,6 +28,7 @@ export type FactEntry = z.infer<typeof FactEntrySchema>;
 export type Position = z.infer<typeof PositionSchema>;
 export type ContestedEntry = z.infer<typeof ContestedEntrySchema>;
 export type QuantEntry = z.infer<typeof QuantEntrySchema>;
+export type RefutedEntry = z.infer<typeof RefutedEntrySchema>;
 export type KnowledgeEntry = z.infer<typeof KnowledgeEntrySchema>;
 
 export type CycleState = z.infer<typeof CycleStateSchema>;

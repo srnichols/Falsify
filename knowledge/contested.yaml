@@ -95,3 +95,89 @@ entries:
         falsified_if: "Systems (e.g. bullet-cluster lensing) require mass where no gravity-modification fits."
         falsifiability_status: scientific
     engine_directive: "both_falsifiable; present_evidence_for_each; do_not_pick_winner"
+
+  - id: contested.biology.origin_of_life
+    question: "How did the first self-replicating life arise from non-living chemistry?"
+    domain: biology/origins
+    note: >-
+      Distinct from evolution (which explains change *after* life exists). The
+      transition from chemistry to biology is genuinely open: each position is
+      testable in principle, but none is yet decisive.
+    positions:
+      - label: "RNA world (genetics-first)"
+        claim: >-
+          Self-replicating RNA, which can both store information and catalyze
+          reactions, preceded DNA and proteins.
+        falsifiable: true
+        falsified_if: >-
+          Demonstration that RNA cannot sustain heritable self-replication under
+          any plausible prebiotic conditions, or discovery that a different
+          replicator must have come first.
+        falsifiability_status: scientific
+        evidence_pointers: ["ribozymes", "RNA in the ribosome's catalytic core", "lab-evolved self-copying RNA"]
+      - label: "metabolism-first"
+        claim: >-
+          Self-sustaining chemical reaction networks (autocatalysis) arose first;
+          heredity came later.
+        falsifiable: true
+        falsified_if: >-
+          Demonstration that no plausible prebiotic reaction network is
+          self-sustaining without a pre-existing template replicator.
+        falsifiability_status: scientific
+        evidence_pointers: ["autocatalytic cycles", "geochemical free-energy gradients"]
+      - label: "hydrothermal / mineral-surface origin"
+        claim: >-
+          Life began at alkaline hydrothermal vents or on mineral surfaces that
+          concentrated reactants and supplied proton gradients.
+        falsifiable: true
+        falsified_if: >-
+          Demonstration that vent/mineral environments cannot drive the required
+          chemistry, or strong evidence locating the origin elsewhere.
+        falsifiability_status: scientific
+        evidence_pointers: ["chemiosmotic gradients at vents", "mineral catalysis of prebiotic reactions"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.mind.consciousness
+    question: "What explains subjective conscious experience?"
+    domain: neuroscience/philosophy
+    note: >-
+      A clean test of the falsifiability rule applied symmetrically: some
+      positions make testable neural predictions; others (the 'hard problem')
+      may be framed so that no observation could decide them, which the engine
+      flags as outside the method — for any side.
+    positions:
+      - label: "physicalism / neural correlates"
+        claim: >-
+          Consciousness is produced by physical brain processes; specific neural
+          mechanisms are necessary and sufficient for specific experiences.
+        falsifiable: true
+        falsified_if: >-
+          Reproducible conscious experience with the proposed neural correlate
+          absent, or the correlate present with experience reproducibly absent.
+        falsifiability_status: scientific
+        evidence_pointers: ["lesion studies", "anesthesia", "neural correlates of perception"]
+      - label: "integrated information theory (IIT)"
+        claim: >-
+          Consciousness corresponds to the amount of integrated information (Phi)
+          a system generates.
+        falsifiable: conditional
+        falsified_if: >-
+          Depends on operationalization. Where Phi is computable and tied to
+          report, mismatches between predicted and measured consciousness can
+          test it; where Phi is not measurable, that formulation is untestable.
+        falsifiability_status: conditional
+      - label: "hard-problem dualism"
+        claim: >-
+          Subjective experience is non-physical and cannot be fully explained by
+          any physical mechanism.
+        falsifiable: depends
+        falsified_if: >-
+          Depends entirely on formulation. A version stating 'no physical account
+          can ever predict experience' is, by rule 2, framed so that no
+          observation could count against it — outside the scientific method,
+          not 'false.' A version making a specific prediction can be tested.
+        falsifiability_status: conditional
+        note: >-
+          The engine must ask for a testable formulation before scoring. The
+          untestable framing is reported as outside-method, symmetrically.
+    engine_directive: "present_all_positions_with_falsifiability; flag_untestable_framings; do_not_pick_winner"

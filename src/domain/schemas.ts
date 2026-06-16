@@ -17,12 +17,13 @@ import { z } from 'zod';
 
 // ─── Knowledge hierarchy (DESIGN.md §4) ──────────────────────────────────────
 
-/** The four knowledge tiers. Names, not L-numbers, to avoid Plan Forge collision. */
+/** The knowledge tiers. Names, not L-numbers, to avoid Plan Forge collision. */
 export const TierSchema = z.enum([
   'bedrock',
   'established',
   'contested',
   'quantitative',
+  'refuted',
 ]);
 
 /**
@@ -82,11 +83,31 @@ export const QuantEntrySchema = z.object({
   failure_guarded: z.string().min(1),
 });
 
-/** Any single knowledge entry, across all four tiers. */
+/**
+ * A Refuted entry — a claim once seriously believed that the scientific method
+ * has since falsified. The graveyard tier carries zero weight: it can never
+ * support a claim. Its purpose is the opposite — to record `falsified_by` (the
+ * decisive observation that killed it) and the methodological `lesson`, so the
+ * engine can show what falsification actually looks like (DESIGN.md §4).
+ */
+export const RefutedEntrySchema = z.object({
+  id: z.string().min(1),
+  claim: z.string().min(1),
+  domain: z.string().min(1),
+  type: z.string().min(1),
+  era: z.string().min(1).optional(),
+  falsified_by: z.string().min(1),
+  superseded_by: z.string().min(1).optional(),
+  lesson: z.string().min(1),
+  sources: z.array(z.string().min(1)).min(1),
+});
+
+/** Any single knowledge entry, across all tiers. */
 export const KnowledgeEntrySchema = z.union([
   FactEntrySchema,
   ContestedEntrySchema,
   QuantEntrySchema,
+  RefutedEntrySchema,
 ]);
 
 // ─── Cycle domain (DESIGN.md §3) ─────────────────────────────────────────────

@@ -37,8 +37,11 @@ state contracts.
 | **Established** | 0.8 | Well-confirmed theories (relativity, QM, plate tectonics…) | knowledge/established.yaml |
 | **Contested** | 0.5 | Open questions; present every position w/ falsifiability, pick no winner | knowledge/contested.yaml |
 | **Quantitative** | cross-cutting | Bayes, base rates, correlation≠causation… a *validator lens*, not a shelf | knowledge/quantitative.yaml |
+| **Refuted** | 0 | The graveyard — once-believed claims the method has falsified, with *what killed them* + the lesson. Supports nothing; demonstrates falsification. | knowledge/refuted.yaml |
 
 `claim_score` formula lives in DESIGN.md §4. `w_consensus` is the smallest term.
+The Refuted tier carries zero weight by design: it can never raise a claim's score,
+only serve as the engine's exhibit of what a successful falsification looks like.
 
 ## Storage model — "two stores, one truth"
 - **Source of truth:** version-controlled `knowledge/*.yaml` (diff-able, PR-reviewed,
@@ -110,6 +113,7 @@ state contracts.
 - [x] Repo created + pushed (`main`)
 - [x] DESIGN.md §1–§11 + glossary
 - [x] 4 knowledge seed YAMLs (bedrock / established / contested / quantitative)
+- [x] **Knowledge expansion** — 51 entries across 5 tiers (bedrock 13, established 13, contested 5, quantitative 13) + new **refuted.yaml graveyard tier** (7: aether, phlogiston, caloric, spontaneous generation, geocentrism, miasma, vacuum-abhorrence)
 - [x] Two-store storage design documented
 - [x] Brain key resolved as env-var reuse; `.env.example` added
 - [x] `docs/` handoff created
@@ -168,3 +172,15 @@ state contracts.
   on recovery; the `x-brain-key` never appears in any error/log (tested). **48 tests,
   95.27% line coverage, 100% functions, 0 vulnerabilities.** HEAD `2ad662e`.
   **Phase 1 CORE ENGINE complete.** Next: seed-sync script, then Phase 2 (MCP server).
+- **2026-06-15 (knowledge expansion)** — Audited the seed corpus and grew it from 19 to
+  **51 entries**. Added a **5th tier, `refuted.yaml` (the graveyard, weight 0)**: claims
+  once believed that the method falsified, each recording `falsified_by` + the `lesson`
+  (aether, phlogiston, caloric, spontaneous generation, geocentrism, miasma, "nature
+  abhors a vacuum"). Extended bedrock (+angular momentum, mass conservation, equivalence
+  principle, Pauli, uncertainty, 0th law, DNA base-pairing), established (+evolution, cell
+  theory, central dogma, atomic theory, Newtonian gravitation, E=mc^2, Standard Model),
+  contested (+abiogenesis, consciousness), quantitative (+deterministic chaos, Simpson's
+  paradox, multiple comparisons, prosecutor's fallacy, dimensional analysis, Godel limits).
+  Deliberately NO math-proof tier: proofs are deductive, not empirically falsifiable, so a
+  proof shelf would contradict the mission — math appears only as reasoning *lenses*.
+  Schema + loader extended for the refuted tier (weight now `nonnegative`). **51 tests pass.**

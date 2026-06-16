@@ -1,0 +1,146 @@
+# Falsify knowledge seed — REFUTED tier (the graveyard)
+# ----------------------------------------------------------------------------
+# Claims that were once seriously believed and that the scientific method has
+# since FALSIFIED. This tier carries ZERO weight: a refuted claim can never
+# support a hypothesis. Its purpose is the opposite of the other tiers —
+# it is the engine's exhibit of what falsification actually looks like.
+#
+# Every entry records:
+#   - `claim`         : what was once believed
+#   - `falsified_by`  : the decisive observation/experiment that killed it
+#   - `superseded_by` : what replaced it (optional)
+#   - `lesson`        : the methodological takeaway (why this is here)
+#
+# This is the heart of "dissent over consensus": each of these was, in its day,
+# the consensus. Consensus is not truth; the test is.
+#
+# SOURCE OF TRUTH (version-controlled). Mirrored into OpenBrain by seed-sync.
+# STARTER SET: expand via pull request.
+# ----------------------------------------------------------------------------
+tier: refuted
+weight: 0   # the graveyard supports nothing; it only instructs
+entries:
+  - id: refuted.physics.aether
+    claim: >-
+      Light propagates through a stationary "luminiferous aether" that fills all
+      space and serves as the medium and absolute rest frame for electromagnetic
+      waves.
+    domain: physics/electromagnetism
+    type: refuted-hypothesis
+    era: "17th–19th century; dominant until ~1905"
+    falsified_by: >-
+      The Michelson–Morley experiment (1887) found no aether wind: the speed of
+      light was the same in every direction regardless of Earth's motion. The
+      predicted fringe shift never appeared.
+    superseded_by: "Special relativity (no medium; invariant light speed)."
+    lesson: >-
+      A null result can be decisive. The absence of a predicted effect falsified
+      a theory that had near-universal assent for two centuries.
+    sources: ["Michelson-Morley 1887", "Einstein 1905"]
+
+  - id: refuted.chemistry.phlogiston
+    claim: >-
+      Combustible bodies contain a fire-like element, "phlogiston," that is
+      released when they burn; burning stops when the surrounding air is
+      saturated with it.
+    domain: chemistry
+    type: refuted-theory
+    era: "1667–late 18th century"
+    falsified_by: >-
+      Careful mass measurement: metals gain weight when they burn (calx is
+      heavier than the metal). A substance being *released* cannot increase mass.
+      Lavoisier showed combustion is combination with oxygen.
+    superseded_by: "Oxygen theory of combustion (Lavoisier)."
+    lesson: >-
+      Quantitative bookkeeping (here, conservation of mass) overturns a
+      qualitatively appealing story. Measure, don't narrate.
+    sources: ["Lavoisier 1777", "Stahl (phlogiston)"]
+
+  - id: refuted.physics.caloric
+    claim: >-
+      Heat is a conserved, weightless fluid ("caloric") that flows from hot to
+      cold bodies.
+    domain: physics/thermodynamics
+    type: refuted-theory
+    era: "18th–early 19th century"
+    falsified_by: >-
+      Rumford's cannon-boring observation that friction generates apparently
+      unlimited heat — inconsistent with a conserved material fluid. Heat is a
+      form of energy transfer, not a substance.
+    superseded_by: "Mechanical theory of heat / thermodynamics."
+    lesson: >-
+      An inexhaustible source falsifies a conservation-of-substance claim. The
+      mechanism, not the analogy, must fit the data.
+    sources: ["Rumford 1798", "Joule", "first law of thermodynamics"]
+
+  - id: refuted.biology.spontaneous_generation
+    claim: >-
+      Living organisms arise spontaneously from non-living matter (maggots from
+      rotting meat, microbes from broth).
+    domain: biology
+    type: refuted-hypothesis
+    era: "antiquity–19th century"
+    falsified_by: >-
+      Pasteur's swan-neck flask experiments (1859): broth sterilized and kept
+      free of airborne particles produced no life, while exposed broth did. The
+      'spontaneous' life came from pre-existing organisms in the air.
+    superseded_by: "Biogenesis ('all life from life'); later cell theory."
+    lesson: >-
+      Controlling the confound (airborne contamination) converted a vague belief
+      into a sharp, falsifiable test — and it failed.
+    sources: ["Pasteur 1859", "Redi 1668"]
+
+  - id: refuted.astronomy.geocentrism
+    claim: >-
+      The Earth is the motionless center of the universe; the Sun, planets, and
+      stars revolve around it.
+    domain: astronomy
+    type: refuted-model
+    era: "antiquity–17th century"
+    falsified_by: >-
+      Accumulating observations: Galileo's full set of Venus phases (requiring
+      Venus to orbit the Sun), Jupiter's moons (centers of motion other than
+      Earth), and the far simpler, more accurate Keplerian heliocentric model.
+    superseded_by: "Heliocentrism (Copernicus/Kepler), then Newtonian gravitation."
+    lesson: >-
+      A model can be saved by epicycles for a long time; predictive simplicity
+      and new instruments (the telescope) eventually decide. Consensus and
+      antiquity are not evidence.
+    sources: ["Galileo 1610", "Kepler", "Copernicus 1543"]
+
+  - id: refuted.medicine.miasma
+    claim: >-
+      Epidemic diseases such as cholera are caused by "miasma" — bad air or
+      noxious vapors from rotting matter.
+    domain: biology/medicine
+    type: refuted-theory
+    era: "antiquity–19th century"
+    falsified_by: >-
+      John Snow's 1854 Broad Street investigation traced cholera to a single
+      contaminated water pump, not to air. Removing the pump handle coincided
+      with the outbreak's decline; germ theory later supplied the mechanism.
+    superseded_by: "Germ theory of disease (see established.yaml)."
+    lesson: >-
+      Mapping the data spatially exposed the real cause. A competing, testable
+      hypothesis beat an untestable 'bad air' that explained everything and
+      predicted nothing.
+    sources: ["Snow 1855", "Pasteur", "Koch"]
+
+  - id: refuted.physics.vacuum_abhorrence
+    claim: >-
+      "Nature abhors a vacuum" — a true void cannot exist; nature acts to
+      prevent any empty space from forming.
+    domain: physics
+    type: refuted-maxim
+    era: "Aristotle–17th century"
+    falsified_by: >-
+      Torricelli's barometer (1643) produced a sustained vacuum above the
+      mercury column, and Pascal's altitude experiments showed the column height
+      varies with air pressure. The 'pull' was atmospheric pressure pushing, not
+      an abhorrence of emptiness.
+    superseded_by: "Atmospheric-pressure physics; the vacuum is ordinary and real."
+    lesson: >-
+      A teleological maxim ('nature wants…') is not a mechanism. Replacing intent
+      with a measurable pushing force both explained the old cases and predicted
+      new ones the maxim could not.
+    sources: ["Torricelli 1643", "Pascal 1648"]

@@ -17,18 +17,19 @@ import type { Tier, KnowledgeEntry } from '../domain/types.js';
 /** The on-disk shape of a single tier file: tier, weight, and its entries. */
 export const KnowledgeFileSchema = z.object({
   tier: TierSchema,
-  weight: z.union([z.number().positive(), z.literal('cross-cutting')]),
+  weight: z.union([z.number().nonnegative(), z.literal('cross-cutting')]),
   entries: z.array(KnowledgeEntrySchema).min(1),
 });
 
 export type KnowledgeFile = z.infer<typeof KnowledgeFileSchema>;
 
-/** The four tier files that make up the seed knowledge base. */
+/** The tier files that make up the seed knowledge base. */
 export const TIER_FILES: Readonly<Record<Tier, string>> = {
   bedrock: 'bedrock.yaml',
   established: 'established.yaml',
   contested: 'contested.yaml',
   quantitative: 'quantitative.yaml',
+  refuted: 'refuted.yaml',
 };
 
 /** Default location of the knowledge directory, relative to the process cwd. */
@@ -42,7 +43,7 @@ export function loadKnowledgeFile(filePath: string): KnowledgeFile {
 }
 
 /**
- * Load all four tier files from a directory.
+ * Load all tier files from a directory.
  *
  * @returns a record keyed by tier, each with its weight and validated entries.
  * @throws if any file is missing or any entry fails validation.

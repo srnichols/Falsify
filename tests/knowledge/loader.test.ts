@@ -10,13 +10,14 @@ import {
 const KNOWLEDGE_DIR = resolve(process.cwd(), 'knowledge');
 
 describe('knowledge loader', () => {
-  it('loads and validates all four tier files', () => {
+  it('loads and validates all tier files', () => {
     const knowledge = loadAllKnowledge(KNOWLEDGE_DIR);
     expect(Object.keys(knowledge).sort()).toEqual([
       'bedrock',
       'contested',
       'established',
       'quantitative',
+      'refuted',
     ]);
   });
 
@@ -26,6 +27,7 @@ describe('knowledge loader', () => {
     expect(knowledge.established.weight).toBe(0.8);
     expect(knowledge.contested.weight).toBe(0.5);
     expect(knowledge.quantitative.weight).toBe('cross-cutting');
+    expect(knowledge.refuted.weight).toBe(0);
   });
 
   it('every file declares the tier it is loaded as', () => {
@@ -42,5 +44,14 @@ describe('knowledge loader', () => {
     expect(flat.every((e) => 'id' in e.entry)).toBe(true);
     expect(flat.some((e) => e.tier === 'bedrock')).toBe(true);
     expect(flat.some((e) => e.tier === 'contested')).toBe(true);
+  });
+
+  it('the refuted graveyard tier carries zero weight and records what killed each claim', () => {
+    const knowledge = loadAllKnowledge(KNOWLEDGE_DIR);
+    expect(knowledge.refuted.weight).toBe(0);
+    for (const entry of knowledge.refuted.entries) {
+      expect('falsified_by' in entry).toBe(true);
+      expect('lesson' in entry).toBe(true);
+    }
   });
 });
