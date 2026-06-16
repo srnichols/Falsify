@@ -255,6 +255,89 @@ entries:
       approximation, not a universal law.
     sources: ["Hooke 1678"]
 
+  - id: established.physics.law_of_the_lever
+    statement: >-
+      A rigid lever in static equilibrium balances when the torques about its
+      pivot are equal and opposite; in the ideal case the applied forces and
+      their moment arms satisfy F1 d1 = F2 d2.
+    domain: physics/mechanics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible lever systems in static equilibrium are shown to violate
+      torque balance under stated geometry and loading, with no hidden support,
+      friction, deformation, or dynamic effect explaining the discrepancy.
+    status: well-supported
+    confirmations: ["beam-balance measurements", "static-equilibrium problems", "laboratory torque experiments"]
+    domain_of_validity: >-
+      Applies to rigid-body statics and quasi-static conditions. Real levers can
+      deviate because of pivot friction, distributed mass, elastic deformation,
+      and dynamic loading.
+    sources: ["Archimedes on equilibrium of planes", "classical statics"]
+
+  - id: established.engineering.ideal_pulley_mechanical_advantage
+    statement: >-
+      In an ideal pulley or block-and-tackle system, the mechanical advantage
+      equals the number of rope segments supporting the load: reducing input
+      force requires pulling a proportionally greater distance, so work is
+      conserved apart from losses.
+    domain: engineering/statics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible idealized pulley setups are shown to violate the predicted
+      force-distance tradeoff or supporting-segment mechanical advantage, with
+      no friction, rope stretch, or inertial effect accounting for the result.
+    status: well-supported
+    confirmations: ["block-and-tackle demonstrations", "work-energy calculations", "engineering statics experiments"]
+    domain_of_validity: >-
+      An idealization assuming massless rope, negligible pulley friction, and
+      quasi-static motion. Real systems lose efficiency through friction,
+      bending resistance, rope elasticity, and moving-mass effects.
+    sources: ["classical statics", "work-energy principle", "engineering mechanics texts"]
+
+  - id: established.engineering.gear_ratio_torque_speed_tradeoff
+    statement: >-
+      Meshed gears transmit motion with an angular-speed ratio set by their
+      tooth counts or pitch radii; in the ideal case torque changes inversely
+      with speed ratio, so increasing torque requires a proportional reduction
+      in angular speed and vice versa.
+    domain: engineering/machines
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible gear trains with known geometry are shown to violate the
+      predicted speed ratio or ideal torque-speed tradeoff, with no slip,
+      backlash, compliance, or loss mechanism explaining the discrepancy.
+    status: well-supported
+    confirmations: ["gear-train kinematics", "machine-design calculations", "measured torque-speed ratios in transmissions"]
+    domain_of_validity: >-
+      Holds for correctly meshed gears in standard operating regimes. Real gear
+      trains depart from the ideal because of friction, tooth deformation,
+      backlash, manufacturing error, lubrication state, and transient loading.
+    sources: ["classical machine design", "gear kinematics", "engineering mechanics texts"]
+
+  - id: established.engineering.ideal_machine_work_conservation
+    statement: >-
+      Ideal simple machines conserve work: any gain in output force is paid for
+      by a proportional increase in input distance, so input work equals output
+      work apart from losses.
+    domain: engineering/mechanics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Reproducible idealized machine setups are shown to deliver more output
+      work than input work with no external energy source, and with no
+      measurement error, stored-energy release, or loss accounting explaining
+      the discrepancy.
+    status: well-supported
+    confirmations: ["lever and pulley work measurements", "inclined-plane demonstrations", "virtual-work derivations in statics"]
+    domain_of_validity: >-
+      An idealization assuming negligible friction, deformation, slip, and
+      dissipative losses. Real machines always depart from equality because of
+      inefficiency, compliance, and transient energy storage.
+    sources: ["work-energy principle", "virtual work in statics", "classical mechanics and engineering texts"]
+
   - id: established.astronomy.kepler_laws
     statement: >-
       Planets move in ellipses with the Sun at one focus; a planet sweeps equal
