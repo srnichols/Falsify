@@ -33,6 +33,7 @@
     "@types/node": "^20.14.10",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^9.7.0",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.0",

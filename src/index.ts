@@ -15,3 +15,5 @@ export * from './cycle/stateMachine.js';
 export * from './knowledge/loader.js';
 export * from './rules/claimScore.js';
 export * from './rules/quantitative.js';
+export * from './config.js';
+export * from './memory/openbrainClient.js';
