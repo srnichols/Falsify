@@ -274,3 +274,83 @@ entries:
       reversible operations are not subject to it. Confirmed in single-bit
       experiments (2012 onward) approaching the bound.
     sources: ["Landauer 1961", "Berut et al. 2012 (experimental confirmation)"]
+
+  - id: bedrock.electromagnetism.coulomb_law
+    statement: >-
+      The electrostatic force between two point charges is proportional to the
+      product of the charges and inversely proportional to the square of the
+      distance between them.
+    domain: physics/electromagnetism
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible electrostatic measurements in the stated regime systematically
+      violate the inverse-square relation with no finite-size, medium, or quantum
+      explanation.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      Stated for classical electrostatics, point-like or sufficiently separated
+      charges, and media where Coulomb's constant or permittivity is well-defined.
+      Dynamic electromagnetic fields and quantum-scale corrections require fuller
+      theory without overturning the classical law in its domain.
+    sources: ["Coulomb 1785", "classical electromagnetism"]
+
+  - id: bedrock.nuclear.radioactive_decay
+    statement: >-
+      Unstable nuclei decay statistically at characteristic rates: for a given
+      isotope under ordinary conditions, the number of undecayed nuclei decreases
+      exponentially with time and the half-life is constant.
+    domain: physics/nuclear
+    type: observed-regularity
+    falsifiable: true
+    falsified_if: >-
+      A reproducible sample of a known isotope under ordinary conditions is shown
+      not to follow the expected exponential decay law or to have a non-constant
+      half-life without a change in nuclide identity or known extreme environment.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      Applies to ordinary laboratory, geological, and astrophysical conditions
+      for a specified nuclide. Rare decay modes, branching ratios, and extreme
+      environments are part of the full picture but do not negate the regularity
+      within its standard domain.
+    sources: ["Rutherford and Soddy 1902", "radioactive decay law"]
+
+  - id: bedrock.biology.biogenesis
+    statement: >-
+      Under ordinary observed conditions, living organisms arise from pre-existing
+      life rather than spontaneously from non-living matter.
+    domain: biology/cell-biology
+    type: observed-regularity
+    falsifiable: true
+    falsified_if: >-
+      A reproducible modern experiment under contamination-controlled ordinary
+      conditions produces living organisms directly from non-living matter with
+      no pre-existing biological source.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      Stated for ordinary present-day conditions accessible to observation and
+      experiment. It does not answer the separate historical question of how the
+      first life arose on early Earth, which remains open in contested.yaml.
+    sources: ["Redi 1668", "Pasteur 1859", "biogenesis principle"]
+
+  - id: bedrock.optics.reflection
+    statement: >-
+      For specular reflection from a smooth surface, the angle of reflection
+      equals the angle of incidence when measured from the surface normal.
+    domain: physics/optics
+    type: law
+    falsifiable: true
+    falsified_if: >-
+      Reproducible specular reflections from smooth surfaces systematically show
+      reflected angles differing from incident angles with no measurement or
+      surface-structure explanation.
+    status: unrefuted
+    confidence: high
+    domain_of_validity: >-
+      Applies to specular reflection from smooth interfaces. Rough surfaces,
+      diffuse scattering, anisotropic media, and wave-optics edge effects can
+      complicate observations without overturning the geometric-optics law.
+    sources: ["geometric optics", "Hero of Alexandria", "classical reflection law"]
