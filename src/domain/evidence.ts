@@ -45,8 +45,14 @@ export const EvidenceSchema = z.object({
    * number of chances there were to get one.
    */
   outcomesTested: z.number().int().positive().optional(),
-  /** True when an independent party reproduced the result. */
+  /**
+   * True when an independent party reproduced the result. Only credited when
+   * `replicationDoi` names the replication and has been confirmed with
+   * `falsify_verify_source`; otherwise the claim is noted and ignored.
+   */
   replicated: z.boolean().optional(),
+  /** DOI of the independent replication. Must differ from `doi`. */
+  replicationDoi: z.string().min(1).refine((v) => normalizeDoi(v) !== undefined, 'not a valid DOI').optional(),
 });
 
 export type EvidenceKind = z.infer<typeof EvidenceKindSchema>;

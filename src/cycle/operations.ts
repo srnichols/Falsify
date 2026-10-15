@@ -625,7 +625,23 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
   const { session, state } = resolved;
 
   const verifiedDois = new Set(Object.keys(session?.verifiedSources ?? {}));
-  const items = normalizeEvidence(input.evidenceCited ?? [], input.evidence ?? [], isConsensusAppeal, verifiedDois).map((item) => {
+  const unverifiedReplications: string[] = [];
+  const items = normalizeEvidence(input.evidenceCited ?? [], input.evidence ?? [], isConsensusAppeal, verifiedDois)
+    .map((item) => {
+      if (item.replicated !== true || item.kind === 'consensus') return item;
+      const own = item.doi !== undefined ? normalizeDoi(item.doi) : undefined;
+      const replication = item.replicationDoi !== undefined ? normalizeDoi(item.replicationDoi) : undefined;
+      const title = replication !== undefined ? session?.verifiedSources?.[replication]?.title : undefined;
+      const credited =
+        replication !== undefined &&
+        replication !== own &&
+        title !== undefined &&
+        titleRelatesTo(title, [item.observation, session?.hypothesis?.statement ?? '', session?.hypothesis?.predicts ?? '']);
+      if (credited) return item;
+      unverifiedReplications.push(item.observation);
+      return { ...item, replicated: false };
+    })
+    .map((item) => {
     const doi = item.doi !== undefined ? normalizeDoi(item.doi) : undefined;
     const title = doi !== undefined ? session?.verifiedSources?.[doi]?.title : undefined;
     if (item.sourceVerified !== true || title === undefined) return item;
@@ -705,6 +721,13 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
   }
 
   const consensusNote: Record<string, unknown> = {
+    ...(unverifiedReplications.length > 0
+      ? {
+          replicationNotCredited: unverifiedReplications,
+          replicationNote:
+            'These items were marked replicated but earned no replication credit: a replication needs its own replicationDoi (different from the original source), confirmed with falsify_verify_source in this session, whose title relates to the claim. They are scored as unreplicated.',
+        }
+      : {}),
     ...(appeals.length > 0 ? { consensusCitedAsEvidence: appeals, challenge: CONSENSUS_CHALLENGE } : {}),
     ...integrity.flags,
     ...(integrity.multiplicity !== undefined ? { multiplicity: integrity.multiplicity } : {}),

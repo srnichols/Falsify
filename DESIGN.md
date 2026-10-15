@@ -120,8 +120,13 @@ lives in the transport-free core (`src/cycle/operations.ts`):
   searched and what contrary or null results exist (`evidenceSearch`); disclosed
   contrary results must be explained and cap the strength at "moderate". A yes whose
   evidence reads as a null result is flagged. A replication, or a hypothesis that
-  itself asserts no effect (`nullHypothesisClaim`), is exempt from the adjustment. The
-  disclosures are still self-reported: they make omission a recorded choice, not an
+  itself asserts no effect (`nullHypothesisClaim`), is exempt from the adjustment. A
+  `replicated: true` flag is not taken on trust: it counts only with a `replicationDoi`
+  (a different paper from the original) confirmed in the session by
+  `falsify_verify_source` whose title relates to the claim; otherwise the item is scored
+  as unreplicated, loses the exemption, and is reported as `replicationNotCredited`.
+  That confirms the replication paper exists and is on topic, not that it replicated.
+  The disclosures are still self-reported: they make omission a recorded choice, not an
   impossible one.
 - **Pre-registration.** The hypothesis is locked (timestamped) before the
   experiment and analysis. Analysis reports when the prediction was locked.

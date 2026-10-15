@@ -42,8 +42,10 @@ export function registerAnalyze(server: McpServer, ctx?: CycleContext): void {
       description:
         'Compare the data to the prediction: verdict yes or no, citing the observations it rests ' +
         'on. Use evidenceCited for plain observations or evidence for structured items (kind, source, ' +
-        'doi, sampleSize, effectSize, pValue, outcomesTested, replicated) \u2014 structured evidence is ' +
-        'what earns a strong claimScore. Any p-value needs outcomesTested: how many outcomes or ' +
+        'doi, sampleSize, effectSize, pValue, outcomesTested, replicated, replicationDoi) \u2014 structured evidence is ' +
+        'what earns a strong claimScore. replicated only counts with a replicationDoi (a different paper from ' +
+        'the original) confirmed by falsify_verify_source in this session; otherwise it is ignored and reported. ' +
+        'Any p-value needs outcomesTested: how many outcomes or ' +
         'comparisons you examined to get it. A "yes" in a session also needs evidenceSearch ' +
         '({description: what you searched and how, contraryFound: how many null or contrary results ' +
         'are known, contraryNote: what they are and why the claim stands}) and must still clear ' +

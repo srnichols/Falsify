@@ -4,7 +4,7 @@ import type { OpResult } from '../../src/cycle/operations.js';
 import type { CycleContext } from '../../src/cycle/context.js';
 import { SessionStore } from '../../src/cycle/session.js';
 import type { Evidence } from '../../src/domain/evidence.js';
-import { CLEAN_YES, MODERATE_EVIDENCE, SEARCH, STRONG_EVIDENCE } from '../helpers/evidence.js';
+import { CLEAN_YES, MODERATE_EVIDENCE, REPLICATION_DOI, SEARCH, STRONG_EVIDENCE, verifyReplication } from '../helpers/evidence.js';
 
 const ANSWERS = {
   q1Methods: 'The protocol was blinded and sound.',
@@ -69,8 +69,9 @@ describe('analysis integrity in a session', () => {
     expect(JSON.stringify(p)).toContain('adjustedPValues');
   });
 
-  it('caps a replicated result at moderate when contrary results are disclosed', () => {
+  it('caps a replicated result at moderate when contrary results are disclosed', async () => {
     const { ctx, sessionId } = setup();
+    await verifyReplication(ctx, sessionId);
     const p = ok(
       opAnalyze(
         {
@@ -98,13 +99,41 @@ describe('review gate on weak evidence', () => {
     expect(p.cycleVerified).toBe(true);
   });
 
-  it('labels replicated evidence supported and unreplicated evidence provisional', () => {
+  it('labels replicated evidence supported and unreplicated evidence provisional', async () => {
     const strong = setup();
+    await verifyReplication(strong.ctx, strong.sessionId);
     ok(opAnalyze({ verdict: 'yes', evidence: [STRONG_EVIDENCE], evidenceSearch: SEARCH, sessionId: strong.sessionId }, strong.ctx));
     expect(ok(opReview({ ...ANSWERS, outcome: 'confirm', sessionId: strong.sessionId }, strong.ctx)).epistemicStatus).toBe('supported');
 
     const moderate = setup();
     ok(opAnalyze({ ...CLEAN_YES, sessionId: moderate.sessionId }, moderate.ctx));
     expect(ok(opReview({ ...ANSWERS, outcome: 'confirm', sessionId: moderate.sessionId }, moderate.ctx)).epistemicStatus).toBe('provisional');
+  });
+
+  it('ignores a replicated flag that cites no verified replication, and says so', async () => {
+    const claimed = setup();
+    const unsourced = { ...STRONG_EVIDENCE } as Evidence;
+    delete (unsourced as { replicationDoi?: string }).replicationDoi;
+    const p = ok(opAnalyze({ verdict: 'yes', evidence: [unsourced], evidenceSearch: SEARCH, sessionId: claimed.sessionId }, claimed.ctx));
+    expect(p.replicationNotCredited).toEqual([unsourced.observation]);
+    expect((p.claimScore as { evidenceStrength: string }).evidenceStrength).toBe('moderate');
+
+    const cited = setup();
+    const unverified = ok(opAnalyze({ verdict: 'yes', evidence: [STRONG_EVIDENCE], evidenceSearch: SEARCH, sessionId: cited.sessionId }, cited.ctx));
+    expect(unverified.replicationNotCredited).toBeDefined();
+
+    const own = setup();
+    await verifyReplication(own.ctx, own.sessionId);
+    const sameAsOriginal = { ...STRONG_EVIDENCE, doi: REPLICATION_DOI };
+    expect(ok(opAnalyze({ verdict: 'yes', evidence: [sameAsOriginal], evidenceSearch: SEARCH, sessionId: own.sessionId }, own.ctx)).replicationNotCredited).toBeDefined();
+  });
+
+  it('no longer exempts an unverified replication from the multiplicity adjustment', () => {
+    const { ctx, sessionId } = setup();
+    const r = opAnalyze(
+      { verdict: 'yes', evidence: [{ ...STRONG_EVIDENCE, pValue: 0.04, outcomesTested: 20 }], evidenceSearch: SEARCH, sessionId },
+      ctx,
+    );
+    expect(rule(r)).toBe('analysis:not-significant-after-adjustment');
   });
 });

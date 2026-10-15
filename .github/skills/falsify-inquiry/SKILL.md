@@ -57,6 +57,7 @@ Use your search and web tools. Do all of this before analysis:
 ### 6. Analysis: `falsify_analyze`
 
 - Give structured `evidence`: observation, `kind`, `source`, `doi`, and statistics **only if the source reports them**. Every p-value needs `outcomesTested`, from the source, or leave the statistic out.
+- Mark `replicated: true` only for a result an independent group reproduced, and give the replication's own `replicationDoi` (a different paper from the original), confirmed with `falsify_verify_source`. Without that it earns nothing and is reported back.
 - Pass `evidenceSearch` with the real description, the real `contraryFound` count, and a `contraryNote` explaining how each contrary result is handled.
 - Link `knowledgeRefs` to the Bedrock or Established entries the claim supports or conflicts with.
 - Verdict **yes** only if the evidence you found supports the prediction and the falsifiers did not occur. Otherwise **no**.

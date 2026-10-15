@@ -4,7 +4,7 @@ import type { OpResult } from '../../src/cycle/operations.js';
 import type { CycleContext } from '../../src/cycle/context.js';
 import { SessionStore } from '../../src/cycle/session.js';
 import type { BrainMemory, MemoryWriter } from '../../src/memory/openbrainClient.js';
-import { SEARCH } from '../helpers/evidence.js';
+import { REPLICATION_DOI, SEARCH, verifyReplication } from '../helpers/evidence.js';
 
 function ok(result: OpResult): Record<string, unknown> {
   if (result.kind !== 'ok') throw new Error(`expected ok, got ${result.rule}: ${result.error}`);
@@ -48,8 +48,9 @@ function setup(statement: string): { ctx: CycleContext; sessionId: string; saved
 }
 
 describe('scored analysis', () => {
-  it('returns a claim score built from structured evidence and records it with the theory', () => {
+  it('returns a claim score built from structured evidence and records it with the theory', async () => {
     const { ctx, sessionId, saved } = setup('Caffeine lowers reaction time');
+    await verifyReplication(ctx, sessionId);
     const p = ok(
       opAnalyze(
         {
@@ -63,6 +64,7 @@ describe('scored analysis', () => {
               pValue: 0.004,
               outcomesTested: 1,
               replicated: true,
+              replicationDoi: REPLICATION_DOI,
             },
           ],
           evidenceSearch: SEARCH,
