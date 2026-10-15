@@ -39,12 +39,12 @@ describe.skipIf(!built)('falsify-mcp over stdio', () => {
   let dataDir: string;
   const open: Client[] = [];
 
-  async function connect(): Promise<Client> {
+  async function connect(cwd: string = process.cwd()): Promise<Client> {
     const client = new Client({ name: 'stdio-e2e', version: '0.0.0' });
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [ENTRYPOINT],
-      cwd: process.cwd(),
+      cwd,
       env: { FALSIFY_DATA_DIR: dataDir },
       stderr: 'ignore',
     });
@@ -82,6 +82,19 @@ describe.skipIf(!built)('falsify-mcp over stdio', () => {
         'falsify_verify_source',
       ].sort(),
     );
+  }, 30_000);
+
+  it('finds its own knowledge corpus when the host starts it in another project', async () => {
+    const elsewhere = mkdtempSync(join(tmpdir(), 'falsify-elsewhere-'));
+    const client = await connect(elsewhere);
+    try {
+      const related = await call(client, 'falsify_related', { claim: 'Energy can be created from nothing in a closed system' });
+      expect(related.rule).toBeUndefined();
+      expect((related.matches as unknown[]).length).toBeGreaterThan(0);
+    } finally {
+      await client.close();
+      rmSync(elsewhere, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   }, 30_000);
 
   it('keeps an inquiry across a server restart and records the theory', async () => {

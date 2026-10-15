@@ -21,7 +21,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "knowledge",
+    "public"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

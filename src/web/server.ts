@@ -17,6 +17,7 @@ import { resolve, sep, extname } from 'node:path';
 import { handleRequest } from './api.js';
 import type { WebDeps } from './api.js';
 import { createDefaultContext } from '../cycle/defaultContext.js';
+import { resolvePublicDir } from '../paths.js';
 
 /** Default localhost bind host. */
 const DEFAULT_HOST = '127.0.0.1';
@@ -26,7 +27,7 @@ const DEFAULT_PORT = 4319;
 const MAX_BODY_BYTES = 1_000_000;
 
 /** Where static front-end assets are served from. */
-const PUBLIC_DIR = resolve(process.cwd(), 'public');
+const PUBLIC_DIR = resolvePublicDir();
 
 const CONTENT_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

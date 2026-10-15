@@ -8,10 +8,11 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { TierSchema, KnowledgeEntrySchema } from '../domain/schemas.js';
+import { resolveKnowledgeDir } from '../paths.js';
 import type { Tier, KnowledgeEntry } from '../domain/types.js';
 
 /** The on-disk shape of a single tier file: tier, weight, and its entries. */
@@ -32,8 +33,8 @@ export const TIER_FILES: Readonly<Record<Tier, string>> = {
   refuted: 'refuted.yaml',
 };
 
-/** Default location of the knowledge directory, relative to the process cwd. */
-export const DEFAULT_KNOWLEDGE_DIR = resolve(process.cwd(), 'knowledge');
+/** Default location of the knowledge directory: the package's own corpus, not the process cwd. */
+export const DEFAULT_KNOWLEDGE_DIR = resolveKnowledgeDir();
 
 /** Parse and validate one tier file. Throws if the file fails its schema. */
 export function loadKnowledgeFile(filePath: string): KnowledgeFile {
