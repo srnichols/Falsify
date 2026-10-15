@@ -18,9 +18,13 @@ import {
   QUORUM_PRESETS,
 } from "./orchestrator/model-scoring.mjs";
 import { COST_SOURCES } from "./enums.mjs";
+import { DEFAULT_ESTIMATE_MODEL } from "./orchestrator/constants.mjs";
 import { quotaCacheGet, compareSliceEstimate } from "./foundry-quota.mjs";
 
 const VALID_COST_SOURCE_LABELS = new Set(COST_SOURCES);
+const COPILOT_PRICING_PATH = new URL("./copilot-pricing.json", import.meta.url);
+/** Share of estimated gh-copilot input assumed to be cache reads (history totals include them). */
+export const COPILOT_ESTIMATE_CACHE_READ_SHARE = 0.30;
 
 function warnOnUnknownCostSourceLabel(source, context) {
   if (typeof source !== "string" || source.length === 0) return;
@@ -28,6 +32,19 @@ function warnOnUnknownCostSourceLabel(source, context) {
     console.warn(`[cost-service] Unknown cost source '${source}' at ${context}; expected one of ${COST_SOURCES.join(", ")}. Keeping record for backward compatibility.`);
   }
 }
+
+function loadCopilotPricingSnapshot() {
+  try {
+    const parsed = JSON.parse(readFileSync(COPILOT_PRICING_PATH, "utf8"));
+    return parsed && typeof parsed === "object" && parsed.models && typeof parsed.models === "object"
+      ? parsed
+      : { models: {} };
+  } catch {
+    return { models: {} };
+  }
+}
+
+export const COPILOT_PRICING = Object.freeze(loadCopilotPricingSnapshot());
 
 // ─── Foundry Quota Preflight Helper ──────────────────────────────────
 // When PFORGE_FOUNDRY_QUOTA_PREFLIGHT=1 and provider is microsoft-foundry,
@@ -95,8 +112,28 @@ function _computeFoundryQuota({ estimatedTokensIn, estimatedTokensOut, provider,
 export const MODEL_PRICING = {
   // ─── Anthropic Claude ──────────────────────────────────────────────
   // Cache: read 0.10×, 5m write 1.25×, 1h write 2.0× (uniform across all tiers).
-  // Opus 4.5/4.6/4.7 dropped to $5/$25 per Anthropic pricing page (2026-05-06).
-  // Source: https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching
+  // Opus 4.5 through Opus 5 bill at $5/$25; Opus 5.5 drops to $4/$20 with a
+  // 0.05× cache read, and Fable 5.1 reads cache at 0.025×. Fable is the tier
+  // above Opus at $10/$50. Claude 4.6+ has no long-context premium.
+  // Source: https://platform.claude.com/docs/en/docs/about-claude/models/overview
+  "claude-fable-5.1":       { input: 10 / 1_000_000,   output: 50 / 1_000_000,
+    cache_read_multiplier: 0.025, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/about-claude/pricing — API ID claude-fable-5-1, 1M ctx (2026-09-30)" },
+  "claude-opus-5.5":        { input: 4 / 1_000_000,    output: 20 / 1_000_000,
+    cache_read_multiplier: 0.05, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/about-claude/pricing — API ID claude-opus-5-5, 1M ctx (2026-09-30)" },
+  "claude-sonnet-5.5":      { input: 2 / 1_000_000,    output: 10 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/about-claude/pricing — API ID claude-sonnet-5-5, 1M ctx (2026-09-30)" },
+  "claude-fable-5":         { input: 10 / 1_000_000,   output: 50 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/about-claude/models/overview — 1M ctx (2026-08-10)" },
+  "claude-opus-5":          { input: 5 / 1_000_000,    output: 25 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/about-claude/models/overview — 1M ctx (2026-08-10)" },
+  "claude-opus-4.8":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/about-claude/models/overview (2026-08-10)" },
   "claude-opus-4.7":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://www.anthropic.com/pricing (2026-05-06)" },
@@ -118,6 +155,9 @@ export const MODEL_PRICING = {
   "claude-opus-4.5":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
+  "claude-sonnet-5":        { input: 2 / 1_000_000,    output: 10 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/about-claude/pricing — launch price made permanent; the planned $3/$15 increase was cancelled (2026-09-30)" },
   "claude-sonnet-4.6":      { input: 3 / 1_000_000,    output: 15 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
@@ -131,11 +171,53 @@ export const MODEL_PRICING = {
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
 
-  // ─── OpenAI GPT (5.x family) ───────────────────────────────────────
-  // Cache: 0.10× read for GPT-5.x. Writes are FREE (no cache_write multiplier).
-  // Flex: 0.5× input AND 0.5× output (symmetric, gpt-5.5 + gpt-5.4 only).
-  // Priority: 2.0× input, 1.5× output (asymmetric).
-  // Source: https://developers.openai.com/api/docs/pricing (2026-05-06)
+  // ─── OpenAI GPT (6.x and 5.x families) ─────────────────────────────
+  // GPT-6 bills cache writes at 1.25× input (not modelled, as for GPT-5.6) and
+  // bills a whole request at 2× input / 1.5× output above 272k prompt tokens.
+  // Cache: 0.10× read for GPT-5.x. Writes are free through gpt-5.5; GPT-5.6
+  //   bills cache writes at 1.25× input, which priceSlice() does NOT model —
+  //   its cache-write math lives in the Anthropic branch only.
+  // Flex: 0.5× input AND 0.5× output (symmetric).
+  // Priority (renamed "Fast mode" 2026-07-30): 2.0× input / 1.5× output on
+  //   gpt-5.4 + gpt-5.5; 2.0× on both for GPT-5.6.
+  // Long context: GPT-5.6 bills a higher rate above 272k prompt tokens; entries
+  //   carry the ≤272k rate and record the long-context rate in _source.
+  // Source: https://developers.openai.com/api/docs/pricing
+  "gpt-6-astra":            { input: 10 / 1_000_000,   output: 50 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $20/$75 (2026-09-30)" },
+  "gpt-6.1-sol":            { input: 2 / 1_000_000,    output: 10 / 1_000_000,
+    cache_read_multiplier: 0.05,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $4/$15 (2026-09-30)" },
+  "gpt-6-sol":              { input: 2 / 1_000_000,    output: 10 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $4/$15 (2026-09-30)" },
+  "gpt-6-luna":             { input: 0.10 / 1_000_000, output: 0.50 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $0.20/$0.75 (2026-09-30)" },
+  "gpt-5.6-sol":            { input: 5 / 1_000_000,    output: 30 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $10/$45 (2026-08-10)" },
+  "gpt-5.6-terra":          { input: 2 / 1_000_000,    output: 12 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $4/$18 (2026-08-10)" },
+  "gpt-5.6-luna":           { input: 0.20 / 1_000_000, output: 1.20 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $0.40/$1.80 (2026-08-10)" },
   "gpt-5.5":                { input: 5 / 1_000_000,    output: 30 / 1_000_000,
     cache_read_multiplier: 0.10,
     flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
@@ -210,16 +292,58 @@ export const MODEL_PRICING = {
     cache_read_multiplier: 0.25,
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
   "o3-mini":                { input: 1.10 / 1_000_000, output: 4.40 / 1_000_000,
-    cache_read_multiplier: 0.25,
+    cache_read_multiplier: 0.50,
     aoai_deployment_type_multiplier: { global: 1.0, "data-zone": 1.1, regional: 1.1, provisioned: 1.0 },
-    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+    _source: "https://developers.openai.com/api/docs/pricing — cached input $0.55 (2026-08-10)" },
   "o4-mini":                { input: 1.10 / 1_000_000, output: 4.40 / 1_000_000,
-    cache_read_multiplier: 0.275,
-    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+    cache_read_multiplier: 0.25,
+    _source: "https://developers.openai.com/api/docs/pricing — cached input $0.275 (2026-08-10)" },
 
   // ─── Google Gemini ────────────────────────────────────────────────
+  // Cache: read 0.10× across Gemini 3.x (context-caching price ÷ input price).
+  // Pro tiers bill a higher rate above 200k prompt tokens; entries carry the
+  // ≤200k rate and record the long-context rate in _source.
+  // Source: https://ai.google.dev/gemini-api/docs/pricing
+  "gemini-3.8-flash":       { input: 0.75 / 1_000_000, output: 3.75 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing — promotional rate through 2026-12-31, then $1.50/$7.50 (2026-09-30)" },
+  "gemini-3.7-flash":       { input: 0.75 / 1_000_000, output: 3.75 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing — promotional rate through 2026-12-31, then $1.50/$7.50 (2026-09-30)" },
+  "gemini-3.6-flash":       { input: 1.50 / 1_000_000, output: 7.50 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-08-10)" },
+  "gemini-3.5-flash":       { input: 1.50 / 1_000_000, output: 9.00 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-08-10)" },
+  "gemini-3.5-flash-lite":  { input: 0.30 / 1_000_000, output: 2.50 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-08-10)" },
+  "gemini-3.1-pro-preview": { input: 2.00 / 1_000_000, output: 12.00 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing — ≤200k prompt; >200k bills $4/$18 (2026-08-10)" },
   "gemini-3-pro-preview":   { input: 1.25 / 1_000_000, output: 5 / 1_000_000,
     _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-05-06)" },
+
+  // ─── Microsoft MAI ────────────────────────────────────────────────
+  // Copilot-only (no public vendor API); rate is the Copilot AI-credit price.
+  "mai-code-1.1-flash":     { input: 0.20 / 1_000_000, output: 1.20 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing (2026-09-30)" },
+
+  // ─── Moonshot Kimi ────────────────────────────────────────────────
+  // Vendor publishes cache-hit and cache-miss input rates directly; input is
+  // the cache-miss rate and cache_read_multiplier is cache-hit ÷ cache-miss.
+  // Source: https://platform.kimi.ai/docs/pricing
+  "kimi-k3":                { input: 3.00 / 1_000_000, output: 15.00 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://platform.kimi.ai/docs/pricing/chat-k3 — 1M ctx (2026-08-10)" },
+  "kimi-k2.7-code":         { input: 0.95 / 1_000_000, output: 4.00 / 1_000_000,
+    cache_read_multiplier: 0.20,
+    _source: "https://platform.kimi.ai/docs/pricing/chat-k27-code — 256k ctx (2026-08-10)" },
+  "kimi-k2.7-code-highspeed": { input: 1.90 / 1_000_000, output: 8.00 / 1_000_000,
+    cache_read_multiplier: 0.20,
+    _source: "https://platform.kimi.ai/docs/pricing/chat-k27-code — 256k ctx, ~180 tok/s (2026-08-10)" },
 
   // ─── xAI Grok ─────────────────────────────────────────────────────
   // Cache: ~0.25× approximation. Authoritative cost comes from response
@@ -227,6 +351,18 @@ export const MODEL_PRICING = {
   // when present and falls back to multiplier math otherwise.
   // Source: https://docs.x.ai/developers/models, https://docs.x.ai/developers/cost-tracking
   // _retiredAfter: marks xAI May 15, 2026 retirements (kept for historical compat).
+  "grok-4.7":                          { input: 2.00 / 1_000_000, output: 6.00 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/developers/models/grok-4.7 — 500k ctx; prompts ≥200k bill $4/$12 (2026-09-30)" },
+  "grok-4.6":                          { input: 2.00 / 1_000_000, output: 6.00 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/developers/models/grok-4.6 — 500k ctx; prompts ≥200k bill $4/$12 (2026-09-30)" },
+  "grok-4.5":                          { input: 2.00 / 1_000_000, output: 6.00 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/docs/models Chat API — 500k ctx (2026-07-14)" },
+  "grok-build-0.1":                    { input: 1.00 / 1_000_000, output: 2.00 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/docs/models Code API — 256k ctx, agentic coding (2026-07-14)" },
   "grok-4.3":                          { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000,
     cache_read_multiplier: 0.25,
     _source: "https://docs.x.ai/developers/models (2026-05-06)" },
@@ -319,9 +455,57 @@ export function getPricing(model) {
   return { ...PRICING_MULTIPLIER_DEFAULTS, ...entry };
 }
 
+function getCopilotSnapshotPricing(model) {
+  const entry = COPILOT_PRICING.models?.[model];
+  if (!entry) return null;
+  return {
+    input: entry.input,
+    output: entry.output,
+    cacheRead: entry.cacheRead ?? entry.input,
+    cacheWrite: entry.cacheWrite ?? entry.input,
+    contextMax: entry.contextMax ?? null,
+    longContext: entry.longContext || null,
+    source: "copilot-pricing.json",
+  };
+}
+
+function getFallbackCopilotPricing(model) {
+  const pricing = getPricing(model);
+  return {
+    input: pricing.input,
+    output: pricing.output,
+    cacheRead: pricing.input * pricing.cache_read_multiplier,
+    cacheWrite: pricing.input * pricing.cache_write_5m_multiplier,
+    contextMax: null,
+    longContext: null,
+    source: "MODEL_PRICING",
+  };
+}
+
+export function getCopilotPricing(model) {
+  return getCopilotSnapshotPricing(model) || getFallbackCopilotPricing(model);
+}
+
+function resolveTokenPricingForProvider(model, provider) {
+  if (provider === "gh-copilot") {
+    return getCopilotPricing(model);
+  }
+  const pricing = getPricing(model);
+  return {
+    input: pricing.input,
+    output: pricing.output,
+    cacheRead: pricing.input * pricing.cache_read_multiplier,
+    cacheWrite: pricing.input * pricing.cache_write_5m_multiplier,
+    contextMax: null,
+    longContext: null,
+    source: "MODEL_PRICING",
+  };
+}
+
 // ─── Provider Awareness ───────────────────────────────────────────────
-// Subscription CLI providers bill by premium-request count, not per-token.
-export const SUBSCRIPTION_PROVIDERS = new Set(["gh-copilot", "claude-cli", "codex-cli"]);
+// Flat subscription CLI providers bill by request/session, not per token.
+// gh-copilot is intentionally excluded: Copilot now bills AI credits per token.
+export const SUBSCRIPTION_PROVIDERS = new Set(["claude-cli", "codex-cli", "grok-cli"]);
 
 // ─── Microsoft Foundry: deployment-name → model-key resolution ────────
 // Reads `.forge/foundry-deployments.json` (operator-editable) once per cwd;
@@ -359,6 +543,33 @@ function resolveFoundryModel(deployment) {
 }
 
 const CLI_PER_REQUEST_USD = 0.01;
+const WORKER_COST_PROVIDERS = Object.freeze({
+  "gh-copilot": "gh-copilot",
+  claude: "claude-cli",
+  "claude-cli": "claude-cli",
+  codex: "codex-cli",
+  "codex-cli": "codex-cli",
+  grok: "grok-cli",
+  "grok-cli": "grok-cli",
+  // Copilot SDK sessions (routing.copilotSdk) spend the same AI credits as gh-copilot.
+  sdk: "gh-copilot",
+});
+
+function costProviderForWorker(worker) {
+  return WORKER_COST_PROVIDERS[worker] || worker || "unknown";
+}
+
+export function tokenCostForProvider({ model, provider, tokensIn, tokensOut, cacheRead = 0, cacheWrite = 0 }) {
+  const pricing = resolveTokenPricingForProvider(model, provider, tokensIn);
+  const uncachedIn = Math.max(0, tokensIn - cacheRead);
+  return {
+    pricing,
+    inputUncachedCost: uncachedIn * pricing.input,
+    inputCacheReadCost: cacheRead * pricing.cacheRead,
+    inputCacheWriteCost: cacheWrite * pricing.cacheWrite,
+    outputCost: tokensOut * pricing.output,
+  };
+}
 
 /**
  * Expected wall-clock minutes for one Copilot Coding Agent slice.
@@ -375,9 +586,11 @@ export const COPILOT_AGENT_MINUTES_PER_SLICE = 30;
  *   2. forgeConfig.cost?.model — project-level config in .forge.json
  *   3. Model-name heuristic:
  *      - gpt-*       → openai-api
- *      - grok-*      → xai-api
+ *      - grok-4.6/4.7 without XAI_API_KEY → gh-copilot token pricing
+ *      - other grok-* → xai-api with key, else grok-cli
  *      - claude-* + ANTHROPIC_API_KEY → anthropic-api
  *      - claude-* (no key)            → claude-cli
+ *      - gemini-* / kimi-* / mai-*    → gh-copilot (Copilot AI-credit token pricing)
  *      - "gh-copilot" / *copilot*     → gh-copilot
  *      - else                         → unknown
  *   4. default → unknown
@@ -385,75 +598,75 @@ export const COPILOT_AGENT_MINUTES_PER_SLICE = 30;
  * @param {{ env?: Record<string,string>, forgeConfig?: object, model?: string }} opts
  * @returns {{ provider: string, perRequestUsd: number|null, source: string }}
  */
+// Model-prefix rules, first match wins. Keyed rules bill the metered API when
+// the env key is set and the flat subscription worker otherwise.
+const MODEL_PREFIX_PROVIDER_RULES = Object.freeze([
+  { pattern: /^(gpt|chatgpt)-/, envKey: "OPENAI_API_KEY", api: "openai-api", subscription: "gh-copilot" },
+  { pattern: /^grok-4\.(6|7)$/, envKey: "XAI_API_KEY", api: "xai-api", subscription: "gh-copilot" },
+  // Phase GROK-BUILD-WORKER (#120): without XAI_API_KEY the only way to run
+  // grok-* is the Grok Build CLI subscription (flat).
+  { pattern: /^grok-/, envKey: "XAI_API_KEY", api: "xai-api", subscription: "grok-cli" },
+  { pattern: /^claude-/, envKey: "ANTHROPIC_API_KEY", api: "anthropic-api", subscription: "claude-cli" },
+  // No direct-API route exists for these families; the gh-copilot worker serves them.
+  { pattern: /^(gemini|kimi|mai)-|copilot/, subscription: "gh-copilot" },
+  { pattern: /^codex-/, subscription: "codex-cli" },
+]);
+
 function _detectProviderFromModelPrefix(m, env) {
-  if (m.startsWith("gpt-") || m.startsWith("chatgpt-")) {
-    return {
-      provider: Boolean(env.OPENAI_API_KEY) ? "openai-api" : "gh-copilot",
-      source: "model-prefix",
-    };
-  }
-  if (m.startsWith("grok-")) {
-    return { provider: "xai-api", source: "model-prefix" };
-  }
-  if (m.startsWith("claude-")) {
-    return {
-      provider: Boolean(env.ANTHROPIC_API_KEY) ? "anthropic-api" : "claude-cli",
-      source: "model-prefix",
-    };
-  }
-  if (m === "gh-copilot" || m.includes("copilot")) {
-    return { provider: "gh-copilot", source: "model-prefix" };
-  }
-  if (m === "codex-cli" || m.startsWith("codex-")) {
-    return { provider: "codex-cli", source: "model-prefix" };
-  }
+  const rule = MODEL_PREFIX_PROVIDER_RULES.find((r) => r.pattern.test(m));
+  if (!rule) return null;
+  const provider = rule.envKey && env[rule.envKey] ? rule.api : rule.subscription;
+  return { provider, source: "model-prefix" };
+}
+
+/** How each CLI worker bills. Direct-API routes ("api:<name>") fall through to the model rules. */
+const WORKER_COST_PROVIDER = Object.freeze({ "gh-copilot": "gh-copilot", claude: "claude-cli", codex: "codex-cli", grok: "grok-cli" });
+
+const KNOWN_COST_PROVIDERS = new Set([
+  "gh-copilot", "claude-cli", "codex-cli", "grok-cli",
+  "anthropic-api", "openai-api", "xai-api", "unknown",
+]);
+
+function _costModelResult(provider, source) {
+  let perRequestUsd = null; // gh-copilot and API providers use token pricing
+  if (SUBSCRIPTION_PROVIDERS.has(provider)) perRequestUsd = CLI_PER_REQUEST_USD;
+  else if (provider === "unknown") perRequestUsd = 0;
+  return { provider, perRequestUsd, source };
+}
+
+/** 1. env PFORGE_COST_MODEL, 2. .forge.json cost.model. */
+function _explicitCostProvider(env, forgeConfig) {
+  if (KNOWN_COST_PROVIDERS.has(env.PFORGE_COST_MODEL)) return _costModelResult(env.PFORGE_COST_MODEL, "env:PFORGE_COST_MODEL");
+  const cfgModel = forgeConfig?.cost?.model;
+  if (KNOWN_COST_PROVIDERS.has(cfgModel)) return _costModelResult(cfgModel, "forge.json:cost.model");
   return null;
 }
 
-export function detectCostModel({ env = {}, forgeConfig = {}, model = "" } = {}) {
-  const knownProviders = new Set([
-    "gh-copilot", "claude-cli", "codex-cli",
-    "anthropic-api", "openai-api", "xai-api", "unknown",
-  ]);
+export function detectCostModel({ env = {}, forgeConfig = {}, model = "", worker = null } = {}) {
+  const explicit = _explicitCostProvider(env, forgeConfig);
+  if (explicit) return explicit;
 
-  function toResult(provider, source) {
-    let perRequestUsd;
-    if (SUBSCRIPTION_PROVIDERS.has(provider)) {
-      perRequestUsd = CLI_PER_REQUEST_USD;
-    } else if (provider === "unknown") {
-      perRequestUsd = 0;
-    } else {
-      perRequestUsd = null; // API provider — use token-based pricing
-    }
-    return { provider, perRequestUsd, source };
+  // 3. The worker execution will use (predictWorkerForModel). A claude-* model
+  // run by the Copilot CLI bills Copilot tokens, not the Claude Code
+  // subscription the model name alone suggests: estimates were 38x low.
+  if (worker && Object.hasOwn(WORKER_COST_PROVIDER, worker)) {
+    return _costModelResult(WORKER_COST_PROVIDER[worker], `worker:${worker}`);
   }
 
-  // 1. Explicit env override
-  const envOverride = env.PFORGE_COST_MODEL;
-  if (envOverride && knownProviders.has(envOverride)) {
-    return toResult(envOverride, "env:PFORGE_COST_MODEL");
-  }
-
-  // 2. forge.json cost.model
-  const cfgModel = forgeConfig?.cost?.model;
-  if (cfgModel && knownProviders.has(cfgModel)) {
-    return toResult(cfgModel, "forge.json:cost.model");
-  }
-
-  // 3. Model-name heuristic
+  // 4. Model-name heuristic
   // Issue #120: previously gpt-* always routed to openai-api (token pricing),
   // which produced ~250x overestimates for users running gh-copilot. Align
   // with probeQuorumModelAvailability's host detection: when no API key is
   // present, prefer the local CLI (gh-copilot for gpt-*, claude-cli for
-  // claude-*) which is subscription-priced.
+  // claude-*). gh-copilot is token-priced from the Copilot snapshot.
   const m = typeof model === "string" ? model : "";
   const prefixResult = _detectProviderFromModelPrefix(m, env);
   if (prefixResult) {
-    return toResult(prefixResult.provider, prefixResult.source);
+    return _costModelResult(prefixResult.provider, prefixResult.source);
   }
 
-  // 4. Default
-  return toResult("unknown", "default");
+  // 5. Default
+  return _costModelResult("unknown", "default");
 }
 
 /**
@@ -511,8 +724,10 @@ function debugCostLog(message) {
  * Phase-COST-TOKEN-COVERAGE Slice 3: vendor-aware billing math with per-class
  * `cost_breakdown`. Five execution paths, picked from `tokens.vendor`:
  *
- *  - **Subscription CLI** (`worker` is set and not `api-*`): unchanged path —
- *    `premiumRequests × $0.01`. v2.83.0 Forbidden Action #1 protected.
+ *  - **Flat subscription CLI** (`claude`, `codex`, `grok` workers):
+ *    `premiumRequests × $0.01`. gh-copilot is excluded and billed per token.
+ *  - **GitHub Copilot CLI** (`gh-copilot`): token-priced AI credits using
+ *    copilot-pricing.json first, then MODEL_PRICING fallback.
  *  - **Anthropic** (`vendor === 'anthropic'`): `tokens_in` is uncached input
  *    (after last cache breakpoint). Bill `tokens_in`, cache_read, 5m write,
  *    1h write each independently with their multipliers.
@@ -548,6 +763,35 @@ function _priceSliceSubscription({ tokens, model, tokensIn, tokensOut, breakdown
   const premiumRequests = tokens?.premiumRequests || 0;
   const cost = premiumRequests * CLI_PER_REQUEST_USD;
   breakdown.subscription_cost = roundUsd(cost);
+  return {
+    cost_usd: roundUsd(cost),
+    model,
+    tokens_in: tokensIn,
+    tokens_out: tokensOut,
+    cost_breakdown: breakdown,
+  };
+}
+
+function _priceSliceGhCopilot({ tokens, model, tokensIn, tokensOut, breakdown }) {
+  const cacheRead = tokens?.cache_read_tokens || 0;
+  const cacheWrite = (tokens?.cache_creation_input_tokens || 0) +
+    (tokens?.cache_creation_5m_tokens || 0) +
+    (tokens?.cache_creation_1h_tokens || 0);
+  const costs = tokenCostForProvider({
+    model,
+    provider: "gh-copilot",
+    tokensIn,
+    tokensOut,
+    cacheRead,
+    cacheWrite,
+  });
+  breakdown.input_uncached = roundUsd(costs.inputUncachedCost);
+  breakdown.input_cache_read = roundUsd(costs.inputCacheReadCost);
+  breakdown.input_cache_write_5m = roundUsd(costs.inputCacheWriteCost);
+  breakdown.output_total = roundUsd(costs.outputCost);
+  breakdown.reasoning_tokens = tokens?.reasoning_tokens || 0;
+  breakdown.authoritative_source = costs.pricing.source;
+  const cost = costs.inputUncachedCost + costs.inputCacheReadCost + costs.inputCacheWriteCost + costs.outputCost;
   return {
     cost_usd: roundUsd(cost),
     model,
@@ -668,8 +912,12 @@ function _priceSliceContext(tokens, worker) {
   };
 }
 
-function _priceSliceUsesSubscriptionPricing(worker) {
-  return Boolean(worker) && !worker.startsWith("api-");
+function _priceSliceUsesFlatSubscriptionPricing(worker) {
+  return SUBSCRIPTION_PROVIDERS.has(costProviderForWorker(worker));
+}
+
+function _priceSliceUsesGhCopilotPricing(worker) {
+  return costProviderForWorker(worker) === "gh-copilot";
 }
 
 function _priceSliceUsesXaiTicks(tokens) {
@@ -681,10 +929,14 @@ function _priceSliceUsesComputedVendorPricing(tokens) {
 }
 
 export function priceSlice(tokens, worker) {
-  const { model, tokensIn, tokensOut, breakdown, isFoundry } = _priceSliceContext(tokens, worker);
+  const effectiveWorker = worker || tokens?.worker || tokens?.billing_provider || null;
+  const { model, tokensIn, tokensOut, breakdown, isFoundry } = _priceSliceContext(tokens, effectiveWorker);
 
-  if (_priceSliceUsesSubscriptionPricing(worker)) {
+  if (_priceSliceUsesFlatSubscriptionPricing(effectiveWorker)) {
     return _priceSliceSubscription({ tokens: tokens, model: model, tokensIn: tokensIn, tokensOut: tokensOut, breakdown: breakdown });
+  }
+  if (_priceSliceUsesGhCopilotPricing(effectiveWorker)) {
+    return _priceSliceGhCopilot({ tokens: tokens, model: model, tokensIn: tokensIn, tokensOut: tokensOut, breakdown: breakdown });
   }
   if (_priceSliceUsesXaiTicks(tokens)) {
     return _priceSliceXaiTicks({ tokens: tokens, model: model, tokensIn: tokensIn, tokensOut: tokensOut, breakdown: breakdown });
@@ -993,22 +1245,25 @@ function _buildCopilotCodingAgentEstimate({ plan, effectiveSlices, effectiveOrde
   const sliceCount = effectiveSlices.length;
   const totalInputTokens = sliceCount * tokensPerSlice.input;
   const totalOutputTokens = sliceCount * tokensPerSlice.output;
+  const effectiveModel = model || DEFAULT_ESTIMATE_MODEL;
+  const estimatedCost = estimateTokenCost({ model: effectiveModel, provider: "gh-copilot", inputTokens: totalInputTokens, outputTokens: totalOutputTokens });
   return {
     status: "estimate",
     sliceCount,
     executionOrder: effectiveOrder,
     ..._estimatePlanResumeFields(plan, resumeFrom),
     worker: "copilot-coding-agent",
-    model: model || "copilot-coding-agent",
+    model: effectiveModel,
     tokens: {
       estimatedInput: totalInputTokens,
       estimatedOutput: totalOutputTokens,
       source: tokensPerSlice.source,
     },
-    estimatedCostUSD: 0,
-    estimated_cost_usd: 0,
+    estimatedCostUSD: Math.round(estimatedCost * 100) / 100,
+    estimated_cost_usd: Math.round(estimatedCost * 100) / 100,
     provider: "copilot-coding-agent",
-    pricingMode: "subscription",
+    pricingMode: "token",
+    pricingSource: "gh-copilot token pricing",
     wallClockEstimateMinutes: sliceCount * COPILOT_AGENT_MINUTES_PER_SLICE,
     confidence: "heuristic",
     slices: effectiveSlices.map((slice) => ({
@@ -1052,9 +1307,27 @@ function _buildEstimatePlanSlices(effectiveSlices, cwd, quorumConfig) {
   });
 }
 
+/**
+ * Share of input that past runs read from and wrote to the prompt cache, from
+ * cost-history entries that recorded it (3.31.2+). Copilot CLI slices read
+ * ~85% of a 400k-token context from cache, so pricing all of it as fresh input
+ * doubled estimates. Null when no run recorded cache tokens.
+ *
+ * @param {object[]} history
+ * @returns {{ read: number, write: number, runs: number }|null}
+ */
+export function cacheSharesFromHistory(history) {
+  const recorded = history.filter((e) => Number.isFinite(e.total_cache_read_tokens) && e.total_tokens_in > 0);
+  if (recorded.length === 0) return null;
+  const sum = (key) => recorded.reduce((total, e) => total + (Number(e[key]) || 0), 0);
+  const input = sum("total_tokens_in");
+  return { read: sum("total_cache_read_tokens") / input, write: sum("total_cache_write_tokens") / input, runs: recorded.length };
+}
+
 function _estimatePlanHistoryContext(cwd, pricingMode) {
   const history = _loadCostHistory(cwd);
   return {
+    cacheShares: cacheSharesFromHistory(history),
     avgTokensPerSlice: _computeAverageTokensPerSlice(
       history,
       history.length > 0 ? `${history.length} prior run(s)` : null
@@ -1065,12 +1338,32 @@ function _estimatePlanHistoryContext(cwd, pricingMode) {
   };
 }
 
-function _estimatePlanBaseCost({ pricingMode, sliceCount, avgPremiumPerSlice, costModel, totalInputTokens, totalOutputTokens, pricing }) {
+function estimateTokenCost({ model, provider, inputTokens, outputTokens, cacheShares = null }) {
+  // Cost history totals from gh-copilot include cached reads in the aggregate
+  // input count, but estimates do not know each future request's exact cache
+  // split. Apply a conservative cache-read share so estimates do not price all
+  // historical input as uncached. Long-context rates are deliberately not
+  // applied here: contextMax is per request, while plan/slice estimates are
+  // aggregate totals across many subprocess calls.
+  // Measured shares from this project's runs win over the default.
+  const defaultReadShare = provider === "gh-copilot" ? COPILOT_ESTIMATE_CACHE_READ_SHARE : 0;
+  const costs = tokenCostForProvider({
+    model,
+    provider,
+    tokensIn: inputTokens,
+    tokensOut: outputTokens,
+    cacheRead: Math.round(inputTokens * (cacheShares?.read ?? defaultReadShare)),
+    cacheWrite: Math.round(inputTokens * (cacheShares?.write ?? 0)),
+  });
+  return costs.inputUncachedCost + costs.inputCacheReadCost + costs.inputCacheWriteCost + costs.outputCost;
+}
+
+function _estimatePlanBaseCost({ pricingMode, sliceCount, avgPremiumPerSlice, costModel, model, totalInputTokens, totalOutputTokens, cacheShares = null }) {
   if (pricingMode === "subscription") {
     const reqPerSlice = avgPremiumPerSlice !== null ? avgPremiumPerSlice : 1.5;
     return sliceCount * reqPerSlice * costModel.perRequestUsd;
   }
-  return (totalInputTokens * pricing.input) + (totalOutputTokens * pricing.output);
+  return estimateTokenCost({ model, provider: costModel.provider, inputTokens: totalInputTokens, outputTokens: totalOutputTokens, cacheShares });
 }
 
 function _estimatePlanCostCalibration(pricingMode, model, cwd) {
@@ -1158,14 +1451,13 @@ function _buildEstimatePlanResult({
   };
 }
 
-export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null }) {
+export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null, executionWorker = null }) {
   const { effectiveSlices, effectiveOrder } = _resolveEffectiveSlices(plan, resumeFrom);
   const forgeConfig = _loadForgeConfig(cwd);
-  const costModel = detectCostModel({ env: process.env, forgeConfig, model });
+  const costModel = detectCostModel({ env: process.env, forgeConfig, model, worker: executionWorker ?? worker });
   const pricingMode = SUBSCRIPTION_PROVIDERS.has(costModel.provider) ? "subscription" : "token";
-  const { avgTokensPerSlice, avgPremiumPerSlice } = _estimatePlanHistoryContext(cwd, pricingMode);
+  const { avgTokensPerSlice, avgPremiumPerSlice, cacheShares } = _estimatePlanHistoryContext(cwd, pricingMode);
   const tokensPerSlice = avgTokensPerSlice || { input: 2000, output: 5000, source: "heuristic" };
-  const pricing = getPricing(model);
   const sliceCount = effectiveSlices.length;
   const totalInputTokens = sliceCount * tokensPerSlice.input;
   const totalOutputTokens = sliceCount * tokensPerSlice.output;
@@ -1179,9 +1471,10 @@ export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom
     sliceCount,
     avgPremiumPerSlice,
     costModel,
+    model,
     totalInputTokens,
     totalOutputTokens,
-    pricing,
+    cacheShares,
   });
   const calibration = _estimatePlanCostCalibration(pricingMode, model, cwd);
   const costCalibration = calibration?.output || null;
@@ -1192,11 +1485,10 @@ export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom
   const costForLeg = (legModel, inTokens, outTokens) => {
     const legCost = detectCostModel({ env: process.env, forgeConfig, model: legModel });
     if (SUBSCRIPTION_PROVIDERS.has(legCost.provider)) {
-      // Subscription provider — flat per-request charge regardless of token volume.
+      // Flat subscription provider — per-request charge regardless of token volume.
       return legCost.perRequestUsd;
     }
-    const mPricing = getPricing(legModel);
-    return (inTokens * mPricing.input) + (outTokens * mPricing.output);
+    return estimateTokenCost({ model: legModel, provider: legCost.provider, inputTokens: inTokens, outputTokens: outTokens });
   };
 
   return _buildEstimatePlanResult({
@@ -1238,23 +1530,25 @@ export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom
  * @returns {object|null} quorumConfig for estimatePlan, or null for mode "false".
  */
 function _buildQuorumAutoConfig() {
+  const speed = QUORUM_PRESETS.speed;
   return {
     enabled: true,
     auto: true,
     threshold: 5,
-    models: QUORUM_PRESETS.speed?.models || ["claude-sonnet-4.6"],
-    reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
+    models: [...speed.models],
+    reviewerModel: speed.reviewerModel,
     preset: "speed",
   };
 }
 
-function _buildQuorumPresetConfig(presetName, fallbackThreshold, fallbackReviewerModel) {
+function _buildQuorumPresetConfig(presetName) {
+  const preset = QUORUM_PRESETS[presetName];
   return {
     enabled: true,
     auto: false,
-    threshold: QUORUM_PRESETS[presetName]?.threshold ?? fallbackThreshold,
-    models: QUORUM_PRESETS[presetName]?.models || [],
-    reviewerModel: QUORUM_PRESETS[presetName]?.reviewerModel || fallbackReviewerModel,
+    threshold: preset.threshold,
+    models: [...preset.models],
+    reviewerModel: preset.reviewerModel,
     preset: presetName,
   };
 }
@@ -1264,8 +1558,8 @@ export function buildQuorumConfigForMode(mode) {
 
   const builders = {
     auto: _buildQuorumAutoConfig,
-    power: () => _buildQuorumPresetConfig("power", 5, "claude-opus-4.7"),
-    speed: () => _buildQuorumPresetConfig("speed", 7, "claude-sonnet-4.6"),
+    power: () => _buildQuorumPresetConfig("power"),
+    speed: () => _buildQuorumPresetConfig("speed"),
   };
   const builder = builders[mode];
   if (builder) {
@@ -1286,7 +1580,7 @@ export function buildQuorumConfigForMode(mode) {
  * @param {object} options.plan - Parsed plan object with slices and dag
  * @param {string|number} options.sliceNumber - Slice identifier (may be alphanumeric, e.g. "2A")
  * @param {"auto"|"power"|"speed"|"false"} [options.mode="auto"] - Quorum mode
- * @param {string} [options.model="claude-sonnet-4.5"] - Base model for pricing
+ * @param {string} [options.model=DEFAULT_ESTIMATE_MODEL] - Base model for pricing
  * @param {string} [options.cwd] - Project root for history + complexity scoring
  * @returns {{
  *   estimatedCostUSD: number,
@@ -1339,7 +1633,7 @@ function _estimateSliceOverhead(quorumEligible, quorumConfig, tokensPerSlice, co
   return dryRunCost + reviewerCost;
 }
 
-export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claude-sonnet-4.5", cwd, env = process.env } = {}) {
+export function estimateSlice({ plan, sliceNumber, mode = "auto", model = DEFAULT_ESTIMATE_MODEL, cwd, env = process.env } = {}) {
   if (!plan || !plan.slices) {
     throw new Error("estimateSlice: plan object with slices is required");
   }
@@ -1360,8 +1654,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
     if (SUBSCRIPTION_PROVIDERS.has(legCost.provider)) {
       return legCost.perRequestUsd;
     }
-    const mPricing = getPricing(legModel);
-    return (inTokens * mPricing.input) + (outTokens * mPricing.output);
+    return estimateTokenCost({ model: legModel, provider: legCost.provider, inputTokens: inTokens, outputTokens: outTokens });
   };
 
   const baseCostUSD = costForLeg(model, tokensPerSlice.input, tokensPerSlice.output);
@@ -1401,7 +1694,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
  * @param {object} options.plan - Parsed plan object (same shape estimatePlan expects)
  * @param {string} [options.cwd] - Project root for history lookup
  * @param {string|number} [options.resumeFrom] - Optional resume point
- * @param {string} [options.defaultModel] - Base model when quorum disabled (default: "claude-sonnet-4.5")
+ * @param {string} [options.defaultModel] - Base model when quorum disabled (default: DEFAULT_ESTIMATE_MODEL)
  * @returns {{
  *   auto: object, power: object, speed: object, "false": object,
  *   recommended: "auto"|"power"|"speed"|"false",
@@ -1412,7 +1705,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
  *   slices[] — an additive per-slice breakdown with sliceNumber,
  *   projectedCostUSD, complexityScore, quorumEligible.
  */
-export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "claude-sonnet-4.5" } = {}) {
+export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = DEFAULT_ESTIMATE_MODEL } = {}) {
   if (!plan || !plan.slices || !plan.dag) {
     throw new Error("estimateQuorum: plan object with slices and dag is required");
   }

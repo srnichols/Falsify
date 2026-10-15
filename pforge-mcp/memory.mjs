@@ -16,6 +16,168 @@
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, statSync, readdirSync, unlinkSync, renameSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { createHash } from "node:crypto";
+import { MS_PER_DAY, MS_PER_HOUR } from "./time-units.mjs";
+import { MEMORY_ORIGINS, MEMORY_TAG_RULES, MEMORY_VISIBILITY } from "./enums.mjs";
+
+const PROVENANCE_HEADER = /^\[\[pforge ([^\]\r\n]*)\]\]\r?\n?/;
+const TAG_RE = new RegExp(MEMORY_TAG_RULES.pattern);
+const DEFAULT_MEMORY_ORIGIN = "trusted";
+const DEFAULT_MEMORY_VISIBILITY = "normal";
+
+function _readHeaderFields(rawText) {
+  const match = rawText.match(PROVENANCE_HEADER);
+  const fields = {};
+  if (!match) return { text: rawText, fields };
+  for (const field of match[1].split(/\s+/)) {
+    const separator = field.indexOf("=");
+    if (separator >= 0) fields[field.slice(0, separator)] = field.slice(separator + 1);
+  }
+  return { text: rawText.slice(match[0].length), fields };
+}
+
+function _readProvenanceTags(value) {
+  return Array.isArray(value) && value.every((tag) => typeof tag === "string")
+    ? value.slice(0, MEMORY_TAG_RULES.maxItems)
+    : null;
+}
+
+function _selectProvenanceValue({ topLevel, metadata, header, allowed, fallback }) {
+  return [metadata, topLevel, header].find((value) => allowed.includes(value)) ?? fallback;
+}
+
+function _selectProvenanceTags({ metadataTags, topLevelTags, headerTags }) {
+  const tags = typeof headerTags === "string"
+    ? headerTags.split(",").filter((tag) => TAG_RE.test(tag)).slice(0, MEMORY_TAG_RULES.maxItems)
+    : [];
+  return _readProvenanceTags(metadataTags) ?? _readProvenanceTags(topLevelTags) ?? tags;
+}
+
+/**
+ * Validate optional capture provenance and provide stable defaults.
+ *
+ * @param {{ origin?: unknown, visibility?: unknown, tags?: unknown }} [input]
+ * @returns {{ ok: true, value: { origin: string, visibility: string, tags: string[], supplied: boolean } } | { ok: false, error: { code: string, field: string, message: string } }}
+ */
+export function validateProvenanceInput({ origin, visibility, tags } = {}) {
+  const supplied = [origin, visibility, tags].some((value) => value !== null && value !== undefined);
+  if (origin != null && !MEMORY_ORIGINS.includes(origin)) {
+    return { ok: false, error: { code: "INVALID_ORIGIN", field: "origin", message: `origin must be one of: ${MEMORY_ORIGINS.join(", ")}` } };
+  }
+  if (visibility != null && !MEMORY_VISIBILITY.includes(visibility)) {
+    return { ok: false, error: { code: "INVALID_VISIBILITY", field: "visibility", message: `visibility must be one of: ${MEMORY_VISIBILITY.join(", ")}` } };
+  }
+  if (tags != null && (
+    !Array.isArray(tags)
+    || tags.length > MEMORY_TAG_RULES.maxItems
+    || tags.some((tag) => typeof tag !== "string" || !TAG_RE.test(tag))
+  )) {
+    return {
+      ok: false,
+      error: {
+        code: "INVALID_TAGS",
+        field: "tags",
+        message: `tags must be an array of at most ${MEMORY_TAG_RULES.maxItems} strings matching ${MEMORY_TAG_RULES.pattern}`,
+      },
+    };
+  }
+  return {
+    ok: true,
+    value: {
+      origin: origin ?? DEFAULT_MEMORY_ORIGIN,
+      visibility: visibility ?? DEFAULT_MEMORY_VISIBILITY,
+      tags: tags ?? [],
+      supplied,
+    },
+  };
+}
+
+/**
+ * Prefix content with an inline header only when provenance is non-default.
+ *
+ * @param {string} content
+ * @param {{ origin?: string, visibility?: string, tags?: string[] }} provenance
+ * @returns {string}
+ */
+export function withProvenanceHeader(content, provenance = {}) {
+  const original = String(content ?? "").replace(PROVENANCE_HEADER, "");
+  const origin = provenance.origin ?? DEFAULT_MEMORY_ORIGIN;
+  const visibility = provenance.visibility ?? DEFAULT_MEMORY_VISIBILITY;
+  const tags = Array.isArray(provenance.tags)
+    ? provenance.tags.filter((tag) => typeof tag === "string" && TAG_RE.test(tag)).slice(0, MEMORY_TAG_RULES.maxItems)
+    : [];
+  const fields = [];
+  if (origin !== DEFAULT_MEMORY_ORIGIN) fields.push(`origin=${origin}`);
+  if (visibility !== DEFAULT_MEMORY_VISIBILITY) fields.push(`visibility=${visibility}`);
+  if (tags.length > 0) fields.push(`tags=${tags.join(",")}`);
+  return fields.length > 0 ? `[[pforge ${fields.join(" ")}]]\n${original}` : original;
+}
+
+/**
+ * Normalize provenance and remove a leading inline header from a memory hit.
+ *
+ * @param {object} hit
+ * @returns {{ text: string, origin: string, visibility: string, tags: string[], project: string|null }}
+ */
+export function readProvenance(hit = {}) {
+  const metadata = hit?.metadata && typeof hit.metadata === "object" && !Array.isArray(hit.metadata)
+    ? hit.metadata
+    : {};
+  const rawText = typeof hit?.text === "string" ? hit.text : typeof hit?.content === "string" ? hit.content : "";
+  const { text, fields } = _readHeaderFields(rawText);
+  return {
+    text,
+    origin: _selectProvenanceValue({
+      topLevel: hit?.origin,
+      metadata: metadata.origin,
+      header: fields.origin,
+      allowed: MEMORY_ORIGINS,
+      fallback: DEFAULT_MEMORY_ORIGIN,
+    }),
+    visibility: _selectProvenanceValue({
+      topLevel: hit?.visibility,
+      metadata: metadata.visibility,
+      header: fields.visibility,
+      allowed: MEMORY_VISIBILITY,
+      fallback: DEFAULT_MEMORY_VISIBILITY,
+    }),
+    tags: _selectProvenanceTags({
+      metadataTags: metadata.tags,
+      topLevelTags: hit?.tags,
+      headerTags: fields.tags,
+    }),
+    project: metadata.project ?? hit?.project ?? null,
+  };
+}
+
+/**
+ * Build the current capture payload, preserving its legacy shape unless provenance is supplied.
+ *
+ * @param {object} args
+ * @param {string|null} project
+ * @param {Date} [now]
+ * @returns {object}
+ */
+export function buildCaptureThought(args, project, now = new Date()) {
+  const validation = validateProvenanceInput(args);
+  if (!validation.ok) {
+    throw new TypeError(`${validation.error.code}: ${validation.error.message}`);
+  }
+  const thought = {
+    content: args.content,
+    project,
+    type: args.type || "decision",
+    source: args.source || "forge_memory_capture",
+    created_by: args.created_by || "forge_memory_capture",
+    captured_at: now.toISOString(),
+  };
+  if (validation.value.supplied) {
+    thought.content = withProvenanceHeader(args.content, validation.value);
+    thought.origin = validation.value.origin;
+    thought.visibility = validation.value.visibility;
+    thought.tags = validation.value.tags;
+  }
+  return thought;
+}
 
 /**
  * Default keyword patterns mapped to targeted search queries for `search_thoughts`.
@@ -237,7 +399,7 @@ Do NOT capture trivial facts. Focus on decisions that would save time in future 
  * @param {object} ctx
  * @param {number} ctx.previousAttempt - The 1-based attempt number that failed (the one being summarized).
  * @param {string} [ctx.gateName] - Gate command that failed (e.g. "npx vitest run"). Defaults to "unknown".
- * @param {string} [ctx.model] - Model used for the failed attempt (e.g. "claude-sonnet-4.5"). Defaults to "auto".
+ * @param {string} [ctx.model] - Model used for the failed attempt (e.g. "claude-sonnet-5.5"). Defaults to "auto".
  * @param {number} [ctx.durationMs] - Duration of the failed attempt in milliseconds. Defaults to 0.
  * @param {string} [ctx.stderrTail] - Stderr / gate-error text from the failed attempt. Truncated to last 2KB.
  * @returns {string} Markdown block ready to prepend to the worker prompt.
@@ -793,7 +955,7 @@ export function shouldPromoteAutoSkill(skill, threshold = AUTOSKILL_DEFAULT_THRE
 const AUTOSKILL_STATE_FILE = "state.json";
 
 /** Defer window for `deferAutoSkill` — Phase-26 MUST (Defer 7d). */
-export const AUTOSKILL_DEFER_MS = 7 * 24 * 60 * 60 * 1000;
+export const AUTOSKILL_DEFER_MS = 7 * MS_PER_DAY;
 
 function autoSkillStatePath(cwd) {
   return resolve(cwd, ".forge", AUTOSKILL_DIR, AUTOSKILL_STATE_FILE);
@@ -1418,6 +1580,40 @@ export function buildWatcherSearchPrompt(anomaly, projectName) {
   return lines.join("\n") + "\n";
 }
 
+// ─── Thought text extraction ──────────────────────────────────────────
+
+/**
+ * Extract the human-readable text from a thought record, whatever shape it
+ * arrived in. Always returns a string.
+ *
+ * Records in `.forge/liveguard-memories.jsonl` are not uniformly shaped:
+ * some carry `content` as a string, others as a nested thought envelope
+ * because a writer passed an already-built thought as the `content` argument
+ * of a second capture. Readers doing `t.content || t.message || t.text` got
+ * the object back — truthy, so the chain stopped there — and then either
+ * coerced it to the literal "[object Object]" or handed it to a tokenizer
+ * that returned an empty bag. Either way the record was silently
+ * unsearchable, with no error (issue #254).
+ *
+ * The writers are fixed, but records already on disk are never rewritten, so
+ * every reader routes through here.
+ *
+ * @param {unknown} record - a thought, or a bare string
+ * @param {number} [maxDepth=5] - unwrap limit; also the cycle guard
+ * @returns {string} the text, or "" when there is none
+ */
+export function thoughtContent(record, maxDepth = 5) {
+  let node = record;
+  for (let depth = 0; depth <= maxDepth; depth++) {
+    if (typeof node === "string") return node;
+    if (!node || typeof node !== "object" || Array.isArray(node)) return "";
+    const next = node.content ?? node.message ?? node.text;
+    if (next === node) return "";
+    node = next;
+  }
+  return "";
+}
+
 // ─── G3.5 — Thought TTL / expiresAt ────────────────────────────────────
 
 /**
@@ -1441,13 +1637,12 @@ export function buildWatcherSearchPrompt(anomaly, projectName) {
 export function stampThoughtExpiry(thought, opts = {}) {
   if (!thought || typeof thought !== "object") return thought;
   if (thought.expiresAt) return thought;
-  const DAY = 24 * 60 * 60 * 1000;
   const defaults = { lesson: 365, decision: 180, gotcha: 90, pattern: null, convention: null };
   const byType = { ...defaults, ...(opts.overrides || {}) };
   const days = byType[thought.type];
   if (days == null) return thought; // no expiry
   const now = opts.now ?? Date.now();
-  return { ...thought, expiresAt: new Date(now + days * DAY).toISOString() };
+  return { ...thought, expiresAt: new Date(now + days * MS_PER_DAY).toISOString() };
 }
 
 /**
@@ -1801,7 +1996,7 @@ export function isCacheEntryFresh(entry, now = Date.now()) {
   if (!entry || !entry.cachedAt) return false;
   const ts = typeof entry.cachedAt === "number" ? entry.cachedAt : Date.parse(entry.cachedAt);
   if (!Number.isFinite(ts)) return false;
-  const ttl = typeof entry.ttlMs === "number" ? entry.ttlMs : 60 * 60 * 1000;
+  const ttl = typeof entry.ttlMs === "number" ? entry.ttlMs : MS_PER_HOUR;
   return now - ts < ttl;
 }
 
@@ -1822,7 +2017,7 @@ export function buildCacheEntry(ctx) {
     limit: ctx.limit,
     results: Array.isArray(ctx.results) ? ctx.results : [],
     cachedAt: new Date().toISOString(),
-    ttlMs: typeof ctx.ttlMs === "number" ? ctx.ttlMs : 60 * 60 * 1000,
+    ttlMs: typeof ctx.ttlMs === "number" ? ctx.ttlMs : MS_PER_HOUR,
   };
 }
 
@@ -2189,5 +2384,3 @@ export function getGateSuggestionCounter(suggestionKey, cwd = process.cwd()) {
   }
   return count;
 }
-
-

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  ANALYZE_MODES,
   COST_SOURCES,
   ERROR_CODES,
   FORGE_MASTER_MODES,
@@ -27,6 +28,7 @@ describe("enums.mjs", () => {
     expect(Object.isFrozen(HOOK_CATEGORY.liveGuard)).toBe(true);
     expect(Object.isFrozen(MODEL_TIERS)).toBe(true);
     expect(Object.isFrozen(QUORUM_MODES)).toBe(true);
+    expect(Object.isFrozen(ANALYZE_MODES)).toBe(true);
     expect(Object.isFrozen(FORGE_MASTER_MODES)).toBe(true);
     expect(Object.isFrozen(WATCHER_MODES)).toBe(true);
     expect(Object.isFrozen(COST_SOURCES)).toBe(true);
@@ -80,8 +82,10 @@ describe("enums.mjs", () => {
   // Alignment check: TOOL_NAMES is the cross-server superset — it includes
   // tools registered by pforge-mcp/server/tool-definitions.mjs AND tools
   // registered by the pforge-master sidecar (forge_master_ask, forge_master_observe).
-  // Every name in TOOL_NAMES MUST be registered in one of the two servers; otherwise
-  // agents calling the name will see "unknown tool".
+  // Both forge_master_* sidecar tools are also registered on pforge-mcp, which
+  // proxies them to the sidecar studio child. Every name in TOOL_NAMES MUST be
+  // registered in one of the two servers; otherwise agents calling the name will
+  // see "unknown tool".
   it("every TOOL_NAMES entry is registered by pforge-mcp or pforge-master", async () => {
     const { TOOLS } = await import("../server/tool-definitions.mjs");
     const pforgeMcpNames = new Set(TOOLS.map((t) => t.name));
@@ -92,5 +96,14 @@ describe("enums.mjs", () => {
     const registered = new Set([...pforgeMcpNames, ...pforgeMasterNames]);
     const orphans = TOOL_NAMES.filter((n) => !registered.has(n));
     expect(orphans, `TOOL_NAMES contains unregistered ("phantom") tool names: ${orphans.join(", ")}`).toEqual([]);
+  });
+
+  it("registers every pforge-master sidecar tool on pforge-mcp as a proxy too", async () => {
+    const { TOOLS } = await import("../server/tool-definitions.mjs");
+    const pforgeMcpNames = new Set(TOOLS.map((t) => t.name));
+    for (const name of ["forge_master_ask", "forge_master_observe"]) {
+      expect(TOOL_NAMES).toContain(name);
+      expect(pforgeMcpNames.has(name), `${name} must be registered on pforge-mcp`).toBe(true);
+    }
   });
 });

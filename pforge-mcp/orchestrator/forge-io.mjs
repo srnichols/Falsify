@@ -13,7 +13,7 @@
 
 import {
   readFileSync, writeFileSync, mkdirSync, existsSync,
-  appendFileSync, readdirSync, statSync, rmSync,
+  appendFileSync, readdirSync,
 } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { isApiOnlyModel } from "./worker-spawn.mjs";
@@ -140,69 +140,7 @@ export function ensureForgeDir(subpath, cwd = process.cwd()) {
   return dir;
 }
 
-// ─── G2.3 — Run pruning ───────────────────────────────────────────────
-
-/**
- * G2.3 (v2.36): prune `.forge/runs/<runId>/` directories. Two retention
- * dimensions are checked; a run is removed if it fails EITHER:
- *   - older than `maxAgeDays` days (default 30), OR
- *   - falls outside the newest `maxRuns` runs (default 50)
- *
- * Best-effort: filesystem errors on individual runs are logged via the
- * returned `errors[]` but never throw. The newest run is always kept.
- *
- * @param {string} [cwd=process.cwd()]
- * @param {{maxAgeDays?: number, maxRuns?: number, dryRun?: boolean}} [opts]
- * @returns {{kept: string[], pruned: string[], errors: Array<{runId: string, error: string}>, dryRun: boolean}}
- */
-export function pruneForgeRuns(cwd = process.cwd(), opts = {}) {
-  const { maxAgeDays = 30, maxRuns = 50, dryRun = false } = opts;
-  const runsDir = resolve(cwd, ".forge", "runs");
-  const result = { kept: [], pruned: [], errors: [], dryRun };
-  if (!existsSync(runsDir)) return result;
-
-  let entries;
-  try {
-    entries = readdirSync(runsDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name)
-      .sort()         // ISO-like timestamps sort lexicographically
-      .reverse();     // newest first
-  } catch (err) {
-    result.errors.push({ runId: "<runs-dir>", error: err.message });
-    return result;
-  }
-
-  const cutoffMs = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
-  for (let i = 0; i < entries.length; i++) {
-    const runId = entries[i];
-    const runPath = resolve(runsDir, runId);
-    let prune = false;
-    if (i >= maxRuns) prune = true;
-    if (!prune) {
-      try {
-        const stat = statSync(runPath);
-        if (stat.mtimeMs < cutoffMs) prune = true;
-      } catch (err) {
-        result.errors.push({ runId, error: err.message });
-        continue;
-      }
-    }
-    // Always keep the newest run regardless of age
-    if (i === 0) prune = false;
-
-    if (prune) {
-      if (!dryRun) {
-        try { rmSync(runPath, { recursive: true, force: true }); }
-        catch (err) { result.errors.push({ runId, error: err.message }); continue; }
-      }
-      result.pruned.push(runId);
-    } else {
-      result.kept.push(runId);
-    }
-  }
-  return result;
-}
+export { pruneForgeRuns } from "../run-retention.mjs";
 
 // ─── Model Performance Tracking (Phase 3) ────────────────────────────
 

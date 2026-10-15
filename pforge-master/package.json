@@ -1,8 +1,16 @@
 {
   "name": "@pforge/pforge-master",
-  "version": "3.8.1",
+  "version": "3.33.0",
   "main": "server.mjs",
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./server.mjs": "./server.mjs",
+    "./src/*": "./src/*"
+  },
   "scripts": {
     "start": "node server.mjs",
     "start:mcp": "node server.mjs --mcp-stdio",
@@ -10,11 +18,11 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "vitest": "^2.1.9"
+    "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "ws": "^8.20.0"
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "ws": "^8.21.0"
   },
   "license": "MIT",
   "author": "srnichols",

@@ -26,17 +26,27 @@ const allUnavailable = {
   xai: makeProviderStub(false, "xai"),
 };
 
-// ── (a) githubCopilot selected when it's the only available provider ─
+// ── (a) githubCopilot SDK is first when available ─
 
 describe("autoSelectProvider", () => {
-  it("(a) selects githubCopilot when only githubCopilot is available", async () => {
+  it("(a) auto-selects githubCopilot first when its stub reports available", async () => {
     const providers = {
       ...allUnavailable,
-      githubCopilot: makeProviderStub(true, "github-copilot"),
+      githubCopilot: makeProviderStub(true, "githubCopilot"),
     };
-    const result = await autoSelectProvider({}, process.env, providers);
-    expect(result).toBeTruthy();
-    expect(result.PROVIDER_NAME).toBe("github-copilot");
+    expect((await autoSelectProvider({}, process.env, providers)).PROVIDER_NAME).toBe("githubCopilot");
+    expect((await autoSelectProvider({ defaultProvider: "githubCopilot" }, process.env, providers)).PROVIDER_NAME).toBe("githubCopilot");
+  });
+
+  it("(a2) tries githubCopilot, then anthropic, then openai, then xai", async () => {
+    const providers = {
+      ...allUnavailable,
+      openai: makeProviderStub(true, "openai"),
+      xai: makeProviderStub(true, "xai"),
+    };
+    expect((await autoSelectProvider({}, process.env, providers)).PROVIDER_NAME).toBe("openai");
+    providers.anthropic = makeProviderStub(true, "anthropic");
+    expect((await autoSelectProvider({}, process.env, providers)).PROVIDER_NAME).toBe("anthropic");
   });
 
   // ── (b) fallback to anthropic when githubCopilot unavailable ─────
@@ -88,6 +98,7 @@ describe("runTurn no-provider error", () => {
     const result = await runTurn(
       { message: "What is my plan status?", cwd: tmpDir },
       {
+        config: { reasoningModel: "test-no-key-model", reasoningProvider: null, defaultProvider: "githubCopilot", maxToolCalls: 3, discoverExtensionTools: false, autoEscalate: false },
         dispatcher: async () => ({}),
         hub: null,
         toolMetadata: {},
@@ -103,8 +114,8 @@ describe("runTurn no-provider error", () => {
     );
 
     expect(result.error).toBe("no provider available");
+    expect(result.suggestion).toContain("ANTHROPIC_API_KEY");
     expect(result.suggestion).toContain("gh auth login");
-    expect(result.suggestion).toContain("GITHUB_TOKEN");
     expect(result.toolCalls).toHaveLength(0);
     expect(result.reply).toBe("");
   });

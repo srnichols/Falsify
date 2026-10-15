@@ -88,33 +88,19 @@ export class McpClient {
       throw new Error(`downstream MCP server not found: ${serverPath}`);
     }
 
-    // Ensure log directory exists
-    try {
-      const logDir = resolve(this.#logPath, "..");
-      if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
-    } catch {
-      // non-fatal
-    }
-
+    this.#ensureLogDir();
     const stderrHandler = this.#logPath ? "pipe" : "inherit";
 
     this.#transport = new StdioClientTransport({
       command: process.execPath,
       args: [serverPath, "--port", "0"],
-      env: { ...env },
+      // Forge-Master applies its own allowlist, so it needs every tool listed,
+      // not pforge-mcp's default core profile.
+      env: { ...env, PFORGE_TOOL_PROFILE: "full" },
       stderr: stderrHandler,
     });
 
-    // Tee child stderr to log file
-    if (stderrHandler === "pipe" && this.#logPath) {
-      this.#transport.stderr?.on("data", (chunk) => {
-        try {
-          appendFileSync(this.#logPath, chunk);
-        } catch {
-          // non-fatal
-        }
-      });
-    }
+    if (stderrHandler === "pipe") this.#teeStderrToLog();
 
     this.#client = new Client(
       { name: "forge-master-studio", version: "1.0.0" },
@@ -122,8 +108,30 @@ export class McpClient {
     );
 
     await this.#client.connect(this.#transport);
+    await this.#discoverTools();
+  }
 
-    // Discover tools
+  #ensureLogDir() {
+    try {
+      const logDir = resolve(this.#logPath, "..");
+      if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
+    } catch {
+      // non-fatal
+    }
+  }
+
+  #teeStderrToLog() {
+    this.#transport.stderr?.on("data", (chunk) => {
+      try {
+        appendFileSync(this.#logPath, chunk);
+      } catch {
+        // non-fatal
+      }
+    });
+  }
+
+  /** tools/list, the expected-count check, and the ready flag — shared by connect() and the test hook. */
+  async #discoverTools() {
     const { tools = [] } = await this.#client.listTools();
     this.#tools = tools;
 
@@ -214,20 +222,7 @@ export class McpClient {
    */
   async _connectWithInjected() {
     await this.#client.connect(this.#transport);
-    const { tools = [] } = await this.#client.listTools();
-    this.#tools = tools;
-
-    if (tools.length < BASE_TOOL_COUNT_MIN) {
-      this.#logger.warn(
-        `forge-master: downstream MCP connected but tool count ${tools.length} < expected ${BASE_TOOL_COUNT_MIN}`,
-      );
-    }
-
-    this.#ready = true;
-    const allowlisted = BASE_ALLOWLIST.filter((n) => tools.some((t) => t.name === n)).length;
-    this.#logger.log(
-      `forge-master: downstream MCP ready (${tools.length} tools, ${allowlisted} allowlisted)`,
-    );
+    await this.#discoverTools();
   }
 }
 

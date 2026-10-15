@@ -1,7 +1,7 @@
 {
   "_comment": "Single source of truth for worker + runtime capability checks. Consumed by orchestrator.mjs detectWorkers() and pforge.ps1 Invoke-Smith Runtime & Worker Readiness section. See issue #28 for the silent-failure mode this prevents.",
   "_version": 2,
-  "_updated": "2026-05-06",
+  "_updated": "2026-07-14",
 
   "workers": {
     "gh-copilot": {
@@ -11,24 +11,30 @@
         "versionArgs": ["--version"],
         "helpArgs": ["--help"],
         "capabilityMarkers": ["--allow-all", "--prompt"],
+        "featureMarkers": { "sessionPinning": "--session-id", "sessionNaming": "--name" },
         "capabilityDescription": "Non-interactive prompt mode with --prompt and --allow-all (env: COPILOT_ALLOW_ALL)",
         "fallback": {
           "command": "gh",
           "versionArgs": ["copilot", "--version"],
           "helpArgs": ["copilot", "--", "--help"],
           "capabilityMarkers": ["--yolo", "-p,", "--no-ask-user"],
+          "featureMarkers": { "sessionPinning": "--session-id", "sessionNaming": "--name" },
           "capabilityDescription": "Legacy gh copilot extension agentic mode"
         }
       },
       "minVersion": "1.0.32",
       "versionRegex": "GitHub Copilot CLI\\s+v?(\\d+\\.\\d+\\.\\d+)",
-      "defaultModel": "claude-sonnet-4.6",
+      "defaultModel": "claude-sonnet-5.5",
       "invocation": {
         "cmd": "copilot",
         "baseArgs": ["-p", "@{PROMPT_FILE}", "--allow-all"],
+        "sessionArg": "--session-id={SESSION_ID}",
+        "nameArg": "--name={SESSION_NAME}",
         "fallback": {
           "cmd": "gh",
-          "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "text"]
+          "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "text"],
+          "sessionArg": "--session-id={SESSION_ID}",
+        "nameArg": "--name={SESSION_NAME}"
         }
       },
       "install": {
@@ -117,6 +123,35 @@
         "linux": "npm install -g @openai/codex",
         "docs": "https://platform.openai.com/docs/codex"
       }
+    },
+
+    "grok": {
+      "description": "xAI Grok Build CLI (agentic coding worker). Headless via `grok -p <prompt> --output-format streaming-json`. Dual auth: browser login on a SuperGrok / X Premium+ subscription (flat billing) or XAI_API_KEY (metered API). Default model grok-4.7.",
+      "probe": {
+        "command": "grok",
+        "versionArgs": ["--version"],
+        "helpArgs": ["--help"],
+        "capabilityMarkers": ["-p", "--output-format"],
+        "capabilityDescription": "Headless prompt mode with -p and --output-format streaming-json"
+      },
+      "minVersion": "0.1.0",
+      "versionRegex": "(\\d+\\.\\d+\\.\\d+)",
+      "defaultModel": "grok-4.7",
+      "costModel": "subscription",
+      "invocation": {
+        "cmd": "grok",
+        "baseArgs": ["-p", "{PROMPT}", "--output-format", "streaming-json"]
+      },
+      "install": {
+        "windows": "irm https://x.ai/cli/install.ps1 | iex",
+        "macos": "curl -fsSL https://x.ai/cli/install.sh | bash",
+        "linux": "curl -fsSL https://x.ai/cli/install.sh | bash",
+        "docs": "https://docs.x.ai/build/overview"
+      },
+      "failureModes": [
+        "grok CLI not authenticated — launch `grok` once and sign in (SuperGrok / X Premium+), or set XAI_API_KEY for headless/metered use.",
+        "Very large slice prompts passed inline via -p may exceed the OS command-line length limit; if observed, switch the invocation to Grok Build's file-input syntax once confirmed (see Phase GROK-BUILD-WORKER Slice 3 fixture capture)."
+      ]
     }
   },
 

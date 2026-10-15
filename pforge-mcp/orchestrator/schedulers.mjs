@@ -1,400 +1,5 @@
-/** Plan Forge — Phase-53 (ORCHESTRATOR-SPLIT) S3: schedulers sub-module */
-
-import { execFileSync, execSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { buildReflexionBlock } from "../memory.mjs";
-import {
-  getCachedBashPath, setCachedBashPath,
-} from "./state.mjs";
-import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS } from "./constants.mjs";
-export { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS };
-
-/**
- * Resolve the gate timeout in milliseconds.
- * Priority: PFORGE_GATE_TIMEOUT_MS env var → default (600 000 ms / 10 min).
- * @returns {number}
- */
-export function resolveGateTimeoutMs() {
-  const envVal = process.env.PFORGE_GATE_TIMEOUT_MS;
-  if (envVal != null && envVal !== "") {
-    const parsed = Number(envVal);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return DEFAULT_GATE_TIMEOUT_MS;
-}
-
-// ─── Windows bash dispatch ─────────────────────────────────────────────
-
-// cachedBashPath state lives in orchestrator/state.mjs (Phase-53 S1).
-
-/** Reset bash path probe cache — for tests only. */
-export function __resetBashPathCache() {
-  setCachedBashPath(undefined);
-}
-
-/**
- * Locate bash.exe on Windows. Probe order:
- *   1. PFORGE_BASH_PATH env (always re-checked; not cached)
- *   2. Cached result from a previous probe
- *   3. Fixed Git-for-Windows locations
- *   4. `where bash` PATH search
- *
- * @returns {string|null} Absolute path to bash, or null if not found.
- */
-export function resolveBashPath() {
-  const envPath = (process.env.PFORGE_BASH_PATH || "").trim();
-  if (envPath && existsSync(envPath)) return envPath;
-
-  if (getCachedBashPath() !== undefined) return getCachedBashPath();
-
-  const fixed = [
-    "C:\\Program Files\\Git\\bin\\bash.exe",
-    "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
-  ];
-  for (const p of fixed) {
-    if (existsSync(p)) {
-      setCachedBashPath(p);
-      return getCachedBashPath();
-    }
-  }
-
-  try {
-    const raw = execFileSync("where", ["bash"], {
-      encoding: "utf-8",
-      timeout: 5000,
-      stdio: ["ignore", "pipe", "ignore"],
-      windowsHide: true,
-    }).trim();
-    for (const candidate of raw.split(/\r?\n/)) {
-      const line = candidate.trim();
-      if (line && existsSync(line)) {
-        setCachedBashPath(line);
-        return getCachedBashPath();
-      }
-    }
-  } catch {
-    // `where` failed or bash not on PATH
-  }
-
-  setCachedBashPath(null);
-  return null;
-}
-
-/**
- * Coalesce multi-line gate commands from a validation gate block.
- * Joins lines inside unmatched quotes into single commands, strips
- * inline comments and standalone comment lines.
- *
- * @param {string} gateText - Raw validation gate text block
- * @returns {string[]} Array of complete, executable gate commands
- */
-export function coalesceGateLines(gateText) {
-  const rawLines = gateText.split("\n");
-  const commands = [];
-  let pending = "";
-  for (const raw of rawLines) {
-    const trimmed = raw.trim();
-    if (!trimmed) continue;
-    if (pending) {
-      pending += "\n" + trimmed;
-      const dblQuotes = (pending.match(/"/g) || []).length;
-      if (dblQuotes % 2 === 0) {
-        commands.push(pending);
-        pending = "";
-      }
-    } else {
-      const stripped = trimmed.replace(/\s{2,}#\s.*$/, "");
-      if (!stripped || stripped.startsWith("#")) continue;
-      // Skip markdown-style numbered list items (e.g. "1. Server generates CSRF...")
-      // and bulleted prose (e.g. "- Install dependencies"). These are documentation,
-      // not shell commands, and would fail the allowlist check with a misleading error.
-      if (/^(\d+\.|[-*+])\s+\S/.test(stripped)) continue;
-      if (looksLikeProse(stripped)) continue;
-      const dblQuotes = (stripped.match(/"/g) || []).length;
-      if (dblQuotes % 2 !== 0) {
-        pending = stripped;
-      } else {
-        commands.push(stripped);
-      }
-    }
-  }
-  if (pending) commands.push(pending);
-  return commands;
-}
-
-/**
- * Compute Levenshtein edit distance between two short strings.
- * Used by runGate() to surface "did you mean X?" suggestions on allowlist misses.
- * Small inputs only (command base tokens) — O(m*n) is fine.
- *
- * @param {string} a
- * @param {string} b
- * @returns {number}
- */
-export function editDistance(a, b) {
-  if (a === b) return 0;
-  if (!a.length) return b.length;
-  if (!b.length) return a.length;
-  const rows = a.length + 1;
-  const cols = b.length + 1;
-  let prev = new Array(cols);
-  let curr = new Array(cols);
-  for (let j = 0; j < cols; j++) prev[j] = j;
-  for (let i = 1; i < rows; i++) {
-    curr[0] = i;
-    for (let j = 1; j < cols; j++) {
-      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
-      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
-    }
-    [prev, curr] = [curr, prev];
-  }
-  return prev[cols - 1];
-}
-
-/**
- * Detect obvious template-placeholder tokens in gate commands
- * (e.g. "{{cmd}}", "<CMD>", "$CMD", or literal words like "item"/"command"
- * that typically leak in from plan templates that weren't filled in).
- *
- * @param {string} token
- * @returns {boolean}
- */
-export function isPlaceholderToken(token) {
-  if (!token) return false;
-  if (/^[{<$].+[}>]?$/.test(token)) return true;
-  return ["item", "command", "cmd", "tool", "runner", "your-tool", "your_cmd", "todo"].includes(token);
-}
-
-/**
- * Suggest the closest allowlisted command to an unrecognized token.
- * Returns null when no reasonable match exists (distance > 2).
- *
- * @param {string} token
- * @returns {string|null}
- */
-export function suggestAllowedCommand(token) {
-  if (!token) return null;
-  let best = null;
-  let bestDist = Infinity;
-  for (const cmd of GATE_ALLOWED_PREFIXES) {
-    const d = editDistance(token, cmd);
-    if (d < bestDist) { bestDist = d; best = cmd; }
-  }
-  return bestDist <= 2 ? best : null;
-}
-
-/**
- * Run a validation gate command directly (no AI worker needed).
- * Commands are validated against an allowlist of common build/test tools.
- *
- * Issue #133: pass/fail is strictly determined by the child process's
- * exit code. Stderr content alone never causes a failure (Prisma's
- * "Loaded Prisma config from prisma.config.ts" banner used to false-fail
- * gates that exited 0). Stderr is captured separately so callers can
- * surface it for diagnostics. Opt-in via `failOnStderr` if a gate
- * genuinely needs strict-stderr behaviour.
- *
- * Issue #131: `node -e "<script>"` (and `node -p "<expr>"`) commands are
- * executed via `execFileSync('node', ['-e', script], { shell: false })`
- * so PowerShell never sees the script. Previously, `$transaction` was
- * expanded to "" and `\b`/`\s`/`\d` regex escapes were stripped before
- * node received the argv \u2014 producing false-fail gates with shipped
- * deliverables.
- *
- * @param {string} command - Shell command to run
- * @param {string} cwd - Working directory
- * @param {object} [opts]
- * @param {boolean} [opts.failOnStderr=false] - Issue #133 opt-in: treat
- *   non-empty stderr as failure even when exit code is 0.
- * @returns {{ success: boolean, output: string, error: string, stderr: string, exitCode: number }}
- */
-function _validateGateAllowlist(command) {
-  const cmdBase = command.trim().split(/\s+/)[0].toLowerCase();
-  const isAllowed = GATE_ALLOWED_PREFIXES.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
-  if (isAllowed) return { cmdBase, blocked: null };
-  const hints = [];
-  if (isPlaceholderToken(cmdBase)) {
-    hints.push(`'${cmdBase}' looks like an unfilled template placeholder \u2014 edit your plan file and replace it with a real build/test command.`);
-  }
-  const suggestion = suggestAllowedCommand(cmdBase);
-  if (suggestion) hints.push(`Did you mean '${suggestion}'?`);
-  const hintSuffix = hints.length ? ` ${hints.join(" ")}` : "";
-  return {
-    cmdBase,
-    blocked: {
-      success: false,
-      output: "",
-      stderr: "",
-      error: `Validation gate blocked: '${cmdBase}' not in allowlist.${hintSuffix} Allowed: ${GATE_ALLOWED_PREFIXES.join(", ")}`,
-      exitCode: -1,
-    },
-  };
-}
-
-function _runInlineNodeGate(command, cwd, gateTimeout, failOnStderr) {
-  const m = command.match(/^\s*node\s+(-e|-p|--eval|--print)\s+(.+)$/i);
-  if (!m) return null;
-  const flag = m[1].startsWith("--") ? m[1] : (m[1] === "-p" ? "--print" : "--eval");
-  let script = m[2].trim();
-  if ((script.startsWith('"') && script.endsWith('"')) || (script.startsWith("'") && script.endsWith("'"))) {
-    script = script.slice(1, -1);
-  }
-  try {
-    const stdoutBuf = execFileSync("node", [flag, script], {
-      cwd,
-      encoding: "utf-8",
-      timeout: gateTimeout,
-      maxBuffer: 16 * 1024 * 1024,
-      env: { ...process.env, NO_COLOR: "1" },
-      stdio: ["ignore", "pipe", "pipe"],
-      shell: false,
-      windowsHide: true,
-    });
-    return { success: true, output: (stdoutBuf || "").trim(), stderr: "", error: "", exitCode: 0 };
-  } catch (err) {
-    const exitCode = typeof err.status === "number" ? err.status : 1;
-    const stderrText = (err.stderr || "").toString();
-    const stdoutText = (err.stdout || "").toString();
-    if (exitCode === 0 && !failOnStderr) {
-      return { success: true, output: stdoutText.trim(), stderr: stderrText.trim(), error: "", exitCode };
-    }
-    return {
-      success: false,
-      output: stdoutText.trim(),
-      stderr: stderrText.trim(),
-      error: stderrText.trim() || err.message || "node -e gate failed",
-      exitCode,
-    };
-  }
-}
-
-function _resolveBashArgs(command, isBashWrapped) {
-  if (!isBashWrapped) return ["-c", command];
-  const m = command.match(/^bash(?:\.exe)?\s+-c\s+(.+)$/i);
-  if (!m) return ["-c", command];
-  let body = m[1].trim();
-  if ((body.startsWith('"') && body.endsWith('"')) || (body.startsWith("'") && body.endsWith("'"))) {
-    body = body.slice(1, -1);
-  }
-  return ["-c", body];
-}
-
-function _runWindowsBashGate({ command, cwd, cmdBase, gateTimeout, failOnStderr }) {
-  if (process.platform !== "win32") return null;
-  const cmdName = cmdBase.split("/").pop().split("\\").pop().replace(/\.(exe|cmd|bat)$/i, "");
-  const hasShellChain = /(^|[^&|])(\s;\s|\s&&\s|\s\|\|\s)/.test(command);
-  const isBashWrapped = cmdName === "bash";
-  if (!(UNIX_TOOLS.includes(cmdName) || hasShellChain || isBashWrapped)) return null;
-
-  const bashPath = resolveBashPath();
-  if (bashPath === null) {
-    return {
-      success: false,
-      output: "",
-      stderr: "",
-      error: `gate requires bash but none found on Windows. Install Git for Windows or set PFORGE_BASH_PATH to a bash.exe path. Detected Unix tool: '${cmdName}'.`,
-      exitCode: -1,
-    };
-  }
-
-  const bashArgs = _resolveBashArgs(command, isBashWrapped);
-  try {
-    const output = execFileSync(bashPath, bashArgs, {
-      cwd,
-      encoding: "utf-8",
-      timeout: gateTimeout,
-      maxBuffer: 16 * 1024 * 1024,
-      env: {
-        ...process.env,
-        NO_COLOR: "1",
-        PATH: `${cwd}${process.platform === "win32" ? ";" : ":"}${process.env.PATH || ""}`,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-    return { success: true, output: (output || "").trim(), stderr: "", error: "", exitCode: 0 };
-  } catch (err) {
-    const exitCode = typeof err.status === "number" ? err.status : 1;
-    const stdoutText = (err.stdout || "").toString().trim();
-    const stderrText = (err.stderr || err.message || "").toString().trim();
-    if (exitCode === 0 && !failOnStderr) {
-      return { success: true, output: stdoutText, stderr: stderrText, error: "", exitCode };
-    }
-    return { success: false, output: stdoutText, stderr: stderrText, error: stderrText, exitCode };
-  }
-}
-
-function _runDefaultGate(command, cwd, gateTimeout, failOnStderr) {
-  try {
-    const output = execSync(command, {
-      cwd,
-      encoding: "utf-8",
-      timeout: gateTimeout,
-      maxBuffer: 16 * 1024 * 1024,
-      env: { ...process.env, NO_COLOR: "1" },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    return { success: true, output: (output || "").trim(), stderr: "", error: "", exitCode: 0 };
-  } catch (err) {
-    const exitCode = typeof err.status === "number" ? err.status : 1;
-    const stdoutText = (err.stdout || "").toString().trim();
-    const stderrText = (err.stderr || err.message || "").toString().trim();
-    if (exitCode === 0 && !failOnStderr) {
-      return { success: true, output: stdoutText, stderr: stderrText, error: "", exitCode };
-    }
-    return { success: false, output: stdoutText, stderr: stderrText, error: stderrText, exitCode };
-  }
-}
-
-export function runGate(command, cwd, opts = {}) {
-  const failOnStderr = opts.failOnStderr === true;
-  const { cmdBase, blocked } = _validateGateAllowlist(command);
-  if (blocked) return blocked;
-
-  const gateTimeout = resolveGateTimeoutMs();
-
-  const inlineRes = _runInlineNodeGate(command, cwd, gateTimeout, failOnStderr);
-  if (inlineRes) return inlineRes;
-
-  const winRes = _runWindowsBashGate({ command: command, cwd: cwd, cmdBase: cmdBase, gateTimeout: gateTimeout, failOnStderr: failOnStderr });
-  if (winRes) return winRes;
-
-  return _runDefaultGate(command, cwd, gateTimeout, failOnStderr);
-}
-
-/**
- * Detect plan-prose lines that are not executable commands.
- * Conservative — prefers under-matching to avoid false-positives on real commands.
- * @param {string} line - A single gate line
- * @returns {boolean} true if the line looks like documentation prose, not a command
- */
-export function looksLikeProse(line) {
-  if (!line || typeof line !== "string") return false;
-  const trimmed = line.trim();
-  if (!trimmed) return false;
-
-  // 1. Numbered-list prose: "1. Server generates..." — decimal + period + space + letter
-  if (/^\d+\.\s+[a-zA-Z]/.test(trimmed)) return true;
-
-  // 2. Currency tokens: $10.00, $5 — "$" must be followed by a digit (NOT $PATH, $VAR)
-  if (/(?:^|[^A-Za-z_])\$\d/.test(trimmed) || /\\\$\d/.test(trimmed)) return true;
-
-  // 3. Mermaid / diagram keywords at start-of-line
-  if (/^(sequenceDiagram|graph\s|flowchart\s|classDiagram|erDiagram|gantt|pie\s)/i.test(trimmed)) return true;
-
-  // 4. Markdown table row
-  if (/^\|\s/.test(trimmed)) return true;
-
-  // 5. Formula-like assignment with arithmetic op (distinguishes from env-var NODE_ENV=test)
-  if (/^[a-z_]\w*\s*=\s*.*[+\-*/x×]/.test(trimmed)) return true;
-
-  // 6. Box-drawing characters (U+2500–U+257F): lines like ┌──────┐, │ text │, └──────┘
-  // These appear in plan files as visual borders and are never valid shell commands.
-  // Range: 0x2500 .. 0x257F
-  if (/[\u2500-\u257F]/.test(trimmed)) return true;
-
-  return false;
-}
+export { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS, resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, normalizeGateCwd, runGate, looksLikeProse } from "./gate-runner.mjs";
 
 // ─── Phase-28.3 Slice 4: Post-slice advisory scanner ─────────────────
 //
@@ -404,6 +9,16 @@ export function looksLikeProse(line) {
 // Pure advisory — does NOT change slice status, does NOT auto-file.
 
 const SELF_REPAIR_MARKERS = /plan was wrong|fixed the plan|gate pattern|brittle gate|workaround|hand-fix|plan forge bug|orchestrator bug/i;
+/** Trailing trajectory lines scanned for self-repair markers. */
+const SELF_REPAIR_SCAN_LINES = 200;
+/** brain.gate-check timeout when gateCheckConfig sets none. */
+const DEFAULT_GATE_CHECK_TIMEOUT_MS = 5000;
+/** Competitive slices run between MIN and MAX variants (DEFAULT when the slice declares none). */
+const MIN_COMPETITIVE_VARIANTS = 2;
+const MAX_COMPETITIVE_VARIANTS = 5;
+const DEFAULT_COMPETITIVE_VARIANTS = 3;
+/** Decimal places for the cost/diff ratio in a competitive winner's reason. */
+const COST_RATIO_DECIMALS = 6;
 
 /**
  * Detect whether a completed slice likely performed self-repair work
@@ -417,7 +32,7 @@ export function detectSelfRepairMissed(trajectoryContent, workerOutput) {
   if (!trajectoryContent) return null;
 
   // Scan trajectory for self-repair markers
-  const lines = trajectoryContent.split("\n").slice(-200);
+  const lines = trajectoryContent.split("\n").slice(-SELF_REPAIR_SCAN_LINES);
   const matched = [];
   for (const line of lines) {
     const m = line.match(SELF_REPAIR_MARKERS);
@@ -480,7 +95,7 @@ export class SequentialScheduler {
   async _handlePostSliceGate({ id, hub, gateCheckConfig, abortSignal }) {
     if (!(hub && gateCheckConfig?.enabled)) return { block: false };
     try {
-      const gateResult = await hub.ask("brain.gate-check", { sliceId: id }, { timeoutMs: gateCheckConfig.timeoutMs || 5000 });
+      const gateResult = await hub.ask("brain.gate-check", { sliceId: id }, { timeoutMs: gateCheckConfig.timeoutMs || DEFAULT_GATE_CHECK_TIMEOUT_MS });
       if (gateResult.ok && gateResult.payload?.proceed === false) {
         this.eventBus.emit("gate-blocked", {
           sliceId: id,
@@ -555,11 +170,48 @@ export class SequentialScheduler {
   }
 }
 
+const DEP_FAILURE_STATUSES = new Set(["failed", "error"]);
+
+/**
+ * Describe the first dependency that did not succeed, or null when all are
+ * satisfied.
+ *
+ * Meta-bug #263: a dependency that was itself skipped behind an unsatisfied
+ * dependency is not a success, and scoring it as one let terminal verification
+ * slices run against prerequisites that were never built — and report passed.
+ * The reason chains so the root cause is readable from the leaf without
+ * reconstructing the graph.
+ *
+ * A slice skipped because it was already complete carries no `unsatisfied` flag
+ * and does satisfy its descendants. A dependency with no result at all is
+ * unknown, not skipped, and is left to the deadlock check (#225).
+ *
+ * @param {{ depends?: string[] }} node
+ * @param {Map<string, { status: string, unsatisfied?: boolean, reason?: string }>} results
+ * @returns {string|null}
+ */
+function findUnsatisfiedDependency(node, results) {
+  for (const dep of node.depends || []) {
+    const r = results.get(dep);
+    if (!r) continue;
+    if (DEP_FAILURE_STATUSES.has(r.status)) return `dependency ${dep} ${r.status}`;
+    if (r.status === "skipped" && r.unsatisfied) return `dependency ${dep} skipped: ${r.reason}`;
+  }
+  return null;
+}
+
 /**
  * Parallel scheduler — Phase 6: executes [P]-tagged slices concurrently.
  * Respects DAG dependencies and merge points.
  * Falls back to sequential for slices without [P] or with scope conflicts.
  */
+/** Split ready slices into parallel-eligible ([P], no scope conflict) and sequential. */
+function partitionReady(ready, nodes, conflicts) {
+  const parallelReady = ready.filter((id) => nodes.get(id).parallel && !conflicts.has(id));
+  const sequentialReady = ready.filter((id) => !parallelReady.includes(id));
+  return { parallelReady, sequentialReady };
+}
+
 export class ParallelScheduler {
   constructor(eventBus, maxParallelism = 3) {
     this.eventBus = eventBus;
@@ -567,14 +219,136 @@ export class ParallelScheduler {
   }
 
   /**
+   * Collect slices whose dependencies are all satisfied. Slices blocked by a
+   * failed or skipped dependency are recorded as skipped here rather than
+   * returned, so the skip propagates to their own descendants on a later pass.
+   */
+  _collectReadySlices({ nodes, order, completed, results, allResults }) {
+    const ready = [];
+    for (const id of order) {
+      if (completed.has(id)) continue;
+      const node = nodes.get(id);
+      if (!(node.depends || []).every((d) => completed.has(d))) continue;
+      const unsatisfiedReason = findUnsatisfiedDependency(node, results);
+      if (unsatisfiedReason) {
+        // Mark the skip itself as unsatisfied so it propagates.
+        const skipResult = { sliceId: id, status: "skipped", unsatisfied: true, reason: unsatisfiedReason };
+        results.set(id, skipResult);
+        allResults.push(skipResult);
+        completed.add(id);
+        continue;
+      }
+      // Checked here rather than at execution time so the ✅ marker is honoured
+      // whether the slice would have run in a batch or alone (meta-bug #266).
+      if (node.status === "completed") {
+        const skipResult = { sliceId: id, status: "skipped" };
+        results.set(id, skipResult);
+        allResults.push(skipResult);
+        completed.add(id);
+        continue;
+      }
+      ready.push(id);
+    }
+    return ready;
+  }
+
+  /**
+   * --resume-from: record every slice before `resumeFrom` (topological order)
+   * as skipped, as SequentialScheduler does. A plain "skipped" result
+   * satisfies dependents, so the resumed slices still become ready.
+   */
+  _skipBeforeResume({ order, resumeFrom, results, completed, allResults }) {
+    if (resumeFrom === null || resumeFrom === undefined) return;
+    for (const id of order) {
+      if (id === String(resumeFrom)) return;
+      const skipResult = { sliceId: id, status: "skipped" };
+      results.set(id, skipResult);
+      allResults.push(skipResult);
+      completed.add(id);
+    }
+  }
+
+  /** Run one slice on its own (sequential, or the only ready [P] slice); a throw becomes an error result. */
+  async _runSingleSlice(id, slice, executeFn) {
+    this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, complexityScore: slice.complexityScore });
+    try {
+      const result = await executeFn(slice);
+      // A failure does not stop the run: the parallel scheduler checks deps, not sequence.
+      const event = result.status === "passed" ? "slice-completed" : "slice-failed";
+      this.eventBus.emit(event, { sliceId: id, complexityScore: slice.complexityScore, ...result });
+      return { sliceId: id, ...result };
+    } catch (err) {
+      const r = { sliceId: id, status: "error", error: err.message };
+      this.eventBus.emit("slice-failed", r);
+      return r;
+    }
+  }
+
+  /**
+   * Fail-loud (#225): a plan that has slices to run but executed ZERO of them is
+   * a dependency deadlock (commonly unsatisfiable prose "Depends On" lines), not
+   * a successful no-op. Report every stranded slice as failed so the run is
+   * non-zero instead of a phantom "0 passed, 0 failed" completion.
+   */
+  _failStrandedSlices({ nodes, order, completed, results, allResults }) {
+    for (const id of order) {
+      const unmet = (nodes.get(id)?.depends || []).filter((d) => !completed.has(d));
+      const r = {
+        sliceId: id,
+        status: "failed",
+        error: unmet.length
+          ? `unsatisfiable dependencies: [${unmet.join(", ")}] — no slice ever became ready ` +
+            `(check the slice's "Depends On" line references valid slice ids)`
+          : "slice never became ready — dependency deadlock",
+      };
+      results.set(id, r);
+      allResults.push(r);
+      this.eventBus.emit("slice-failed", r);
+    }
+    this.eventBus.emit("scheduler-deadlock", { stranded: [...order], total: order.length });
+  }
+
+  /** Run one slice of a concurrent batch, converting a throw into an error result. */
+  async _runSliceInBatch(id, slice, executeFn) {
+    this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, parallel: true, complexityScore: slice.complexityScore });
+    try {
+      const result = await executeFn(slice);
+      const event = result.status === "passed" ? "slice-completed" : "slice-failed";
+      this.eventBus.emit(event, { sliceId: id, complexityScore: slice.complexityScore, ...result, parallel: true });
+      return { sliceId: id, ...result };
+    } catch (err) {
+      const r = { sliceId: id, status: "error", error: err.message };
+      this.eventBus.emit("slice-failed", r);
+      return r;
+    }
+  }
+
+  async _executeBatch(batch, nodes, executeFn, options) {
+    if (options.projectDir) {
+      const { executeIsolatedBatch } = await import("./parallel-worktrees.mjs");
+      return executeIsolatedBatch({
+        projectDir: options.projectDir, runDir: options.runDir, abortSignal: options.abortSignal,
+        slices: batch.map((id) => nodes.get(id)), executeFn, eventBus: this.eventBus,
+      });
+    }
+    return Promise.all(batch.map((id) => this._runSliceInBatch(id, nodes.get(id), executeFn)));
+  }
+
+  /**
    * Execute slices respecting DAG dependencies with parallel [P]-tagged slices.
    * Uses a readiness-based approach: slices become ready when all dependencies complete.
    */
   async execute(nodes, order, executeFn, options = {}) {
-    const { abortSignal } = options;
+    const { abortSignal, resumeFrom } = options;
     const results = new Map();
     const completed = new Set();
     const allResults = [];
+    const record = (r) => {
+      results.set(r.sliceId, r);
+      allResults.push(r);
+      completed.add(r.sliceId);
+    };
+    this._skipBeforeResume({ order, resumeFrom, results, completed, allResults });
 
     // Check for scope conflicts among parallel-eligible slices
     const conflicts = detectScopeConflicts(nodes);
@@ -586,102 +360,25 @@ export class ParallelScheduler {
         break;
       }
 
-      // Find ready slices: all dependencies completed
-      const ready = [];
-      for (const id of order) {
-        if (completed.has(id)) continue;
-        const node = nodes.get(id);
-        const depsComplete = (node.depends || []).every((d) => completed.has(d));
-        if (!depsComplete) continue;
-        // Check if any dependency failed
-        const depFailed = (node.depends || []).some((d) => {
-          const r = results.get(d);
-          return r && (r.status === "failed" || r.status === "error");
-        });
-        if (depFailed) {
-          // Skip slices whose dependencies failed
-          const skipResult = { sliceId: id, status: "skipped", reason: "dependency failed" };
-          results.set(id, skipResult);
-          allResults.push(skipResult);
-          completed.add(id);
-          continue;
-        }
-        ready.push(id);
-      }
+      const ready = this._collectReadySlices({ nodes, order, completed, results, allResults });
 
       if (ready.length === 0) break; // No more slices can run
 
-      // Separate parallel-eligible from sequential
-      const parallelReady = ready.filter((id) => {
-        const node = nodes.get(id);
-        return node.parallel && !conflicts.has(id);
-      });
-      const sequentialReady = ready.filter((id) => !parallelReady.includes(id));
+      const { parallelReady, sequentialReady } = partitionReady(ready, nodes, conflicts);
 
-      // Execute parallel batch (up to maxParallelism)
+      // Execute parallel batch (up to maxParallelism), else one slice at a time
       if (parallelReady.length > 1) {
         const batch = parallelReady.slice(0, this.maxParallelism);
-        const promises = batch.map(async (id) => {
-          const slice = nodes.get(id);
-          this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, parallel: true, complexityScore: slice.complexityScore });
-          try {
-            const result = await executeFn(slice);
-            const r = { sliceId: id, ...result };
-            if (result.status === "passed") {
-              this.eventBus.emit("slice-completed", { sliceId: id, complexityScore: slice.complexityScore, ...result, parallel: true });
-            } else {
-              this.eventBus.emit("slice-failed", { sliceId: id, complexityScore: slice.complexityScore, ...result, parallel: true });
-            }
-            return r;
-          } catch (err) {
-            const r = { sliceId: id, status: "error", error: err.message };
-            this.eventBus.emit("slice-failed", r);
-            return r;
-          }
-        });
-
-        const batchResults = await Promise.all(promises);
-        for (const r of batchResults) {
-          results.set(r.sliceId, r);
-          allResults.push(r);
-          completed.add(r.sliceId);
-        }
+        for (const r of await this._executeBatch(batch, nodes, executeFn, options)) record(r);
       } else {
-        // Execute one at a time (sequential or single parallel)
         const id = sequentialReady[0] || parallelReady[0];
         if (!id) break;
-
-        const slice = nodes.get(id);
-        if (slice.status === "completed") {
-          const r = { sliceId: id, status: "skipped" };
-          results.set(id, r);
-          allResults.push(r);
-          completed.add(id);
-          continue;
-        }
-
-        this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, complexityScore: slice.complexityScore });
-        try {
-          const result = await executeFn(slice);
-          const r = { sliceId: id, ...result };
-          results.set(id, r);
-          allResults.push(r);
-          completed.add(id);
-
-          if (result.status === "passed") {
-            this.eventBus.emit("slice-completed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
-          } else {
-            this.eventBus.emit("slice-failed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
-            // Don't break — parallel scheduler checks deps, not sequence
-          }
-        } catch (err) {
-          const r = { sliceId: id, status: "error", error: err.message };
-          results.set(id, r);
-          allResults.push(r);
-          completed.add(id);
-          this.eventBus.emit("slice-failed", r);
-        }
+        record(await this._runSingleSlice(id, nodes.get(id), executeFn));
       }
+    }
+
+    if (allResults.length === 0 && order.length > 0) {
+      this._failStrandedSlices({ nodes, order, completed, results, allResults });
     }
 
     return allResults;
@@ -713,7 +410,7 @@ export class CompetitiveScheduler {
    */
   constructor(eventBus, config = {}) {
     this.eventBus = eventBus;
-    this.maxVariants = config.maxVariants ?? 3;
+    this.maxVariants = config.maxVariants ?? DEFAULT_COMPETITIVE_VARIANTS;
     this.projectDir = config.projectDir ?? null;
     this.planBasename = config.planBasename ?? null;
     this.worktreeManager = config.worktreeManager ?? null;
@@ -875,7 +572,7 @@ export class CompetitiveScheduler {
     const declaredVariants = Number.isInteger(slice.competitiveVariants)
       ? slice.competitiveVariants
       : this.maxVariants;
-    const n = Math.min(5, Math.max(2, declaredVariants));
+    const n = Math.min(MAX_COMPETITIVE_VARIANTS, Math.max(MIN_COMPETITIVE_VARIANTS, declaredVariants));
 
     this.eventBus.emit("competitive-slice-started", { sliceId: slice.number, title: slice.title, variants: n });
 
@@ -999,7 +696,7 @@ export function selectWinner(variants) {
 
   const winner = sorted[0];
   const reason =
-    `variant ${winner.variant}: cost/diff=${ratio(winner).toFixed(6)}` +
+    `variant ${winner.variant}: cost/diff=${ratio(winner).toFixed(COST_RATIO_DECIMALS)}` +
     `, diff=${winner.diffLines ?? "?"}` +
     `, completion=${completionKey(winner)}`;
   return { winner, reason, eligible };

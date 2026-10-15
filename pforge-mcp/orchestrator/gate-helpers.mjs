@@ -3,10 +3,15 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
-import { parsePlan } from "./plan-parser.mjs";
-import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS } from "./constants.mjs";
+import { parsePlan, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
+import { UNIX_TOOLS, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
 import { coalesceGateLines, looksLikeProse, runGate, resolveGateTimeoutMs } from "./schedulers.mjs";
 import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "../brain.mjs";
+
+/** Characters of an offending line quoted in a lint message. */
+const LINT_EXCERPT_CHARS = 60;
+/** Leading literal path segments that identify an artifact in a [scope:] glob (presets/php, src/Api). */
+const ARTIFACT_ROOT_SEGMENTS = 2;
 
 export function extractPlanReleaseVersion(planPath) {
   if (!planPath || typeof planPath !== "string") return null;
@@ -139,7 +144,7 @@ function _parseDisableDirectivesAndComments(rawLines, slice, warnings) {
         command: raw,
         rule: "comment-line",
         severity: "warn",
-        message: `${loc}: Standalone comment '${raw.slice(0, 60)}...' will be treated as a command. Remove or prefix with a real command.`,
+        message: `${loc}: Standalone comment '${raw.slice(0, LINT_EXCERPT_CHARS)}...' will be treated as a command. Remove or prefix with a real command.`,
       });
     }
   }
@@ -147,12 +152,13 @@ function _parseDisableDirectivesAndComments(rawLines, slice, warnings) {
 }
 
 function _resolveCmdToken(line) {
-  const tokens = line.split(/\s+/);
-  let cmdIdx = 0;
-  while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
-    cmdIdx++;
-  }
-  return (tokens[cmdIdx] || tokens[0]).toLowerCase();
+  return resolveGateCommandToken(line);
+}
+
+// Shell metacharacters inside a quoted argument (e.g. the JS handed to `node -e`)
+// are not shell operators. Blank those spans out before applying shell-shape rules (#246).
+function _stripQuotedSpans(line) {
+  return line.replace(/'[^']*'|"[^"]*"/g, "");
 }
 
 function _pushWRule({ test, ruleId, rule, msg, line, slice, loc, strictMode, disabledRules, warnings, errors }) {
@@ -168,6 +174,71 @@ function _pushWRule({ test, ruleId, rule, msg, line, slice, loc, strictMode, dis
   });
 }
 
+/**
+ * Warn-level gate checks, in reporting order. Each entry: `applies` decides
+ * from the gate line, `message` explains the fix. Add a rule here, not as
+ * another branch in _lintBasicRules.
+ */
+const GATE_WARN_RULES = Object.freeze([
+  {
+    rule: "runtime-gate",
+    applies: ({ line, slice, lastSliceNumber }) => /curl\s.*localhost[:\s]/.test(line) && slice.number !== lastSliceNumber,
+    message: () => "curl to localhost requires a running server. Move runtime API checks to vitest integration tests.",
+  },
+  {
+    rule: "vitest-direct-node",
+    applies: ({ line }) => /^node\s+.*\.test\.(mjs|js|ts)/.test(_stripQuotedSpans(line)),
+    message: () => "'node *.test.*' fails for vitest test files. Use 'npx vitest run <file>' instead.",
+  },
+  {
+    rule: "pforge-analyze-in-gate",
+    applies: ({ line }) => /\bpforge\s+analyze\b/.test(line),
+    message: () => "'pforge analyze' in a gate exits 1 on noisy text-match heuristics (false-negatived all Phase-38.1–38.8 Slice 5 gates). Omit it — the orchestrator auto-runs analyze post-execution. Use 'pforge regression-guard <plan>' for a doc-integrity check instead.",
+  },
+  {
+    rule: "windows-unavailable",
+    applies: ({ line, cmdToken }) => UNIX_TOOLS.includes(cmdToken) && !/^bash\s+-c/.test(line),
+    message: ({ cmdToken }) => `'${cmdToken}' is not available in cmd.exe on Windows. Wrap in 'bash -c' or use a 'node -e' equivalent.`,
+  },
+  {
+    rule: "unix-only-path",
+    applies: ({ line }) => /\/tmp\/|\/dev\/null/.test(line),
+    message: () => "Unix-only path (/tmp/ or /dev/null) — fails on Windows. Use os.tmpdir() or NUL.",
+  },
+  {
+    rule: "project-script",
+    applies: ({ line }) => /^pforge\s/.test(line),
+    message: () => "'pforge' is a project script, not on PATH during gate execution. Use 'pwsh ./pforge.ps1' or rewrite as 'node -e'.",
+  },
+  {
+    rule: "js-comment-in-eval",
+    applies: ({ line }) => /^node\s+-e\s+".*\/\//.test(line) && !line.includes("http://") && !line.includes("https://"),
+    message: () => "node -e contains '//' which acts as a line comment on a single line, breaking the code. Remove JS comments from gate commands.",
+  },
+  {
+    rule: "gate-cannot-fail",
+    applies: ({ line }) => /\bpnpm\s+(?:--filter|-F)\s+\S+\s+(?!exec\b|run\b|-)\S+/.test(line),
+    message: () => "'pnpm --filter <pkg> <script>' exits 0 when the script does not exist (\"None of the selected packages has a ... script\"), so a typo or a script that only exists in a sibling package reads as a passing gate. Use 'pnpm run <script>' from inside the package directory — it exits 1 with ERR_PNPM_NO_SCRIPT.",
+  },
+  {
+    rule: "git-diff-misses-untracked",
+    applies: ({ line }) => /\bgit\s+diff\b[^\n]*\bHEAD~\d/.test(line),
+    message: () => "'git diff ... HEAD~N' never lists untracked files, so a gate counting brand-new files reads 0 until they are committed — and the slice cannot commit on an unrun gate. Use 'git status --porcelain' or 'git ls-files --others --exclude-standard' to include new files.",
+  },
+  {
+    rule: "lookaround-unsupported",
+    applies: ({ line }) => /\b(grep|rg|ripgrep|egrep|fgrep)\b/.test(line)
+      && /\(\?<[=!]|\(\?[=!]/.test(line)
+      && !/(^|\s)(-P|--pcre2|--perl-regexp)(\s|=|$)/.test(line),
+    message: () => "regex look-around ((?<=) (?<!) (?=) (?!)) is not supported by the default grep/ripgrep engine — the match count silently evaluates wrong (often 0, a false pass). Add '-P' for PCRE, or scope the count to a literal navigation pattern (href=, router.push, redirect) and exclude component/lib imports and non-route API paths instead of a negated-lookbehind.",
+  },
+  {
+    rule: "release-rehearsal-in-gate",
+    applies: ({ line }) => /scripts[\\/]release[\\/]rehearse\.mjs/.test(line),
+    message: () => "release rehearsal refuses a -dev VERSION, and a plan's branch is always at X.Y.Z-dev between releases, so this gate cannot pass (#316). Rehearse the release commit in the release checklist instead, or test the updater with vitest fixtures here.",
+  },
+]);
+
 function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, warnings, errors }) {
   if (line.includes("/dev/stdin")) {
     errors.push({
@@ -175,54 +246,17 @@ function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, warnings
       message: `${loc}: '/dev/stdin' is Unix-only — fails on Windows. Use readFileSync(0,'utf8') for cross-platform stdin.`,
     });
   }
-  const isAllowed = GATE_ALLOWED_PREFIXES.some(p => cmdToken === p || cmdToken.endsWith(`/${p}`));
+  const isAllowed = isGatePrefixAllowed(cmdToken);
   if (!isAllowed) {
     errors.push({
       slice: slice.number, command: line, rule: "blocked-command", severity: "error",
       message: `${loc}: '${cmdToken}' is not in the gate allowlist. Add it to GATE_ALLOWED_PREFIXES or rewrite the command.`,
     });
   }
-  if (/curl\s.*localhost[:\s]/.test(line) && slice.number !== lastSliceNumber) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "runtime-gate", severity: "warn",
-      message: `${loc}: curl to localhost requires a running server. Move runtime API checks to vitest integration tests.`,
-    });
-  }
-  if (/^node\s+.*\.test\.(mjs|js|ts)/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "vitest-direct-node", severity: "warn",
-      message: `${loc}: 'node *.test.*' fails for vitest test files. Use 'npx vitest run <file>' instead.`,
-    });
-  }
-  if (/\bpforge\s+analyze\b/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "pforge-analyze-in-gate", severity: "warn",
-      message: `${loc}: 'pforge analyze' in a gate exits 1 on noisy text-match heuristics (false-negatived all Phase-38.1–38.8 Slice 5 gates). Omit it — the orchestrator auto-runs analyze post-execution. Use 'pforge regression-guard <plan>' for a doc-integrity check instead.`,
-    });
-  }
-  if (UNIX_TOOLS.includes(cmdToken) && !/^bash\s+-c/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "windows-unavailable", severity: "warn",
-      message: `${loc}: '${cmdToken}' is not available in cmd.exe on Windows. Wrap in 'bash -c' or use a 'node -e' equivalent.`,
-    });
-  }
-  if (/\/tmp\/|\/dev\/null/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "unix-only-path", severity: "warn",
-      message: `${loc}: Unix-only path (/tmp/ or /dev/null) — fails on Windows. Use os.tmpdir() or NUL.`,
-    });
-  }
-  if (/^pforge\s/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "project-script", severity: "warn",
-      message: `${loc}: 'pforge' is a project script, not on PATH during gate execution. Use 'pwsh ./pforge.ps1' or rewrite as 'node -e'.`,
-    });
-  }
-  if (/^node\s+-e\s+".*\/\//.test(line) && !line.includes("http://") && !line.includes("https://")) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "js-comment-in-eval", severity: "warn",
-      message: `${loc}: node -e contains '//' which acts as a line comment on a single line, breaking the code. Remove JS comments from gate commands.`,
-    });
+  for (const { rule, applies, message } of GATE_WARN_RULES) {
+    if (applies({ line, slice, cmdToken, lastSliceNumber })) {
+      warnings.push({ slice: slice.number, command: line, rule, severity: "warn", message: `${loc}: ${message({ cmdToken })}` });
+    }
   }
 }
 
@@ -234,7 +268,7 @@ function _lintWRules({ line, slice, loc, cmdToken, strictMode, disabledRules, wa
     line, slice, loc, strictMode, disabledRules, warnings, errors,
   });
   _pushWRule({
-    test: !/^bash\s+-c\b/.test(line) && /^(node|npx|pwsh)\b.*\|/.test(line),
+    test: !/^bash\s+-c\b/.test(line) && /^(node|npx|pwsh)\b.*\|/.test(_stripQuotedSpans(line)),
     ruleId: "W2", rule: "pipeline-node",
     msg: `Shell pipeline with '${cmdToken}' as left operand — cmd.exe may handle this differently. Consider wrapping in a 'node -e' script that uses child_process for portability.`,
     line, slice, loc, strictMode, disabledRules, warnings, errors,
@@ -271,7 +305,7 @@ function _lintCommandLine(line, slice, {
   if (looksLikeProse(line)) {
     warnings.push({
       slice: slice.number, command: line, rule: "prose-detected", severity: "warn",
-      message: `${loc}: Line looks like prose, not a command: '${line.slice(0, 60)}...' — will be skipped at runtime.`,
+      message: `${loc}: Line looks like prose, not a command: '${line.slice(0, LINT_EXCERPT_CHARS)}...' — will be skipped at runtime.`,
     });
     return;
   }
@@ -282,6 +316,179 @@ function _lintCommandLine(line, slice, {
   const portResult = validateGatePortability(line);
   for (const pw of portResult.warnings) {
     portabilityWarnings.push({ ...pw, slice: slice.number, command: line });
+  }
+}
+
+/**
+ * A dependency declaration in any shape the hardener or a human writes.
+ * Group 1 is everything after the marker.
+ */
+const DEPENDS_DECLARATION_RE =
+  /(?:\*\*Depends\s+On:?\*\*:?|\(\s*depends\b|\bafter\s+slice\b)\s*:?\s*(.*)/i;
+/** Phrase that explicitly asserts there is no dependency — never a defect. */
+const DEPENDS_NONE_RE = /^\s*[-—–]*\s*(?:n\/a|none|nothing|no\b|null)/i;
+/** Phrase that names at least one slice-ish token. */
+const DEPENDS_NAMES_SLICE_RE = /\bslices?\s*\d|\bs\d+\b|^\s*\d+[A-Za-z]?\b/i;
+
+/**
+ * Warn when a slice declares a dependency that the parser did not understand.
+ *
+ * `depends` is populated only from `[depends: Slice N]` heading tags and
+ * `**Depends On**:` body lines whose phrase begins with a slice id. Forms like
+ * `Slices 1–5`, `Slices 3 + 4` or `All prior slices` produce no edge, and the
+ * plan then asserts an order the orchestrator does not hold (meta #262).
+ *
+ * Scoped deliberately: it fires only when the phrase NAMES a slice. Across this
+ * repo's 46 parseable plans there are 211 dependency declarations, of which 17
+ * say "nothing"/"none"/"—" — warning on those would be pure noise.
+ */
+function _lintDependencyDeclarations(plan, warnings) {
+  for (const slice of plan.slices) {
+    if ((slice.depends || []).length > 0) continue;
+    const body = [slice.title || "", ...(slice.rawLines || [])];
+    for (const line of body) {
+      const m = String(line).match(DEPENDS_DECLARATION_RE);
+      if (!m) continue;
+      const phrase = (m[1] || "").trim();
+      if (DEPENDS_NONE_RE.test(phrase) || !DEPENDS_NAMES_SLICE_RE.test(phrase)) continue;
+      warnings.push({
+        slice: slice.number,
+        command: null,
+        rule: "depends-not-parsed",
+        severity: "warn",
+        message:
+          `Slice ${slice.number} ("${slice.title}"): dependency declaration "${phrase.slice(0, LINT_EXCERPT_CHARS)}" ` +
+          `produced no parsed dependency. Recognised forms are the heading tag [depends: Slice N] and ` +
+          `a "**Depends On**:" line beginning with a slice id. This slice will fall back to running ` +
+          `after its predecessor.`,
+      });
+      break;
+    }
+  }
+}
+
+/**
+ * Check that each parsed slice will actually launch with a gate and with
+ * instructions (meta-bug #281). A lint that only inspects the gate commands
+ * it found passed plans whose gates sat in ```text fences (never executed)
+ * and whose tasks were bullets or prose (never sent to the worker).
+ *
+ * - A slice that DECLARES a Validation Gate but parsed no runnable command is
+ *   an error: it would run with no gate at all. An explicit `[manual]` gate —
+ *   the step-2 convention for checks that cannot be automated — is exempt.
+ * - A slice with no numbered tasks is a warning: buildSlicePrompt sends only
+ *   numbered items, so the worker receives just the title, scope and gate.
+ *   Plain objects without a `tasks` array (callers passing gate-only fixtures)
+ *   are not judged.
+ */
+function _lintSliceExecutability(plan, errors, warnings) {
+  for (const slice of plan.slices) {
+    const loc = `Slice ${slice.number} ("${slice.title}")`;
+    const declaredGate = (slice.rawLines || []).find((line) => VALIDATION_GATE_MARKER_RE.test(line));
+    const gateText = String(slice.validationGateDescription || "").trim();
+    const isManualGate = /^\[manual\]/i.test(gateText);
+    if (declaredGate && !isManualGate && !String(slice.validationGate || "").trim()) {
+      const described = gateText ? ` (gate text: "${gateText.slice(0, LINT_EXCERPT_CHARS)}")` : "";
+      errors.push({
+        slice: slice.number, command: null, rule: "gate-declared-not-runnable", severity: "error",
+        message:
+          `${loc}: declares a Validation Gate but no runnable gate command was parsed${described} — ` +
+          "the slice would run with no gate. Put gate commands in a shell-tagged fence (```bash, ```powershell, …) " +
+          "or inline backticks; ```text fences and prose are never executed.",
+      });
+    }
+    if (Array.isArray(slice.tasks) && slice.tasks.length === 0) {
+      warnings.push({
+        slice: slice.number, command: null, rule: "no-numbered-tasks", severity: "warn",
+        message:
+          `${loc}: no numbered tasks were parsed. The worker prompt lists only numbered items ("1. …"), so ` +
+          "bullet or prose instructions (including **Goal**) never reach the worker — it receives just the title, scope and gate.",
+      });
+    }
+  }
+}
+
+/**
+ * #308 — parallel slices that build one artifact must share a contract and be
+ * verified together. Each slice passing its own gate is not enough: in the #292
+ * preset rewrite, parallel slices defined the same helper twice and wrote
+ * signatures that did not fit together. Two concurrent parallel slices whose
+ * [scope:] roots overlap (first two literal path segments) form a group; the
+ * plan needs a "## Shared Contract" section and a later slice that depends,
+ * directly or transitively, on every member to check the combined result.
+ * Warnings only. Plain-object plans without `hasSharedContract` are not judged.
+ */
+function _artifactRoot(glob) {
+  const literal = [];
+  for (const seg of String(glob).replace(/\\/g, "/").replace(/^\.\//, "").replace(/`/g, "").split("/")) {
+    if (!seg || /[*?[{]/.test(seg)) break;
+    literal.push(seg);
+  }
+  return literal.slice(0, ARTIFACT_ROOT_SEGMENTS).join("/") || null;
+}
+
+function _ancestors(plan) {
+  const byId = new Map(plan.slices.map((s) => [String(s.number), s]));
+  const memo = new Map();
+  const visit = (id, seen = new Set()) => {
+    if (memo.has(id)) return memo.get(id);
+    const out = new Set();
+    for (const dep of byId.get(id)?.depends || []) {
+      const d = String(dep);
+      if (seen.has(d)) continue;
+      out.add(d);
+      for (const a of visit(d, new Set([...seen, id]))) out.add(a);
+    }
+    memo.set(id, out);
+    return out;
+  };
+  for (const id of byId.keys()) visit(id);
+  return memo;
+}
+
+function _parallelArtifactGroups(plan, ancestors) {
+  const parallel = plan.slices.filter((s) => s.parallel && (s.scope || []).length > 0);
+  const groups = new Map();
+  for (let i = 0; i < parallel.length; i++) {
+    for (let j = i + 1; j < parallel.length; j++) {
+      const [a, b] = [parallel[i], parallel[j]];
+      const [ia, ib] = [String(a.number), String(b.number)];
+      if (ancestors.get(ia)?.has(ib) || ancestors.get(ib)?.has(ia)) continue;
+      const rootsA = new Set(a.scope.map(_artifactRoot).filter(Boolean));
+      const shared = b.scope.map(_artifactRoot).find((r) => r && rootsA.has(r));
+      if (!shared) continue;
+      const members = groups.get(shared) || new Set();
+      members.add(ia).add(ib);
+      groups.set(shared, members);
+    }
+  }
+  return groups;
+}
+
+function _lintParallelCoherence(plan, warnings) {
+  if (typeof plan.hasSharedContract !== "boolean") return;
+  const ancestors = _ancestors(plan);
+  for (const [root, members] of _parallelArtifactGroups(plan, ancestors)) {
+    const ids = [...members];
+    const first = Number.isNaN(Number(ids[0])) ? ids[0] : Math.min(...ids.map(Number));
+    const label = `Slices ${ids.join(", ")} run in parallel on ${root}`;
+    if (!plan.hasSharedContract) {
+      warnings.push({
+        slice: first, command: null, rule: "parallel-no-shared-contract", severity: "warn",
+        message:
+          `${label} but the plan has no "## Shared Contract" section. Pin the shared types, names, ` +
+          "signatures and conventions there so the slices cannot each invent their own.",
+      });
+    }
+    const coherent = [...ancestors].some(([id, anc]) => !members.has(id) && ids.every((m) => anc.has(m)));
+    if (!coherent) {
+      warnings.push({
+        slice: first, command: null, rule: "parallel-no-coherence-gate", severity: "warn",
+        message:
+          `${label} but no later slice depends on all of them. Add a coherence slice ` +
+          `([depends: ${ids.map((id) => `Slice ${id}`).join(", ")}]) whose gate builds or tests ${root} as a whole.`,
+      });
+    }
   }
 }
 
@@ -297,6 +504,20 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
   const lastSliceNumber = plan.slices.length > 0
     ? plan.slices[plan.slices.length - 1].number
     : null;
+
+  // A lint that examined nothing is not a lint that passed. Three plans read
+  // "0 error(s), 0 warning(s)" while every slice heading had failed to parse;
+  // only the "across 0 slices" tail of the summary gave it away (meta-bug #260).
+  if (plan.slices.length === 0) {
+    errors.push({
+      slice: null, command: null, rule: "no-slices-parsed", severity: "error",
+      message: "No slices parsed from the plan — zero gate commands were examined, so this result says nothing about the plan's gates. Check that slice headings match '### Slice <N> — <Title>'.",
+    });
+  }
+
+  _lintDependencyDeclarations(plan, warnings);
+  _lintSliceExecutability(plan, errors, warnings);
+  _lintParallelCoherence(plan, warnings);
 
   for (const slice of plan.slices) {
     if (!slice.validationGate) continue;
@@ -406,14 +627,7 @@ export function validateGatePortability(command) {
  */
 function wouldPassAllowlist(cmd) {
   if (!cmd || typeof cmd !== "string") return false;
-  const trimmed = cmd.trim();
-  const tokens = trimmed.split(/\s+/);
-  let cmdIdx = 0;
-  while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
-    cmdIdx++;
-  }
-  const cmdToken = (tokens[cmdIdx] || tokens[0] || "").toLowerCase();
-  return GATE_ALLOWED_PREFIXES.some((p) => cmdToken === p || cmdToken.endsWith(`/${p}`));
+  return isGatePrefixAllowed(resolveGateCommandToken(cmd));
 }
 
 /**
@@ -438,13 +652,7 @@ export function isGateCommandAllowed(cmd) {
   ];
   if (BLOCKED_PATTERNS.some((p) => p.test(trimmed))) return false;
 
-  const tokens = trimmed.split(/\s+/);
-  let cmdIdx = 0;
-  while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
-    cmdIdx++;
-  }
-  const cmdToken = (tokens[cmdIdx] || tokens[0] || "").toLowerCase();
-  if (GATE_ALLOWED_PREFIXES.some((p) => cmdToken === p || cmdToken.endsWith(`/${p}`))) {
+  if (isGatePrefixAllowed(resolveGateCommandToken(trimmed))) {
     return true;
   }
 
@@ -528,12 +736,17 @@ function _collectGateItemsFromPlans(planPaths, cwd) {
   return gateItems;
 }
 
+/** Regression-guard gates touching the N hottest files run first. */
+const HOTSPOT_PRIORITY_COUNT = 10;
+/** Gate output kept per regression-guard result. */
+const GATE_OUTPUT_MAX_CHARS = 500;
+
 function _prioritizeByHotspots(gateItems, cwd) {
   try {
     const hotspotCache = resolve(cwd, ".forge", "hotspot-cache.json");
     if (!existsSync(hotspotCache)) return;
     const cached = JSON.parse(readFileSync(hotspotCache, "utf-8"));
-    const hotFiles = new Set((cached.hotspots || []).slice(0, 10).map(h => h.file));
+    const hotFiles = new Set((cached.hotspots || []).slice(0, HOTSPOT_PRIORITY_COUNT).map(h => h.file));
     if (hotFiles.size === 0) return;
     gateItems.sort((a, b) => {
       const aHot = a.cmd && [...hotFiles].some(h => a.cmd.includes(h)) ? 1 : 0;
@@ -567,10 +780,10 @@ function _classifyAndSkipGate(gate, cwd, results) {
 function _runGate(gate, cwd, results) {
   try {
     const output = execSync(gate.cmd, { cwd, stdio: "pipe", timeout: resolveGateTimeoutMs(), encoding: "utf-8" });
-    results.push({ ...gate, status: "passed", output: (output || "").trim().slice(0, 500) });
+    results.push({ ...gate, status: "passed", output: (output || "").trim().slice(0, GATE_OUTPUT_MAX_CHARS) });
     return "passed";
   } catch (err) {
-    const errOut = ((err.stderr || "") + (err.stdout || "")).trim().slice(0, 500) || err.message;
+    const errOut = ((err.stderr || "") + (err.stdout || "")).trim().slice(0, GATE_OUTPUT_MAX_CHARS) || err.message;
     results.push({ ...gate, status: "failed", output: errOut });
     return "failed";
   }

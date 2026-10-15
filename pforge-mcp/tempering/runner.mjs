@@ -205,6 +205,21 @@ function _checkScannerSkipReason(scanner, config, adapter) {
   return null;
 }
 
+/**
+ * The command for this run. An adapter entry may add `resolveCmd(cwd)` when the
+ * right syntax depends on the project (e.g. .NET on Microsoft.Testing.Platform);
+ * a throw or a non-array result falls back to the static `cmd`.
+ */
+function _resolveScannerCmd(entry, cwd) {
+  if (typeof entry.resolveCmd !== "function") return entry.cmd;
+  try {
+    const resolved = entry.resolveCmd(cwd);
+    return Array.isArray(resolved) && resolved.length > 0 ? resolved : entry.cmd;
+  } catch {
+    return entry.cmd;
+  }
+}
+
 function _computeScannerVerdict(proc, parsed) {
   if (proc.timedOut) return "budget-exceeded";
   if (proc.error && proc.exitCode === -1) return "error";
@@ -238,7 +253,8 @@ export async function runScanner(ctx) {
   const budgetKey = SCANNER_BUDGET_KEYS[scanner] || `${scanner}MaxMs`;
   const budgetMs = (config.runtimeBudgets && config.runtimeBudgets[budgetKey]) || DEFAULT_UNIT_BUDGET_MS;
 
-  const proc = await runSubprocess(adapter[scanner].cmd, { cwd, budgetMs, spawn: spawnFn });
+  const cmd = _resolveScannerCmd(adapter[scanner], cwd);
+  const proc = await runSubprocess(cmd, { cwd, budgetMs, spawn: spawnFn });
 
   let parsed = { pass: 0, fail: 0, skipped: 0, coverage: null };
   try {
@@ -250,7 +266,7 @@ export async function runScanner(ctx) {
   return {
     ...base,
     completedAt: new Date(now()).toISOString(),
-    cmd: adapter[scanner].cmd,
+    cmd,
     exitCode: proc.exitCode,
     timedOut: proc.timedOut,
     error: proc.error || null,
@@ -933,7 +949,7 @@ const SCANNER_ENTRY_POINTS = {
 async function _runSpawnBasedScanner({ name, cwd, timeoutMs, started, now }) {
   const config = await readTemperingConfig(cwd);
   const stack = detectStack(cwd);
-  const adapter = loadAdapter(stack);
+  const adapter = await loadAdapter(stack);
   if (!adapter) {
     const err = new Error(`No adapter for stack "${stack}" — scanner "${name}" unavailable`);
     err.code = ERROR_CODES.SCANNER_UNAVAILABLE.code;
@@ -1044,6 +1060,12 @@ export async function runSingleScanner(name, opts = {}) {
 }
 
 /**
+ * Scanners that must actually execute for a run to mean anything. A run that
+ * skipped these has measured nothing, whatever the cross-stack scanners say.
+ */
+const MANDATORY_SCANNERS = new Set(["unit", "integration"]);
+
+/**
  * Derive a single run-level verdict from scanner verdicts.
  * Priority: error > budget-exceeded > fail > pass > skipped.
  */
@@ -1054,6 +1076,14 @@ export function deriveOverallVerdict(scanners) {
   for (const s of scanners) {
     const v = s && s.verdict ? s.verdict : "skipped";
     if (order.indexOf(v) < order.indexOf(worst)) worst = v;
+  }
+  // Reporting "pass" off a cross-stack scanner while EVERY real test scanner was
+  // skipped is a green light for an unmeasured codebase (meta-bug #269). Partial
+  // adapter coverage — unit ran, integration has no command — is legitimate and
+  // still passes. Worse verdicts carry their own signal and are left alone.
+  const mandatory = scanners.filter((s) => MANDATORY_SCANNERS.has(s?.scanner));
+  if (worst === "pass" && mandatory.length > 0 && mandatory.every((s) => (s?.verdict ?? "skipped") === "skipped")) {
+    return "skipped";
   }
   return worst;
 }

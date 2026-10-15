@@ -12,27 +12,15 @@ their project's non-negotiable principles and produce a completed
 
 ## Step 1: Choose Your Path
 
-Start by checking for existing sources:
-
-1. Check if `memory/constitution.md` exists (Spec Kit project constitution)
-2. Check if `docs/plans/PROJECT-PRINCIPLES.md` already exists
-
-**If Spec Kit constitution found:**
-
-> "I found a Spec Kit constitution at `memory/constitution.md`. Want me to convert it to Plan Forge's Project Principles format? I'll map each article to a principle entry and flag any gaps."
-
-If yes: Read the constitution, extract principles, map to the template format, then ask the user to review and adjust.
-
-**If no existing sources found**, ask:
+Start by asking:
 
 > "How would you like to define your project principles?
 >
 > **A) I know my principles** — I'll interview you section by section
 > **B) Show me starter principles** — I'll suggest common principles for your tech stack and you accept, modify, or reject each one
 > **C) Discover from my codebase** — I'll scan your project files and suggest principles based on patterns I find
-> **D) Import from Spec Kit** — Point me to a `constitution.md` file and I'll convert it
 >
-> Pick A, B, C, D (or a combination)."
+> Pick A, B, or C (or a combination)."
 
 ---
 
@@ -113,7 +101,7 @@ to **Accept**, **Modify**, or **Reject**.
 **Python**:
 - Core Principle: "Type hints on all function signatures"
 - Core Principle: "All I/O operations must be async where the framework supports it"
-- Technology: "Python 3.11+ with type hints"
+- Technology: "Python 3.14+ with type hints"
 - Forbidden: "Bare `except:` clauses" (swallows all errors including KeyboardInterrupt)
 - Forbidden: "`# type: ignore` without an issue link explaining why"
 - Quality: "pytest with 85%+ coverage on business logic"
@@ -121,15 +109,15 @@ to **Accept**, **Modify**, or **Reject**.
 **Java / Spring Boot**:
 - Core Principle: "Constructor injection only — no field injection with @Autowired"
 - Core Principle: "@Transactional at the service layer, never at the repository layer"
-- Technology: "Java 21+ with Spring Boot 3.x"
+- Technology: "Java 25 (LTS) with Spring Boot 4.x"
 - Forbidden: "Field injection (@Autowired on fields)" (untestable, hidden dependencies)
 - Forbidden: "Catching generic Exception instead of specific types"
-- Quality: "JUnit 5 with 90%+ coverage on service layer"
+- Quality: "JUnit 6 with 90%+ coverage on service layer"
 
 **Go**:
 - Core Principle: "Always check returned errors — no `_` for error values"
 - Core Principle: "Context propagation through all function chains"
-- Technology: "Go 1.22+ with standard library preferred over third-party"
+- Technology: "Go 1.27+ with standard library preferred over third-party"
 - Forbidden: "Ignoring error returns with `_`" (silent failures)
 - Forbidden: "Goroutine leaks — all goroutines must have a shutdown path"
 - Quality: "go test with race detector enabled in CI"

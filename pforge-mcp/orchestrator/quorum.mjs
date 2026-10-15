@@ -3,14 +3,58 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildMemorySearchBlock } from "../memory.mjs";
-import { QUORUM_PRESETS } from "./constants.mjs";
+import { QUORUM_PRESETS, DEFAULT_GROK_ADDIN_MODEL, DEFAULT_QUORUM_MODELS, DEFAULT_QUORUM_REVIEWER_MODEL } from "./constants.mjs";
 import { readForgeJsonl } from "./forge-io.mjs";
 import { scoreSliceComplexity } from "./review-watcher.mjs";
-import { spawnWorker } from "./worker-spawn.mjs";
+import { spawnWorker, detectWorkers, isCopilotServableModel } from "./worker-spawn.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
 import { priceSlice as _priceSlice, priceRun as _priceRun } from "../cost-service.mjs";
 
-export function loadQuorumConfig(cwd, presetOverride = null) {
+/**
+ * Adaptive threshold: learn from quorum history which slices actually need quorum.
+ * Floor is 5 (matches the static default); ceiling is 9.
+ */
+function adaptQuorumThreshold(threshold, cwd) {
+  try {
+    const qHistory = readForgeJsonl("quorum-history.jsonl", [], cwd); // G2.1
+    if (qHistory.length < 5) return threshold;
+    const neededRate = qHistory.filter((q) => q.quorumNeeded).length / qHistory.length;
+    // <20% of slices needed quorum → raise threshold (fewer get quorum).
+    if (neededRate < 0.2 && threshold < 9) return Math.min(9, threshold + 1);
+    // >60% needed quorum → lower it (more get quorum).
+    if (neededRate > 0.6 && threshold > 5) return Math.max(5, threshold - 1);
+    return threshold;
+  } catch {
+    return threshold; // use static default
+  }
+}
+
+/** `.forge.json#quorum`, or `{}` when absent or unreadable. */
+function readUserQuorumConfig(cwd) {
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (!existsSync(configPath)) return {};
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    return config.quorum && typeof config.quorum === "object" ? config.quorum : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Explicit opts value wins; otherwise probe only when the CLI lane was requested. */
+function resolveGrokCliAvailable(opts, includeGrok) {
+  if (opts.grokCliAvailable != null) return opts.grokCliAvailable;
+  return includeGrok === "cli"
+    ? detectWorkers(opts.cwd).some((w) => w.name === "grok" && w.available)
+    : false;
+}
+
+function resolveGhCopilotAvailable(opts) {
+  if (opts.ghCopilotAvailable != null) return opts.ghCopilotAvailable;
+  return detectWorkers(opts.cwd).some((w) => w.name === "gh-copilot" && w.available);
+}
+
+export function loadQuorumConfig(cwd, presetOverride = null, opts = {}) {
   const defaults = {
     enabled: false,
     auto: true,
@@ -20,46 +64,65 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
     // effectively "always quorum". Threshold=5 matches the power preset and
     // restricts auto-quorum to genuinely complex slices.
     threshold: 5,
-    // Bug #107: default uses the standard tier (opus-4.6). Users who want
-    // the premium tier (opus-4.7) opt in via --quorum=power. Reviewer stays
-    // on 4.7 since it only runs once per slice and the spend is bounded.
-    models: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
-    reviewerModel: "claude-opus-4.7",
+    // Bug #107: the default is the standard tier; --quorum=power swaps the
+    // OpenAI leg for the premium GPT-6 Astra (see QUORUM_PRESETS).
+    models: [...DEFAULT_QUORUM_MODELS],
+    reviewerModel: DEFAULT_QUORUM_REVIEWER_MODEL,
     dryRunTimeout: 300_000, // 5 min per dry-run leg
     strictAvailability: false, // H.3: true = fast-fail if any model unavailable
   };
 
-  // Adaptive threshold: learn from quorum history which slices actually need quorum.
-  // Floor is 5 (matches the static default); ceiling is 9 (Math.min(9, ...)).
-  try {
-    const qHistory = readForgeJsonl("quorum-history.jsonl", [], cwd); // G2.1
-    if (qHistory.length >= 5) {
-      const needed = qHistory.filter(q => q.quorumNeeded).length;
-      const total = qHistory.length;
-      const neededRate = needed / total;
-      // If <20% of slices needed quorum, raise threshold (fewer get quorum)
-      // If >60% needed quorum, lower threshold (more get quorum)
-      if (neededRate < 0.2 && defaults.threshold < 9) defaults.threshold = Math.min(9, defaults.threshold + 1);
-      else if (neededRate > 0.6 && defaults.threshold > 5) defaults.threshold = Math.max(5, defaults.threshold - 1);
-    }
-  } catch { /* use static default */ }
-  const configPath = resolve(cwd, ".forge.json");
-  let userConfig = {};
-  try {
-    if (existsSync(configPath)) {
-      const config = JSON.parse(readFileSync(configPath, "utf-8"));
-      if (config.quorum && typeof config.quorum === "object") {
-        userConfig = config.quorum;
-      }
-    }
-  } catch { /* defaults */ }
+  defaults.threshold = adaptQuorumThreshold(defaults.threshold, cwd);
+
+  const userConfig = readUserQuorumConfig(cwd);
 
   // Resolve preset: CLI override > .forge.json preset > none
   const presetName = presetOverride || userConfig.preset || null;
   const preset = presetName ? QUORUM_PRESETS[presetName] || {} : {};
 
   // Merge order: defaults < preset < userConfig (explicit fields win)
-  return { ...defaults, ...preset, ...userConfig, ...(presetOverride ? { preset: presetOverride } : {}) };
+  const merged = { ...defaults, ...preset, ...userConfig, ...(presetOverride ? { preset: presetOverride } : {}) };
+
+  // Phase GROK-BUILD-WORKER Slice 7: additive Grok quorum member. The CLI
+  // override (--with-grok / --with-grok-cli) wins over .forge.json quorum.includeGrok.
+  const includeGrok = opts.includeGrokOverride ?? merged.includeGrok ?? false;
+  return applyGrokAddIn(merged, {
+    includeGrok,
+    grokModel: merged.grokModel,
+    hasXaiKey: Boolean((opts.env || process.env).XAI_API_KEY),
+    grokCliAvailable: resolveGrokCliAvailable(opts, includeGrok),
+    ghCopilotAvailable: resolveGhCopilotAvailable(opts),
+  });
+}
+
+/**
+ * Additively append a Grok quorum member (Phase GROK-BUILD-WORKER Slice 7).
+ * Purely additive: never removes or reorders existing members, and never
+ * duplicates when a grok member is already present. Records `grokAddInSkipped`
+ * (advisory) when the required credential is missing — it never hard-fails.
+ *
+ * @param {object} config - resolved quorum config with a `models` array
+ * @param {{ includeGrok?: boolean|"api"|"cli", grokModel?: string, hasXaiKey?: boolean, grokCliAvailable?: boolean, ghCopilotAvailable?: boolean }} opts
+ * @returns {object} config (possibly with an appended grok member + `grokVia` tag)
+ */
+export function applyGrokAddIn(config, { includeGrok, grokModel, hasXaiKey, grokCliAvailable, ghCopilotAvailable } = {}) {
+  const mode = includeGrok === true ? "api" : includeGrok;
+  if (mode !== "api" && mode !== "cli") return config;
+  const models = config.models || [];
+  if (models.some((m) => /^grok-/.test(String(m)))) return config; // already present — no dup
+  const model = grokModel || DEFAULT_GROK_ADDIN_MODEL;
+  const copilotOk = mode === "api" && isCopilotServableModel(model) && Boolean(ghCopilotAvailable);
+  const credentialOk = mode === "api" ? (Boolean(hasXaiKey) || copilotOk) : Boolean(grokCliAvailable);
+  if (!credentialOk) {
+    return {
+      ...config,
+      grokAddInSkipped: mode === "api"
+        ? "Neither gh-copilot nor XAI_API_KEY is available — Grok quorum add-in skipped"
+        : "grok CLI not available — Grok quorum add-in skipped",
+    };
+  }
+  // grokVia tags the appended member so dispatch routes "cli" through the grok worker.
+  return { ...config, models: [...models, model], grokVia: mode };
 }
 
 /**
@@ -327,7 +390,7 @@ export async function quorumReview(dispatchResult, slice, config, options = {}) 
     return {
       enhancedPrompt,
       reviewerTokens: reviewerResult.tokens,
-      reviewerCost: calculateSliceCost(reviewerResult.tokens).cost_usd,
+      reviewerCost: calculateSliceCost(reviewerResult.tokens, reviewerResult.worker).cost_usd,
       modelResponses: successful,
       fallback: false,
     };
@@ -349,17 +412,6 @@ export async function quorumReview(dispatchResult, slice, config, options = {}) 
 
 // ─── Quorum Analysis ─────────────────────────────────────────────────
 
-/**
- * Multi-model analysis of a plan or file.
- * Dispatches independent analysis to N models, then synthesizes findings.
- *
- * Modes:
- *   - plan: Analyze a hardened plan for consistency, coverage gaps, risk
- *   - file: Analyze source file(s) for bugs, patterns, improvements
- *
- * @param {object} options - { target, mode, models, cwd }
- * @returns {Promise<{ results, synthesis, cost }>}
- */
 function readAnalysisTargetContent({ cwd, target }) {
   try {
     return readFileSync(resolve(cwd, target), "utf-8");
@@ -426,7 +478,7 @@ async function synthesizeAnalysisResults({ successful, target, mode, cwd, config
     console.log("   ✅ Synthesis complete");
     return {
       synthesis: synthResult.output || "",
-      synthesisCost: calculateSliceCost(synthResult.tokens).cost_usd,
+      synthesisCost: calculateSliceCost(synthResult.tokens, synthResult.worker).cost_usd,
     };
   } catch (err) {
     console.log(`   ⚠️  Synthesis failed: ${err.message} — returning raw results`);
@@ -437,7 +489,7 @@ async function synthesizeAnalysisResults({ successful, target, mode, cwd, config
 function summarizeAnalysisResults({ results, synthesisCost }) {
   let totalCost = synthesisCost;
   for (const result of results) {
-    totalCost += calculateSliceCost(result.tokens).cost_usd;
+    totalCost += calculateSliceCost(result.tokens, result.worker).cost_usd;
   }
 
   return {
@@ -448,21 +500,35 @@ function summarizeAnalysisResults({ results, synthesisCost }) {
       duration: result.duration,
       success: result.success,
       worker: result.worker,
-      cost: calculateSliceCost(result.tokens).cost_usd,
+      cost: calculateSliceCost(result.tokens, result.worker).cost_usd,
       error: result.error,
     })),
   };
 }
 
+/**
+ * Multi-model analysis of a plan or file.
+ * Dispatches independent analysis to N models, then synthesizes findings.
+ *
+ * Modes:
+ *   - plan: Analyze a hardened plan for consistency, coverage gaps, risk
+ *   - file: Analyze source file(s) for bugs, patterns, improvements
+ *   - diagnose: Investigate a source file for bugs and root causes
+ *
+ * @param {{ target: string, mode?: string, models?: string[]|null, preset?: string|null, cwd?: string }} options
+ *   preset: a QUORUM_PRESETS name (power, speed, …); explicit `models` still win.
+ * @returns {Promise<{ target, mode, models, results, synthesis, totalDuration, totalCost, timestamp }>}
+ */
 export async function analyzeWithQuorum(options = {}) {
   const {
     target,
     mode = "plan",
     models = null,
+    preset = null,
     cwd = process.cwd(),
   } = options;
 
-  const config = loadQuorumConfig(cwd);
+  const config = loadQuorumConfig(cwd, preset);
   const analyzeModels = models || config.models;
   const content = readAnalysisTargetContent({ cwd, target });
   const prompt = buildAnalysisPromptForMode({ mode, content, target });

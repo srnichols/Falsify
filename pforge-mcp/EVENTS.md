@@ -26,8 +26,58 @@ Every event includes:
 | `version` | string | Schema version. Always `"1.0"`. |
 | `type` | string | Event type identifier (see sections below). |
 | `timestamp` | string | ISO-8601 UTC timestamp of emission. |
-| `source` | string | System that emitted the event. One of `orchestrator`, `worker`, `hub`, `bridge`, `liveguard`, `crucible`, `skill`, `watcher`, `audit`. |
+| `source` | string | System that emitted the event. One of `orchestrator`, `worker`, `hub`, `bridge`, `liveguard`, `crucible`, `skill`, `watcher`, `audit`, `forge-master`. |
 | `security_risk` | string | Security risk level assessed at emission time. One of `none`, `low`, `medium`, `high`, `critical`. Defaults to `none`. |
+
+---
+
+## Forge-Master Observer Events
+
+### `forge-master-insight`
+
+Emitted by Forge-Master after a successful observer model turn when the model
+identifies a notable pattern. The hub adds its common `version` and `timestamp`
+fields to this event envelope.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | Always `forge-master-insight`. |
+| `ts` | string | ISO-8601 timestamp for the insight observation. |
+| `source` | string | Always `forge-master`. |
+| `runId` | string | Included only when every event in the observed batch has the same non-empty run ID; limited to 80 characters. |
+| `insight.id` | string | Stable `fmi-` fingerprint for de-duplication. It excludes evidence refs and time. |
+| `insight.severity` | string | One of `info`, `warn`, or `critical`. |
+| `insight.summary` | string | Insight summary, limited to 200 characters. |
+| `insight.evidence` | array | Up to five `{eventType, ref}` references. |
+| `insight.suggestedAction` | object or null | Advisory recommendation only; it is never dispatched. |
+
+Each observer turn may emit at most five insights; each insight contains up to
+five evidence items. The summary limit is 200 characters. Insights are kept in
+a 50-entry in-process ring only and are lost when the process exits. Read them
+with `forge_master_observe` using `action: "status"` and optional `limit` and
+`cursor` pagination fields. The ring lives in the Forge-Master studio child;
+`pforge-mcp` registers `forge_master_observe` as a proxy to that same child, so
+any MCP client connected to a project's `pforge-mcp` can start the observer and
+page its insights. There is no in-process fallback: if the child cannot be
+reached, the tool returns `{ ok: false, error: "FORGE_MASTER_UNAVAILABLE" }`.
+
+```json
+{
+  "type": "forge-master-insight",
+  "version": "1.0",
+  "timestamp": "2026-10-07T17:10:00.000Z",
+  "ts": "2026-10-07T17:10:00.000Z",
+  "source": "forge-master",
+  "runId": "run-123",
+  "insight": {
+    "id": "fmi-0123456789abcdef",
+    "severity": "warn",
+    "summary": "The same gate failed repeatedly.",
+    "evidence": [{ "eventType": "gate-failed", "ref": "slice-2" }],
+    "suggestedAction": null
+  }
+}
+```
 
 ---
 
@@ -55,7 +105,7 @@ Emitted when `runPlan()` begins execution.
   "type": "run-started",
   "plan": "docs/plans/Phase-1.md",
   "mode": "auto",
-  "model": "claude-sonnet-4.6",
+  "model": "claude-sonnet-5.5",
   "sliceCount": 8,
   "executionOrder": ["1", "2", "3"]
 }
@@ -81,7 +131,7 @@ Emitted when a slice passes all validation gates.
   "sliceId": "1",
   "status": "passed",
   "duration": 45000,
-  "tokens": { "tokens_out": 4200, "model": "claude-sonnet-4.6" },
+  "tokens": { "tokens_out": 4200, "model": "claude-sonnet-5.5" },
   "cost_usd": 0.12
 }
 ```
@@ -322,7 +372,7 @@ Emitted when a slice is escalated to quorum for multi-model consensus review.
   "version": "1.0",
   "sliceId": "3",
   "reason": "complexity threshold exceeded",
-  "models": ["claude-sonnet-4.6", "gpt-5.2", "grok-3-mini"],
+  "models": ["claude-opus-5.5", "gpt-6-sol", "grok-4.7"],
   "timestamp": "..."
 }
 ```
@@ -428,7 +478,7 @@ Emitted when `forge_watch` builds a snapshot of a target project. Consumed by th
 {
   "type": "watch-snapshot-completed",
   "data": {
-    "target": "../Rummag",
+    "target": "../my-app",
     "runState": "in-progress",
     "runId": "run-2026-04-17-0930",
     "anomalyCount": 2,
@@ -445,11 +495,11 @@ Emitted when `forge_watch` detects one or more anomalies. One event per watch in
 {
   "type": "watch-anomaly-detected",
   "data": {
-    "target": "../Rummag",
+    "target": "../my-app",
     "runId": "run-2026-04-17-0930",
     "anomalies": [
       { "code": "slice-failed", "severity": "high", "message": "Slice 3 failed after 2 retries" },
-      { "code": "model-escalated", "severity": "warn", "message": "Slice 2 escalated to claude-opus-4.7" }
+      { "code": "model-escalated", "severity": "warn", "message": "Slice 2 escalated to claude-opus-5.5" }
     ]
   }
 }
@@ -464,9 +514,9 @@ Emitted when `forge_watch` analyze-mode produces narrative advice from a frontie
 {
   "type": "watch-advice-generated",
   "data": {
-    "target": "../Rummag",
+    "target": "../my-app",
     "runId": "run-2026-04-17-0930",
-    "model": "claude-opus-4.7",
+    "model": "claude-opus-5.5",
     "tokensIn": 8432,
     "tokensOut": 512,
     "durationMs": 4821,

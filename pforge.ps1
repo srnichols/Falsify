@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     pforge — CLI wrapper for the Plan Forge Pipeline
 
@@ -24,6 +24,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# ─── Issue #296: Windows PowerShell 5.1 started by a Node process (VS Code,
+# ─── Copilot CLI) can inherit PowerShell 7's PSModulePath. 5.1 then imports
+# ─── PowerShell 7's Core-only Microsoft.PowerShell.Utility, which lacks 5.1's
+# ─── script functions such as Get-FileHash. Keep 5.1 on its own module paths.
+if ($PSVersionTable.PSEdition -eq 'Desktop' -and $env:PSModulePath) {
+    $env:PSModulePath = (($env:PSModulePath -split ';') | Where-Object { $_ -and $_ -notmatch '(^|\\)PowerShell\\' }) -join ';'
+}
 
 # ─── Issue #196: force UTF-8 console output so box-drawing chars (╔═╗║),
 # ─── checkmarks (✓⚠✅⚠️), and other Unicode survive when stdout is captured
@@ -65,6 +73,124 @@ function Write-ManualSteps([string]$Title, [string[]]$Steps) {
         $i++
     }
     Write-Host ""
+}
+
+# ─── JSONC (Issue #252) ────────────────────────────────────────────────
+# .vscode/settings.json is JSONC — comments and trailing commas are legal
+# there. Windows PowerShell 5.1's ConvertFrom-Json rejects both; pwsh 7.6
+# accepts them. Strip the JSONC ourselves so the result does not depend on
+# which host the user happens to be running.
+#
+# These scanners walk characters rather than matching a regex, because a
+# regex cannot tell a comment from its lookalike inside a string literal:
+# "https://x" holds a `//` that is not a comment, and "a,b," holds a comma
+# that is not a trailing comma.
+
+<#
+.SYNOPSIS
+    Copy one JSON string literal, starting at the opening quote, honouring
+    backslash escapes. Returns the index just past the closing quote.
+#>
+function Copy-JsonStringLiteral {
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][int]$Start,
+        [Parameter(Mandatory)][System.Text.StringBuilder]$Builder
+    )
+    $len = $Text.Length
+    $i = $Start
+    [void]$Builder.Append($Text[$i]); $i++
+    while ($i -lt $len) {
+        $ch = $Text[$i]
+        [void]$Builder.Append($ch)
+        $i++
+        if ($ch -eq '\') {
+            if ($i -lt $len) { [void]$Builder.Append($Text[$i]); $i++ }
+            continue
+        }
+        if ($ch -eq '"') { break }
+    }
+    return $i
+}
+
+<#
+.SYNOPSIS
+    Remove // line comments and /* */ block comments from JSONC text,
+    leaving string literals and line structure untouched.
+#>
+function Remove-JsoncComment {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+
+    $out = [System.Text.StringBuilder]::new($Text.Length)
+    $len = $Text.Length
+    $i = 0
+    while ($i -lt $len) {
+        $ch = $Text[$i]
+        if ($ch -eq '"') {
+            $i = Copy-JsonStringLiteral -Text $Text -Start $i -Builder $out
+            continue
+        }
+        if ($ch -eq '/' -and ($i + 1) -lt $len) {
+            $next = $Text[$i + 1]
+            if ($next -eq '/') {
+                # Stop AT the newline so line numbers survive for error text.
+                while ($i -lt $len -and $Text[$i] -ne "`n") { $i++ }
+                continue
+            }
+            if ($next -eq '*') {
+                $i += 2
+                while (($i + 1) -lt $len -and -not ($Text[$i] -eq '*' -and $Text[$i + 1] -eq '/')) { $i++ }
+                $i = [Math]::Min($i + 2, $len)
+                continue
+            }
+        }
+        [void]$out.Append($ch)
+        $i++
+    }
+    return $out.ToString()
+}
+
+<#
+.SYNOPSIS
+    Drop commas that are followed only by whitespace and a closing } or ],
+    skipping over string literals.
+#>
+function Remove-JsoncTrailingComma {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+
+    $out = [System.Text.StringBuilder]::new($Text.Length)
+    $len = $Text.Length
+    $i = 0
+    while ($i -lt $len) {
+        $ch = $Text[$i]
+        if ($ch -eq '"') {
+            $i = Copy-JsonStringLiteral -Text $Text -Start $i -Builder $out
+            continue
+        }
+        if ($ch -eq ',') {
+            $j = $i + 1
+            while ($j -lt $len -and [char]::IsWhiteSpace($Text[$j])) { $j++ }
+            if ($j -lt $len -and ($Text[$j] -eq '}' -or $Text[$j] -eq ']')) {
+                $i++
+                continue
+            }
+        }
+        [void]$out.Append($ch)
+        $i++
+    }
+    return $out.ToString()
+}
+
+<#
+.SYNOPSIS
+    Parse JSONC (JSON with comments and trailing commas) — the dialect VS Code
+    uses for settings.json. Throws on genuinely malformed JSON, as ConvertFrom-Json does.
+#>
+function ConvertFrom-Jsonc {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+
+    $stripped = Remove-JsoncTrailingComma -Text (Remove-JsoncComment -Text $Text)
+    return ($stripped | ConvertFrom-Json)
 }
 
 # ─── .gitignore Manager (Issue #211) ───────────────────────────────────
@@ -149,12 +275,17 @@ function Show-Help {
     Write-Host "  ext install <p>   Install extension from path"
     Write-Host "  ext list          List installed extensions"
     Write-Host "  ext remove <name> Remove an installed extension"
-    Write-Host "  update [source]   Update framework files from Plan Forge source (preserves customizations)"
+    Write-Host "  update [source]   Update framework files from Plan Forge source (keeps guidance files you edited)"
+    Write-Host "                      Flags: --dry-run, --yes/-y (no prompt), --force (no prompt; re-apply the same version), --overwrite-customized (replace edited guidance; backups kept)"
     Write-Host "  self-update       Check for and install the latest Plan Forge release from GitHub"
-    Write-Host "                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after)"
+    Write-Host "                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),"
+    Write-Host "                             --overwrite-customized"
     Write-Host "  analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance"
+    Write-Host "                      Flags: --quorum[=<preset>] or --models m1,m2 (multi-model review, also of source files), --mode plan|file"
+    Write-Host "  diagnose <file>   Multi-model bug investigation — root causes and fixes. Flags: --models m1,m2, --quorum=<preset>"
     Write-Host "  run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens"
     Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
+    Write-Host "  pending           List, diff, apply or discard guidance updates pforge update saved instead of overwriting your edits"
     Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
     Write-Host "  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings"
     Write-Host "  drift             Score codebase against architecture guardrail rules — track drift over time"
@@ -1221,6 +1352,53 @@ function Invoke-Sweep {
     }
 }
 
+# ─── Plan scope hints (shared by diff + analyze) ───────────────────────
+# Backticked hints from every "## <Heading>" section of a plan, each section
+# stopping at the next heading. The previous pattern lacked (?m), so "^" never
+# matched mid-file and the section ran to EOF — every later slice scope became
+# a "forbidden" path (meta-bugs #283, #286). Only single-token hints with a
+# letter or digit can name a path; prose such as "git push --force" or "*" is
+# ignored. Twin of pforge.sh plan_section_hints and the check-forbidden hooks.
+function Get-PlanSectionHints([string]$PlanContent, [string]$Heading) {
+    $pattern = '(?m)^#{2,6}[ \t]+' + [regex]::Escape($Heading) + '(?!\w)[^\n]*\n([\s\S]*?)(?=^#{2,6}[ \t]|\z)'
+    $hints = @()
+    foreach ($section in [regex]::Matches($PlanContent, $pattern)) {
+        foreach ($token in [regex]::Matches($section.Groups[1].Value, '`([^`\r\n]+)`')) {
+            $hint = $token.Groups[1].Value.Trim()
+            if ($hint -match '[A-Za-z0-9]' -and $hint -notmatch '\s') { $hints += $hint }
+        }
+    }
+    return , $hints
+}
+
+# Plan path hints are literal text with "*" as the only wildcard; -like also
+# read "[...]" as a character class, so a backticked "[parallel-safe]" tag
+# matched nearly every path (meta-bug #286). A bare word (letters, digits,
+# "_", "-") matches only a whole path segment, so prose tokens such as `true`
+# or `0` cannot match arbitrary paths.
+function Test-PlanPathHint([string]$File, [string]$Hint) {
+    $normalizedHint = $Hint -replace '\\', '/'
+    if ($normalizedHint -match '^[A-Za-z0-9_-]+$') {
+        $pattern = '(^|/)' + $normalizedHint + '($|/)'
+    } else {
+        $pattern = [regex]::Escape($normalizedHint) -replace '\\\*', '.*'
+    }
+    return [regex]::IsMatch(($File -replace '\\', '/'), $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+}
+
+# Verdict for one changed file: forbidden (with the matching hint), in-scope,
+# or unplanned. A plan without In Scope hints allows every non-forbidden file.
+function Get-PlanScopeVerdict([string]$File, [string[]]$ForbiddenHints, [string[]]$InScopeHints) {
+    foreach ($hint in $ForbiddenHints) {
+        if (Test-PlanPathHint $File $hint) { return @{ Verdict = 'forbidden'; Hint = $hint } }
+    }
+    if ($InScopeHints.Count -eq 0) { return @{ Verdict = 'in-scope' } }
+    foreach ($hint in $InScopeHints) {
+        if (Test-PlanPathHint $File $hint) { return @{ Verdict = 'in-scope' } }
+    }
+    return @{ Verdict = 'unplanned' }
+}
+
 # ─── Command: diff ─────────────────────────────────────────────────────
 function Invoke-Diff {
     if (-not $Arguments -or $Arguments.Count -eq 0) {
@@ -1257,21 +1435,9 @@ function Invoke-Diff {
         return
     }
 
-    $planContent = Get-Content $planFile -Raw
-
-    # Extract In Scope paths
-    $inScopeSection = ""
-    if ($planContent -match '(?s)### In Scope(.*?)(?=^###?\s|\z)') {
-        $inScopeSection = $Matches[1]
-    }
-    $inScopePaths = [regex]::Matches($inScopeSection, '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
-
-    # Extract Forbidden Actions paths
-    $forbiddenSection = ""
-    if ($planContent -match '(?s)### Forbidden Actions(.*?)(?=^###?\s|\z)') {
-        $forbiddenSection = $Matches[1]
-    }
-    $forbiddenPaths = [regex]::Matches($forbiddenSection, '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
+    $planContent = Get-Content -LiteralPath $planFile -Raw
+    $inScopePaths = Get-PlanSectionHints $planContent 'In Scope'
+    $forbiddenPaths = Get-PlanSectionHints $planContent 'Forbidden Actions'
 
     Write-Host ""
     Write-Host "Scope Drift Check — $($changedFiles.Count) changed file(s) vs plan:" -ForegroundColor Cyan
@@ -1281,38 +1447,17 @@ function Invoke-Diff {
     $outOfScope = 0
 
     foreach ($file in $changedFiles) {
-        # Check forbidden
-        $isForbidden = $false
-        foreach ($fp in $forbiddenPaths) {
-            if ($file -like "*$fp*") {
-                Write-Host "  🔴 FORBIDDEN  $file  (matches: $fp)" -ForegroundColor Red
+        $verdict = Get-PlanScopeVerdict $file $forbiddenPaths $inScopePaths
+        switch ($verdict.Verdict) {
+            'forbidden' {
+                Write-Host "  🔴 FORBIDDEN  $file  (matches: $($verdict.Hint))" -ForegroundColor Red
                 $violations++
-                $isForbidden = $true
-                break
             }
-        }
-        if ($isForbidden) { continue }
-
-        # Check in-scope
-        $isInScope = $false
-        if ($inScopePaths.Count -eq 0) {
-            $isInScope = $true  # No scope defined — everything allowed
-        }
-        else {
-            foreach ($sp in $inScopePaths) {
-                if ($file -like "*$sp*") {
-                    $isInScope = $true
-                    break
-                }
+            'in-scope' { Write-Host "  ✅ IN SCOPE   $file" -ForegroundColor Green }
+            default {
+                Write-Host "  🟡 UNPLANNED  $file  (not in Scope Contract)" -ForegroundColor Yellow
+                $outOfScope++
             }
-        }
-
-        if ($isInScope) {
-            Write-Host "  ✅ IN SCOPE   $file" -ForegroundColor Green
-        }
-        else {
-            Write-Host "  🟡 UNPLANNED  $file  (not in Scope Contract)" -ForegroundColor Yellow
-            $outOfScope++
         }
     }
 
@@ -1330,6 +1475,117 @@ function Invoke-Diff {
 }
 
 # ─── Command: update ───────────────────────────────────────────────────
+# ─── Update guard (#280) ──────────────────────────────────────────────
+# Guidance files (instructions, prompts, agents, skills, hooks, automations, runbooks) go
+# through pforge-mcp/update-guard.mjs from the update source. It replaces only
+# files the project has not changed, keeps customized ones (saving the new
+# version under .forge/update-pending/), and renders setup's placeholders.
+$script:GuidancePathPattern = '^(\.github/(prompts|instructions|agents|skills|hooks|automations)/|docs/plans/)'
+
+function Select-GuidedFiles([object[]]$Items, [string]$SourceRoot, [string]$ProjectRoot) {
+    foreach ($item in $Items) {
+        if (-not $item.Dst.StartsWith($ProjectRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        if (-not $item.Src.StartsWith($SourceRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $dstRel = $item.Dst.Substring($ProjectRoot.Length).TrimStart('\', '/').Replace('\', '/')
+        if ($dstRel -notmatch $script:GuidancePathPattern) { continue }
+        $item.Guided = $true
+        $item.DstRel = $dstRel
+        $item.SrcRel = $item.Src.Substring($SourceRoot.Length).TrimStart('\', '/').Replace('\', '/')
+        $item
+    }
+}
+
+# The guard to use: the source's copy (its index knows the newest shipped
+# versions), else the project's installed copy (e.g. when the source is an older
+# release). $null when Node or both copies are missing; update then compares
+# guidance files byte for byte, as releases before the guard did.
+function Resolve-UpdateGuard([string]$SourceRoot, [string]$ProjectRoot) {
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { return $null }
+    foreach ($root in @($SourceRoot, $ProjectRoot)) {
+        $guard = Join-Path $root 'pforge-mcp/update-guard.mjs'
+        if ((Test-Path $guard) -and (Test-Path (Join-Path $root 'pforge-mcp/shipped-guidance-hashes.json'))) { return $guard }
+    }
+    return $null
+}
+
+# #280: updaters before the guard copied guidance files with setup's
+# placeholders unrendered. Such a file matches the source byte for byte, so a
+# hash compare alone never offers it again; while the guard is active, a
+# guidance Markdown file that still holds a placeholder .forge.json can fill
+# is offered too, and the guard renders it (or keeps it, if it was edited).
+function Test-UpdateNeeded([string]$Src, [string]$Dst) {
+    if ((Get-FileHash $Src -Algorithm SHA256).Hash -ne (Get-FileHash $Dst -Algorithm SHA256).Hash) { return $true }
+    if (-not $script:FillablePlaceholders -or -not $Dst.EndsWith('.md', [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if (-not $Dst.StartsWith($RepoRoot, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    $rel = $Dst.Substring($RepoRoot.Length).TrimStart('\', '/').Replace('\', '/')
+    if ($rel -notmatch $script:GuidancePathPattern) { return $false }
+    $text = [IO.File]::ReadAllText($Dst)
+    foreach ($token in $script:FillablePlaceholders) { if ($text.Contains($token)) { return $true } }
+    return $false
+}
+
+# Removes the release tarball and extract dir that 'update --from-github' downloaded,
+# unless --keep-cache (#298). The paths live in $script: scope because the nested
+# Fetch-GitHubSource helper sets them.
+# Add missing modelRouting / hooks defaults to .forge.json (pforge-mcp/migrate-forge-config.mjs,
+# shared with pforge.sh). Idempotent, so it also runs when the install is already current.
+# The JSON result of a Node helper run with 2>&1: the last line starting with "{",
+# or the last line when there is none (so an error message still surfaces). Node
+# can print deprecation warnings after the JSON, which made -Last 1 read a warning.
+function Select-LastJsonLine {
+    param([Parameter(ValueFromPipeline)] $Line)
+    begin { $last = $null; $json = $null }
+    process {
+        $text = "$Line"
+        $last = $text
+        if ($text -match '^\s*\{') { $json = $text }
+    }
+    end { if ($null -ne $json) { $json } else { $last } }
+}
+
+function Invoke-ForgeConfigMigration([string]$ProjectRoot, [string]$SourceRoot) {
+    $migrator = @((Join-Path $ProjectRoot "pforge-mcp/migrate-forge-config.mjs"), (Join-Path $SourceRoot "pforge-mcp/migrate-forge-config.mjs")) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $migrator) { return }
+    foreach ($key in @(& node $migrator --project $ProjectRoot 2>$null)) {
+        if ($key) { Write-Host "  ✅ Added $key to .forge.json" -ForegroundColor Green }
+    }
+}
+
+function Clear-GitHubUpdateCache([switch]$KeepCache) {
+    if (-not $script:ghTarball) { return }
+    if ($KeepCache) {
+        Write-Host "  Cache preserved (--keep-cache): $script:ghTarball" -ForegroundColor DarkGray
+        return
+    }
+    $removed = $false
+    foreach ($path in @($script:ghTarball, $script:ghExtractDir)) {
+        if ($path -and (Test-Path $path)) { Remove-Item -Recurse -Force $path; $removed = $true }
+    }
+    if ($removed) { Write-Host "  Cleaned up cache files." -ForegroundColor DarkGray }
+}
+
+function Invoke-UpdateGuard([string]$Guard, [string]$Mode, [object[]]$Items, [string]$SourceRoot, [string]$ProjectRoot, [switch]$OverwriteCustomized) {
+    $list = [IO.Path]::GetTempFileName()
+    try {
+        $lines = ($Items | ForEach-Object { "$($_.SrcRel)`t$($_.DstRel)" }) -join "`n"
+        [IO.File]::WriteAllText($list, "$lines`n", [Text.UTF8Encoding]::new($false))
+        $guardArgs = @($Guard, $Mode, '--source', $SourceRoot, '--project', $ProjectRoot, '--list', $list)
+        if ($OverwriteCustomized) { $guardArgs += '--overwrite-customized' }
+        # stdout only: under Windows PowerShell 5.1, merging a native command's
+        # stderr with 2>&1 throws when $ErrorActionPreference is Stop.
+        $out = & node @guardArgs
+        if ($LASTEXITCODE -ne 0) { throw "update guard failed with exit code $LASTEXITCODE" }
+        $result = [ordered]@{}
+        foreach ($line in @($out)) {
+            $parts = "$line" -split "`t"
+            if ($parts.Count -ge 2) { $result[$parts[1]] = @{ Action = $parts[0]; Detail = $(if ($parts.Count -ge 3) { $parts[2] } else { '' }) } }
+        }
+        return $result
+    } finally {
+        Remove-Item $list -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-Update {
     Write-ManualSteps "update" @(
         "Clone/pull the latest Plan Forge template repo"
@@ -1341,8 +1597,15 @@ function Invoke-Update {
 
     $dryRun = $Arguments -contains '--dry-run' -or $Arguments -contains '--check'
     $forceUpdate = $Arguments -contains '--force'
+    # --yes only answers the confirmation prompt; --force also re-applies the same version.
+    $autoYes = $Arguments -contains '--yes' -or $Arguments -contains '-y'
+    $overwriteCustomized = $Arguments -contains '--overwrite-customized'
     $fromGitHub = $Arguments -contains '--from-github'
     $keepCache = $Arguments -contains '--keep-cache'
+    # Read by Invoke-SelfUpdate: whether files were applied, and what the second pass needs.
+    $script:UpdateApplied = $false
+    $script:UpdateWrapperChanged = $false
+    $script:UpdateSourceDir = $null
 
     # Parse --tag <value>
     $ghTag = $null
@@ -1355,8 +1618,11 @@ function Invoke-Update {
 
     # ─── --from-github path ──────────────────────────────────────
     $sourcePath = $null
-    $ghExtractDir = $null
-    $ghTarball = $null
+    $script:ghExtractDir = $null
+    $script:ghTarball = $null
+    $script:ghResolvedTag = $null
+    $script:ghSha256 = $null
+    $script:ghSizeBytes = $null
 
     # Helper: fetch + extract tarball for a resolved tag, returns source path.
     function Fetch-GitHubSource {
@@ -1371,7 +1637,7 @@ function Invoke-Update {
         Write-Host "Resolving release tag from GitHub..." -ForegroundColor DarkCyan
         $tagArgs = @("resolve-tag")
         if ($RequestedTag) { $tagArgs += @("--tag", $RequestedTag) }
-        $tagResult = & node $nodeHelper @tagArgs 2>&1 | Select-Object -Last 1
+        $tagResult = & node $nodeHelper @tagArgs 2>&1 | Select-LastJsonLine
         try { $tagJson = $tagResult | ConvertFrom-Json } catch {
             Write-Host "ERROR: Failed to parse tag resolution output: $tagResult" -ForegroundColor Red
             exit 1
@@ -1393,7 +1659,7 @@ function Invoke-Update {
 
         Write-Host "Downloading release tarball..." -ForegroundColor DarkCyan
         $dlArgs = @("download", "--tag", $resolvedTag, "--project-dir", $RepoRoot)
-        $dlResult = & node $nodeHelper @dlArgs 2>&1 | Select-Object -Last 1
+        $dlResult = & node $nodeHelper @dlArgs 2>&1 | Select-LastJsonLine
         try { $dlJson = $dlResult | ConvertFrom-Json } catch {
             Write-Host "ERROR: Failed to parse download output: $dlResult" -ForegroundColor Red
             exit 1
@@ -1403,6 +1669,9 @@ function Invoke-Update {
             exit 1
         }
         $script:ghTarball = $dlJson.path
+        $script:ghResolvedTag = $resolvedTag
+        $script:ghSha256 = $dlJson.sha256
+        $script:ghSizeBytes = $dlJson.sizeBytes
         Write-Host "  Downloaded: $($dlJson.path) ($($dlJson.sizeBytes) bytes)" -ForegroundColor White
         Write-Host "  SHA-256: $($dlJson.sha256)" -ForegroundColor DarkGray
 
@@ -1507,7 +1776,7 @@ function Invoke-Update {
                         $nodeHelperProbe = Join-Path $RepoRoot "pforge-mcp/update-from-github.mjs"
                         if (Test-Path $nodeHelperProbe) {
                             try {
-                                $tagProbe = & node $nodeHelperProbe resolve-tag 2>&1 | Select-Object -Last 1
+                                $tagProbe = & node $nodeHelperProbe resolve-tag 2>&1 | Select-LastJsonLine
                                 $tagProbeJson = $tagProbe | ConvertFrom-Json
                                 if ($tagProbeJson.ok -and $tagProbeJson.tag) {
                                     $latestTagVer = ($tagProbeJson.tag -replace '^v', '').Trim()
@@ -1526,7 +1795,7 @@ function Invoke-Update {
                             $cmpResult = 0
                             if (Test-Path $nodeCmp) {
                                 try {
-                                    $cmpStr = & node -e "import('$($nodeCmp -replace '\\', '/')').then(m=>{console.log(m.compareVersions('$siblingVer','$latestTagVer'))})" 2>&1 | Select-Object -Last 1
+                                    $cmpStr = & node -e "import('$($nodeCmp -replace '\\', '/')').then(m=>{console.log(m.compareVersions('$siblingVer','$latestTagVer'))})" 2>$null | Select-Object -Last 1
                                     $cmpResult = [int]$cmpStr
                                 } catch { $cmpResult = 0 }
                             }
@@ -1571,12 +1840,26 @@ function Invoke-Update {
     $sourceVersion = (Get-Content (Join-Path $sourcePath "VERSION") -Raw).Trim()
     $configPath = Join-Path $RepoRoot ".forge.json"
     $currentVersion = "unknown"
-    $currentPreset = "custom"
+    $currentPreset = $null
+    $presetNote = ""
 
     if (Test-Path $configPath) {
         $config = Get-Content $configPath -Raw | ConvertFrom-Json
         $currentVersion = $config.templateVersion
         $currentPreset = $config.preset
+    }
+    # No .forge.json (or no preset in it): detect the stack like setup -AutoDetect,
+    # rather than assuming "custom" and replacing stack guidance with shared copies.
+    if (-not $currentPreset) {
+        $currentPreset = "custom"
+        $detector = @((Join-Path $sourcePath "pforge-mcp/detect-preset.mjs"), (Join-Path $RepoRoot "pforge-mcp/detect-preset.mjs")) | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if ($detector) {
+            $detected = (& node $detector --project $RepoRoot --fields 2>$null | Select-Object -Last 1)
+            if ($detected -match '^([\w-]+)\|(.*)$') {
+                $currentPreset = $Matches[1]
+                $presetNote = if ($Matches[2]) { " (detected from $($Matches[2]); add ""preset"": ""$($Matches[1])"" to .forge.json to pin it)" } else { " (no .forge.json preset and no stack markers found)" }
+            }
+        }
     }
 
     # v2.53.1 — refuse to install a '-dev' source over a clean install.
@@ -1596,6 +1879,7 @@ function Invoke-Update {
         Write-Host "    pulls the latest tagged release from GitHub." -ForegroundColor DarkGray
         Write-Host ""
         Write-Host "  Override (not recommended): re-run with --allow-dev" -ForegroundColor DarkGray
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
         exit 1
     }
 
@@ -1605,15 +1889,17 @@ function Invoke-Update {
     Write-Host "  Source:   $sourcePath" -ForegroundColor White
     Write-Host "  Current:  v$currentVersion" -ForegroundColor White
     Write-Host "  Latest:   v$sourceVersion" -ForegroundColor White
-    Write-Host "  Preset:   $currentPreset" -ForegroundColor White
+    Write-Host "  Preset:   $currentPreset$presetNote" -ForegroundColor White
     Write-Host ""
 
     if ($currentVersion -eq $sourceVersion -and -not $forceUpdate) {
         Write-Host "Already up to date (v$currentVersion). Use --force to re-apply." -ForegroundColor Green
+        if (-not $dryRun) { Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath }
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
         return
     }
 
-    # ─── Define update categories ─────────────────────────────────
+    # ─── Delegate scan to update-plan.mjs (#299, Phase-UPDATE-CORE) ───────
     # NEVER UPDATE: User-customized files
     $neverUpdate = @(
         ".github/copilot-instructions.md",
@@ -1625,104 +1911,10 @@ function Invoke-Update {
         ".forge.json"
     )
 
-    # ─── Calculate changes ────────────────────────────────────────
-    $updates = @()
-    $newFiles = @()
+    # #280: resolve the update guard before scanning, so guidance files are
+    # offered only when the guard can keep the project's edits.
+    $updateGuard = Resolve-UpdateGuard -SourceRoot $sourcePath -ProjectRoot $RepoRoot
 
-    # Update step prompts from .github/prompts/ in the source
-    $srcPrompts = Join-Path $sourcePath ".github/prompts"
-    $dstPrompts = Join-Path $RepoRoot ".github/prompts"
-    if (Test-Path $srcPrompts) {
-        Get-ChildItem -Path $srcPrompts -Filter "*.prompt.md" -File | ForEach-Object {
-            # project-principles.prompt.md is user-customized (lives in templates/ source) — never auto-update
-            if ($_.Name -eq 'project-principles.prompt.md') { return }
-            $dstFile = Join-Path $dstPrompts $_.Name
-            if (Test-Path $dstFile) {
-                $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
-                    $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = ".github/prompts/$($_.Name)" }
-                }
-            } else {
-                $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = ".github/prompts/$($_.Name)" }
-            }
-        }
-    }
-
-    # Update pipeline agents from templates/
-    $srcAgents = Join-Path $sourcePath "templates/.github/agents"
-    $dstAgents = Join-Path $RepoRoot ".github/agents"
-    $pipelineAgents = @("specifier.agent.md", "plan-hardener.agent.md", "executor.agent.md", "reviewer-gate.agent.md", "shipper.agent.md")
-    if (Test-Path $srcAgents) {
-        foreach ($agentName in $pipelineAgents) {
-            $srcFile = Join-Path $srcAgents $agentName
-            $dstFile = Join-Path $dstAgents $agentName
-            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
-                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/agents/$agentName" }
-                }
-            }
-        }
-    }
-
-    # Update shared instruction files.
-    # Source convention mirrors setup.ps1 Step 2:
-    #   $sourcePath/.github/instructions/             — Plan-Forge-internal files that ship as-is (no leakage)
-    #   $sourcePath/presets/shared/.github/instructions/ — consumer-facing genericized versions
-    # aci-design.instructions.md intentionally NOT in either list — MCP-tool-author guidance, not consumer-relevant.
-    $srcInternalInstr = Join-Path $sourcePath ".github/instructions"
-    $srcSharedInstr   = Join-Path $sourcePath "presets/shared/.github/instructions"
-    $dstInstr = Join-Path $RepoRoot ".github/instructions"
-    $internalInstructions = @("ai-plan-hardening-runbook.instructions.md", "context-fuel.instructions.md", "git-workflow.instructions.md", "security.instructions.md")
-    $sharedInstructions   = @("architecture-principles.instructions.md", "clean-code.instructions.md", "self-repair-reporting.instructions.md", "status-reporting.instructions.md", "testing.instructions.md")
-    if (Test-Path $srcInternalInstr) {
-        foreach ($instrName in $internalInstructions) {
-            $srcFile = Join-Path $srcInternalInstr $instrName
-            $dstFile = Join-Path $dstInstr $instrName
-            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
-                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/instructions/$instrName" }
-                }
-            }
-        }
-    }
-    if (Test-Path $srcSharedInstr) {
-        foreach ($instrName in $sharedInstructions) {
-            $srcFile = Join-Path $srcSharedInstr $instrName
-            $dstFile = Join-Path $dstInstr $instrName
-            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
-                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/instructions/$instrName" }
-                }
-            }
-        }
-    }
-
-    # Update runbook docs
-    $srcDocs = Join-Path $sourcePath "docs/plans"
-    $dstDocs = Join-Path $RepoRoot "docs/plans"
-    $runbookFiles = @("AI-Plan-Hardening-Runbook.md", "AI-Plan-Hardening-Runbook-Instructions.md", "DEPLOYMENT-ROADMAP-TEMPLATE.md", "PROJECT-PRINCIPLES-TEMPLATE.md")
-    if (Test-Path $srcDocs) {
-        foreach ($docName in $runbookFiles) {
-            $srcFile = Join-Path $srcDocs $docName
-            $dstFile = Join-Path $dstDocs $docName
-            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
-                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = "docs/plans/$docName" }
-                }
-            }
-        }
-    }
-
-    # ─── Preset-specific files (instructions, agents, prompts, skills) ───
     # Normalise preset: .forge.json may store a single string or a comma-separated list
     $presets = @()
     if ($currentPreset -is [System.Array]) {
@@ -1733,255 +1925,115 @@ function Invoke-Update {
         $presets = @($currentPreset)
     }
 
-    foreach ($p in ($presets | Where-Object { $_ -ne 'custom' })) {
-        $srcPresetDir = Join-Path $sourcePath "presets/$p/.github"
-        if (-not (Test-Path $srcPresetDir)) { continue }
-
-        Write-Host "  Checking preset: $p" -ForegroundColor DarkGray
-
-        # Instructions, agents, prompts: add NEW files only — existing files may have been customized
-        foreach ($subDir in @('instructions', 'agents', 'prompts')) {
-            $srcSub = Join-Path $srcPresetDir $subDir
-            $dstSub = Join-Path $RepoRoot ".github/$subDir"
-
-            if (-not (Test-Path $srcSub)) { continue }
-
-            Get-ChildItem -Path $srcSub -File | ForEach-Object {
-                $srcFile = $_.FullName
-                $dstFile = Join-Path $dstSub $_.Name
-
-                # Never overwrite protected customization files
-                $relFile = ".github/$subDir/$($_.Name)"
-                if ($neverUpdate -contains $relFile) { return }
-
-                # Only add files that don't exist yet — existing files may be customized
-                if (-not (Test-Path $dstFile)) {
-                    $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $relFile }
-                }
-            }
-        }
-
-        # Skills: add new skill directories only — existing SKILL.md files may be customized
-        $srcSkills = Join-Path $srcPresetDir "skills"
-        $dstSkills = Join-Path $RepoRoot ".github/skills"
-        if (Test-Path $srcSkills) {
-            Get-ChildItem -Path $srcSkills -Directory | ForEach-Object {
-                $skillName = $_.Name
-                $srcSkillFile = Join-Path $_.FullName "SKILL.md"
-                $dstSkillFile = Join-Path $dstSkills "$skillName/SKILL.md"
-
-                if (-not (Test-Path $srcSkillFile)) { return }
-
-                # Only add if skill doesn't exist yet
-                if (-not (Test-Path $dstSkillFile)) {
-                    $newFiles += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md" }
-                }
-            }
-        }
+    # #299: the category-by-category scan now lives in one place — update-plan.mjs
+    # — so both shells see identical UPDATE/NEW classification for every category.
+    $updatePlanScript = Join-Path $sourcePath "pforge-mcp/update-plan.mjs"
+    if (-not (Test-Path $updatePlanScript)) {
+        Write-Host "ERROR: The update source doesn't have pforge-mcp/update-plan.mjs." -ForegroundColor Red
+        Write-Host "  This source predates the version of pforge.ps1 you're running." -ForegroundColor Yellow
+        Write-Host "  Run 'pforge self-update', or point --from-github at a newer release." -ForegroundColor Yellow
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
+        exit 1
     }
 
-    # ─── MCP server files (auto-discover all files) ──────────────
-    $srcMcp = Join-Path $sourcePath "pforge-mcp"
-    $dstMcp = Join-Path $RepoRoot "pforge-mcp"
-    if (Test-Path $srcMcp) {
-        Get-ChildItem -Path $srcMcp -File -Recurse | Where-Object { $_.FullName -notmatch 'node_modules' } | ForEach-Object {
-            $relPath = $_.FullName.Substring($srcMcp.Length + 1)
-            $relName = "pforge-mcp/$($relPath.Replace('\', '/'))"
-            $dstFile = Join-Path $dstMcp $relPath
-            if ($neverUpdate -contains $relName) { return }
-            if (Test-Path $dstFile) {
-                $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
-                    $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                }
-            } else {
-                $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-            }
+    $planArgs = @($updatePlanScript, "plan", "--source", $sourcePath, "--project", $RepoRoot, "--presets", ($presets -join ','), "--json", "--removals")
+    # Capture stdout only — merging stderr (2>&1) can interleave with stdout on
+    # Windows PowerShell 5.1 and corrupt the JSON (see Invoke-UpdateGuard).
+    $planJsonLines = @(& node @planArgs)
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: update-plan.mjs failed (exit code $LASTEXITCODE):" -ForegroundColor Red
+        foreach ($line in $planJsonLines) { if ($line) { Write-Host "  $line" -ForegroundColor Yellow } }
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
+        exit 1
+    }
+    try {
+        $plan = ($planJsonLines -join "`n") | ConvertFrom-Json
+    } catch {
+        Write-Host "ERROR: Could not parse update-plan.mjs JSON output." -ForegroundColor Red
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
+        exit 1
+    }
+
+    # Map operations back into $updates / $newFiles, matching the shape the
+    # confirm/apply/guard/pending machinery below already expects.
+    $updates = @()
+    $newFiles = @()
+    # Package files the release no longer ships; moved to .forge/update-backups/ on apply.
+    $removals = @()
+    foreach ($op in @($plan.operations)) {
+        if (-not $op) { continue }
+        if ($op.action -eq 'remove') { $removals += $op.dst; continue }
+        $entry = @{
+            Src    = Join-Path $sourcePath $op.src
+            Dst    = Join-Path $RepoRoot $op.dst
+            Name   = $op.dst
+            # Guided only when a guard can apply it; without one, guidance files
+            # are replaced when they differ, as releases before the guard did.
+            Guided = ([bool]$op.guided -and [bool]$updateGuard)
+            DstRel = $op.dst
+            SrcRel = $op.src
         }
+        if ($op.action -eq 'new') { $newFiles += $entry } else { $updates += $entry }
     }
 
-    # ─── pforge-sdk (helper library) + pforge-master (Studio MCP) ──
-    # Same auto-discover loop, parameterized by package directory. Consumer
-    # installs that skipped these crashed at runtime for opt-in features
-    # (lattice, notifications, hallmark, forge-master-chat). Issue: installer
-    # coverage gap — see fix(installer) commit.
-    foreach ($pkg in @('pforge-sdk', 'pforge-master')) {
-        $srcPkg = Join-Path $sourcePath $pkg
-        $dstPkg = Join-Path $RepoRoot $pkg
-        if (-not (Test-Path $srcPkg)) { continue }
-        Get-ChildItem -Path $srcPkg -File -Recurse |
-            Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
-            ForEach-Object {
-                $relPath = $_.FullName.Substring($srcPkg.Length + 1)
-                $relName = "$pkg/$($relPath.Replace('\', '/'))"
-                $dstFile = Join-Path $dstPkg $relPath
-                if ($neverUpdate -contains $relName) { return }
-                if (Test-Path $dstFile) {
-                    $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                    $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                    if ($srcHash -ne $dstHash) {
-                        $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                    }
-                } else {
-                    $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
+    # ─── Recover KEEP candidates update-plan.mjs's scan already excludes ──
+    # `guidedEntry()` classifies during the scan itself and drops "customized"
+    # (hand-edited) files from `operations` entirely — there's no byte for the
+    # operator to see "you changed it" unless we re-probe guidance files the
+    # project already has that the plan didn't offer.
+    $keptCandidatesList = [System.Collections.Generic.List[object]]::new()
+    if ($updateGuard) {
+        $offeredDst = @{}
+        foreach ($op in @($plan.operations)) { if ($op) { $offeredDst[$op.dst] = $true } }
+        foreach ($dir in @('.github/prompts', '.github/instructions', '.github/agents', '.github/skills', '.github/hooks', 'docs/plans')) {
+            $dstDir = Join-Path $RepoRoot $dir
+            if (-not (Test-Path $dstDir)) { continue }
+            Get-ChildItem -Path $dstDir -File -Recurse | ForEach-Object {
+                $dstRel = $_.FullName.Substring($RepoRoot.Length).TrimStart('\', '/').Replace('\', '/')
+                if ($offeredDst.ContainsKey($dstRel) -or $neverUpdate -contains $dstRel) { return }
+                $candidates = @(
+                    (Join-Path $sourcePath $dstRel),
+                    (Join-Path $sourcePath "presets/shared/$dstRel"),
+                    (Join-Path $sourcePath "templates/$dstRel")
+                )
+                foreach ($p in @($presets | Where-Object { $_ -ne 'custom' })) {
+                    $candidates += (Join-Path $sourcePath "presets/$p/$dstRel")
                 }
-            }
-    }
-
-    # ─── CLI scripts (pforge.ps1, pforge.sh) ─────────────────────
-    foreach ($cliFile in @("pforge.ps1", "pforge.sh")) {
-        $srcFile = Join-Path $sourcePath $cliFile
-        $dstFile = Join-Path $RepoRoot $cliFile
-        if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-            $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-            $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-            if ($srcHash -ne $dstHash) {
-                $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
-            }
-        } elseif ((Test-Path $srcFile) -and -not (Test-Path $dstFile)) {
-            $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
-        }
-    }
-
-    # ─── Validation scripts ──────────────────────────────────────
-    foreach ($valFile in @("validate-setup.ps1", "validate-setup.sh")) {
-        $srcFile = Join-Path $sourcePath $valFile
-        $dstFile = Join-Path $RepoRoot $valFile
-        if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-            $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-            $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-            if ($srcHash -ne $dstHash) {
-                $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $valFile }
-            }
-        } elseif ((Test-Path $srcFile) -and -not (Test-Path $dstFile)) {
-            $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $valFile }
-        }
-    }
-
-    # ─── Core CLI files (root level) ────────────────────────────
-    # Includes root `pforge` bash shim so it self-heals on self-update.
-    foreach ($cliFile in @("pforge.ps1", "pforge.sh", "pforge", "VERSION")) {
-        $srcFile = Join-Path $sourcePath $cliFile
-        $dstFile = Join-Path $RepoRoot $cliFile
-        if (Test-Path $srcFile) {
-            if (Test-Path $dstFile) {
-                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
-                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
-                }
-            } else {
-                $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
+                $srcFile = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+                if (-not $srcFile) { return }
+                $srcRel = $srcFile.Substring($sourcePath.Length).TrimStart('\', '/').Replace('\', '/')
+                $keptCandidatesList.Add(@{ Src = $srcFile; Dst = $_.FullName; Name = $dstRel; Guided = $true; DstRel = $dstRel; SrcRel = $srcRel })
             }
         }
     }
+    $keptCandidates = @($keptCandidatesList)
 
-    # ─── MCP server files (all — single recursive scan) ──────────
-    $srcMcp = Join-Path $sourcePath "pforge-mcp"
-    $dstMcp = Join-Path $RepoRoot "pforge-mcp"
-    if (Test-Path $srcMcp) {
-        Get-ChildItem -Path $srcMcp -File -Recurse |
-            Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
-            ForEach-Object {
-                $relPath = $_.FullName.Substring($srcMcp.Length + 1)
-                $relName = "pforge-mcp/$($relPath.Replace('\', '/'))"
-                $dstFile = Join-Path $dstMcp $relPath
-                if (Test-Path $dstFile) {
-                    $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                    $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                    if ($srcHash -ne $dstHash) {
-                        $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                    }
-                } else {
-                    $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                }
-            }
+    # ─── Guard pass: split guided files into update vs. keep-customized ───
+    $kept = @()
+    $guided = @(@($updates + $newFiles) | Where-Object { $_.Guided })
+    $guardCandidates = @($guided + $keptCandidates)
+    if ($guardCandidates.Count -gt 0 -and -not $updateGuard) {
+        Write-Host "  Update guard not available (needs Node and pforge-mcp/update-guard.mjs); guidance files are replaced when they differ." -ForegroundColor DarkGray
     }
-
-    # ─── pforge-sdk + pforge-master (same scan, parameterized) ──
-    foreach ($pkg in @('pforge-sdk', 'pforge-master')) {
-        $srcPkg = Join-Path $sourcePath $pkg
-        $dstPkg = Join-Path $RepoRoot $pkg
-        if (-not (Test-Path $srcPkg)) { continue }
-        Get-ChildItem -Path $srcPkg -File -Recurse |
-            Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
-            ForEach-Object {
-                $relPath = $_.FullName.Substring($srcPkg.Length + 1)
-                $relName = "$pkg/$($relPath.Replace('\', '/'))"
-                $dstFile = Join-Path $dstPkg $relPath
-                if (Test-Path $dstFile) {
-                    $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                    $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                    if ($srcHash -ne $dstHash) {
-                        $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                    }
-                } else {
-                    $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                }
-            }
-    }
-
-    # ─── Hook files (lifecycle + LiveGuard) ─────────────────────
-    $srcHooks = Join-Path $sourcePath "templates/.github/hooks"
-    $dstHooks = Join-Path $RepoRoot ".github/hooks"
-    if (Test-Path $srcHooks) {
-        Get-ChildItem -Path $srcHooks -File -Recurse | ForEach-Object {
-            $relPath = $_.FullName.Substring($srcHooks.Length + 1)
-            $relName = ".github/hooks/$($relPath.Replace('\', '/'))"
-            $dstFile = Join-Path $dstHooks $relPath
-            if (Test-Path $dstFile) {
-                $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
-                    $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                }
-            } else {
-                $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-            }
+    if ($guardCandidates.Count -gt 0 -and $updateGuard) {
+        $guardPlan = Invoke-UpdateGuard -Guard $updateGuard -Mode plan -Items $guardCandidates -SourceRoot $sourcePath -ProjectRoot $RepoRoot
+        $updates = @($updates | Where-Object { -not $_.Guided -or $guardPlan[$_.DstRel].Action -eq 'update' })
+        $newFiles = @($newFiles | Where-Object { -not $_.Guided -or $guardPlan[$_.DstRel].Action -eq 'new' })
+        $kept = @($guardCandidates | Where-Object { $guardPlan[$_.DstRel].Action -eq 'customized' })
+        if ($overwriteCustomized -and $kept.Count -gt 0) {
+            foreach ($k in $kept) { $k.Name = "$($k.Name) (customized; your version is backed up first)" }
+            $updates = @($updates + $kept)
+            $kept = @()
         }
     }
-
-    # ─── Shared skills (add new, update existing shared-only) ────
-    $srcSharedSkills = Join-Path $sourcePath "presets/shared/skills"
-    if (Test-Path $srcSharedSkills) {
-        Get-ChildItem -Path $srcSharedSkills -Directory | ForEach-Object {
-            $skillName = $_.Name
-            $srcSkillFile = Join-Path $_.FullName "SKILL.md"
-            $dstSkillFile = Join-Path $RepoRoot ".github/skills/$skillName/SKILL.md"
-
-            if (-not (Test-Path $srcSkillFile)) { return }
-
-            # Check if the preset has a stack-specific version
-            $hasPresetVersion = $false
-            foreach ($p in ($presets | Where-Object { $_ -ne 'custom' })) {
-                $presetSkill = Join-Path $sourcePath "presets/$p/.github/skills/$skillName/SKILL.md"
-                if (Test-Path $presetSkill) { $hasPresetVersion = $true; break }
-            }
-
-            if (-not $hasPresetVersion) {
-                # Pure shared skill — safe to update
-                if (Test-Path $dstSkillFile) {
-                    $srcHash = (Get-FileHash $srcSkillFile -Algorithm SHA256).Hash
-                    $dstHash = (Get-FileHash $dstSkillFile -Algorithm SHA256).Hash
-                    if ($srcHash -ne $dstHash) {
-                        $updates += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md (shared)" }
-                    }
-                } else {
-                    $newFiles += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md (shared)" }
-                }
-            }
-            # If preset has a stack-specific version, the preset skill update handles it
-        }
-    }
-
-    # ─── Deduplicate (overlapping scans may add same file twice) ─
-    $updates = $updates | Group-Object -Property { $_.Name } | ForEach-Object { $_.Group[0] }
-    $newFiles = $newFiles | Group-Object -Property { $_.Name } | ForEach-Object { $_.Group[0] }
 
     # ─── Report ───────────────────────────────────────────────────
-    if ($updates.Count -eq 0 -and $newFiles.Count -eq 0) {
+    if ($updates.Count -eq 0 -and $newFiles.Count -eq 0 -and $removals.Count -eq 0 -and $kept.Count -eq 0 -and $currentVersion -eq $sourceVersion) {
         Write-Host "All framework files are up to date." -ForegroundColor Green
+        # Nothing to copy means the release is installed; self-update reads this.
+        if (-not $dryRun) { $script:UpdateApplied = $true }
+        if (-not $dryRun) { Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath }
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
         return
     }
 
@@ -1992,6 +2044,18 @@ function Invoke-Update {
     foreach ($n in $newFiles) {
         Write-Host "  NEW     $($n.Name)" -ForegroundColor Green
     }
+    foreach ($r in $removals) {
+        Write-Host "  REMOVE  $r" -ForegroundColor Magenta
+    }
+    if ($removals.Count -gt 0) {
+        Write-Host "  Removed files are no longer part of Plan Forge; each is kept under .forge/update-backups/." -ForegroundColor DarkGray
+    }
+    foreach ($k in $kept) {
+        Write-Host "  KEEP    $($k.Name) (you changed it; the new version goes to .forge/update-pending/$($k.DstRel))" -ForegroundColor Yellow
+    }
+    if ($kept.Count -gt 0) {
+        Write-Host "  After updating, compare and merge with 'pforge pending', or use --overwrite-customized to replace kept files (each is backed up under .forge/update-backups/)." -ForegroundColor DarkGray
+    }
     Write-Host ""
     Write-Host "Protected (never updated):" -ForegroundColor DarkGray
     Write-Host "  .github/copilot-instructions.md, project-profile, project-principles," -ForegroundColor DarkGray
@@ -2000,14 +2064,17 @@ function Invoke-Update {
 
     if ($dryRun) {
         Write-Host "DRY RUN — no files were changed." -ForegroundColor Yellow
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
         return
     }
 
     # ─── Confirm ──────────────────────────────────────────────────
-    if (-not $forceUpdate) {
-        $confirm = Read-Host "Apply $($updates.Count) updates and $($newFiles.Count) new files? [y/N] (use --force to skip this prompt)"
+    if (-not $forceUpdate -and -not $autoYes) {
+        $removalNote = if ($removals.Count -gt 0) { " and remove $($removals.Count) old files" } else { "" }
+        $confirm = Read-Host "Apply $($updates.Count) updates and $($newFiles.Count) new files$removalNote? [y/N] (use --yes to skip this prompt)"
         if ($confirm -notin @('y', 'Y', 'yes', 'Yes')) {
             Write-Host "Cancelled." -ForegroundColor Yellow
+            Clear-GitHubUpdateCache -KeepCache:$keepCache
             return
         }
     }
@@ -2017,16 +2084,32 @@ function Invoke-Update {
     # itself among the updates. If yes, the in-memory copy of this script
     # is now stale — warn the operator to re-invoke any subsequent command.
     $wrapperSelfUpdated = $false
-    foreach ($u in $updates) {
+    foreach ($u in @($updates | Where-Object { -not $_.Guided })) {
         if ($u.Name -in @("pforge.ps1", "pforge.sh")) { $wrapperSelfUpdated = $true }
         Copy-Item -Path $u.Src -Destination $u.Dst -Force
         Write-Host "  ✅ Updated $($u.Name)" -ForegroundColor Green
     }
-    foreach ($n in $newFiles) {
+    foreach ($n in @($newFiles | Where-Object { -not $_.Guided })) {
         $parentDir = Split-Path $n.Dst -Parent
         if (-not (Test-Path $parentDir)) { New-Item -ItemType Directory -Path $parentDir -Force | Out-Null }
         Copy-Item -Path $n.Src -Destination $n.Dst
         Write-Host "  ✅ Added $($n.Name)" -ForegroundColor Green
+    }
+    if ($removals.Count -gt 0) {
+        $removals -join "`n" | & node $updatePlanScript remove --project $RepoRoot
+    }
+    $guidedToApply = @(@($updates + $newFiles) | Where-Object { $_.Guided }) + $kept
+    if ($guidedToApply.Count -gt 0) {
+        $applied = Invoke-UpdateGuard -Guard $updateGuard -Mode apply -Items $guidedToApply -SourceRoot $sourcePath -ProjectRoot $RepoRoot -OverwriteCustomized:$overwriteCustomized
+        foreach ($rel in $applied.Keys) {
+            $r = $applied[$rel]
+            switch ($r.Action) {
+                'added'     { Write-Host "  ✅ Added $rel" -ForegroundColor Green }
+                'updated'   { Write-Host "  ✅ Updated $rel" -ForegroundColor Green }
+                'overwrote' { Write-Host "  ✅ Updated $rel (your version backed up to $($r.Detail))" -ForegroundColor Green }
+                'kept'      { Write-Host "  📝 Kept $rel (customized); new version saved to $($r.Detail)" -ForegroundColor Yellow }
+            }
+        }
     }
 
     # ─── Update .forge.json version + migrate new fields ─────────
@@ -2034,24 +2117,11 @@ function Invoke-Update {
         $config = Get-Content $configPath -Raw | ConvertFrom-Json
         $config.templateVersion = $sourceVersion
 
-        # Migrate: add modelRouting.default if missing (v2.27+)
-        if (-not $config.modelRouting) {
-            $config | Add-Member -NotePropertyName "modelRouting" -NotePropertyValue @{ default = "claude-opus-4.6" }
-            Write-Host "  ✅ Added modelRouting.default = claude-opus-4.6" -ForegroundColor Green
-        }
-
-        # Migrate: add hooks config if missing (v2.29+)
-        if (-not $config.hooks) {
-            $config | Add-Member -NotePropertyName "hooks" -NotePropertyValue @{
-                preDeploy       = @{ blockOnSecrets = $true; warnOnEnvGaps = $true; scanSince = "HEAD~1" }
-                postSlice       = @{ silentDeltaThreshold = 5; warnDeltaThreshold = 10; scoreFloor = 70 }
-                preAgentHandoff = @{ injectContext = $true; runRegressionGuard = $true; cacheMaxAgeMinutes = 30; minAlertSeverity = "medium" }
-            }
-            Write-Host "  ✅ Added hooks config (preDeploy, postSlice, preAgentHandoff)" -ForegroundColor Green
-        }
-
-        $config | ConvertTo-Json -Depth 4 | Set-Content -Path $configPath
+        $config | ConvertTo-Json -Depth 10 | Set-Content -Path $configPath
         Write-Host "  ✅ Updated .forge.json templateVersion to $sourceVersion" -ForegroundColor Green
+
+        # Add missing modelRouting / hooks defaults. Shared with pforge.sh (#299).
+        Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath
     }
 
     # ─── Create docs/plans/auto/ if missing (v2.29+) ─────────────
@@ -2075,6 +2145,9 @@ Files in this directory (except this README) are gitignored — they are runtime
     Write-Host ""
     Write-Host "Update complete: v$currentVersion → v$sourceVersion" -ForegroundColor Green
     Write-Host "Run 'pforge check' to validate the updated setup." -ForegroundColor DarkGray
+    $script:UpdateApplied = $true
+    $script:UpdateWrapperChanged = $wrapperSelfUpdated
+    $script:UpdateSourceDir = $sourcePath
 
     # Issue #177: when the wrapper itself was updated, the running PowerShell
     # session is still executing the OLD code. Subsequent commands will use
@@ -2180,39 +2253,149 @@ writeFreshCache(process.argv[1], process.argv[2]);
     if ($fromGitHub -and -not $dryRun) {
         $filesChanged = ($updates.Count + $newFiles.Count)
         $auditEntry = @{
-            tag = $resolvedTag
-            sha256 = $ghSha256
-            sizeBytes = $ghSizeBytes
+            tag = $script:ghResolvedTag
+            sha256 = $script:ghSha256
+            sizeBytes = $script:ghSizeBytes
             source = "manual"
             filesChanged = $filesChanged
             outcome = "success"
         } | ConvertTo-Json -Compress
         $auditEntry | & node (Join-Path $RepoRoot "pforge-mcp/update-from-github.mjs") audit --project-dir $RepoRoot 2>&1 | Out-Null
     }
-    if ($fromGitHub -and -not $keepCache) {
-        if ($ghTarball -and (Test-Path $ghTarball)) { Remove-Item -Force $ghTarball }
-        if ($ghExtractDir -and (Test-Path $ghExtractDir)) { Remove-Item -Recurse -Force $ghExtractDir }
-        Write-Host "  Cleaned up cache files." -ForegroundColor DarkGray
-    } elseif ($fromGitHub -and $keepCache) {
-        Write-Host "  Cache preserved (--keep-cache): $ghTarball" -ForegroundColor DarkGray
-    }
+    if ($fromGitHub) { Clear-GitHubUpdateCache -KeepCache:$keepCache }
 }
 
 # ─── Command: analyze ──────────────────────────────────────────────────
+# Dependency and build-output directories never hold the project's own tests.
+$script:AnalyzeSkipDirs = @('node_modules', 'bin', 'obj', 'dist', '.git', 'vendor')
+
+# Walks $Root without descending into $script:AnalyzeSkipDirs. Get-ChildItem -Recurse
+# enumerated every bin/obj/node_modules file before filtering, so analyze timed out
+# on a .NET solution (meta-bug #319). Hidden entries and reparse points are skipped,
+# matching Get-ChildItem -Recurse without -Force / -FollowSymlink.
+function Get-AnalyzeFiles {
+    param([string]$Root, [string[]]$NamePatterns = @())
+    $skipAttrs = [System.IO.FileAttributes]::Hidden -bor [System.IO.FileAttributes]::ReparsePoint
+    $pending = [System.Collections.Generic.Stack[System.IO.DirectoryInfo]]::new()
+    $pending.Push([System.IO.DirectoryInfo]::new($Root))
+    while ($pending.Count -gt 0) {
+        $dir = $pending.Pop()
+        try { $entries = @($dir.EnumerateFileSystemInfos()) } catch { continue }
+        foreach ($entry in $entries) {
+            if ($entry.Attributes -band $skipAttrs) { continue }
+            if ($entry -is [System.IO.DirectoryInfo]) {
+                if ($script:AnalyzeSkipDirs -notcontains $entry.Name) { $pending.Push($entry) }
+                continue
+            }
+            if ($NamePatterns.Count -eq 0) { $entry; continue }
+            foreach ($pattern in $NamePatterns) {
+                if ($entry.Name -like $pattern) { $entry; break }
+            }
+        }
+    }
+}
+
+# Parses `analyze` / `diagnose` arguments. Flags may come before or after the target;
+# the first non-flag token is the target. --models implies a quorum run.
+function Get-AnalysisArgs {
+    $parsed = @{ Target = $null; Mode = $null; Models = $null; Quorum = $false; Preset = $null }
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        $arg = [string]$Arguments[$i]
+        if ($arg -eq '--quorum') { $parsed.Quorum = $true; continue }
+        if ($arg -like '--quorum=*') { $parsed.Quorum = $true; $parsed.Preset = $arg.Substring('--quorum='.Length); continue }
+        if ($arg -eq '--mode' -or $arg -eq '--models') {
+            if (($i + 1) -ge $Arguments.Count) {
+                Write-Host "ERROR: $arg requires a value." -ForegroundColor Red
+                exit 1
+            }
+            $i++
+            # From a PowerShell prompt an unquoted "m1,m2" binds as an array and arrives
+            # space-joined in [string[]]$Arguments; model names never contain spaces.
+            if ($arg -eq '--mode') { $parsed.Mode = [string]$Arguments[$i] } else { $parsed.Models = ([string]$Arguments[$i]).Trim() -replace '\s+', ','; $parsed.Quorum = $true }
+            continue
+        }
+        if ($arg.StartsWith('--')) {
+            Write-Host "ERROR: Unknown option '$arg'." -ForegroundColor Red
+            exit 1
+        }
+        if (-not $parsed.Target) { $parsed.Target = $arg }
+    }
+    return $parsed
+}
+
+# Resolves a target relative to the current directory, then the repo root; exits 1 when missing.
+function Resolve-AnalysisTarget([string]$Target, [string]$Label) {
+    if (Test-Path -LiteralPath $Target) { return $Target }
+    $fromRoot = Join-Path $RepoRoot $Target
+    if (Test-Path -LiteralPath $fromRoot) { return $fromRoot }
+    Write-Host "ERROR: $Label not found: $Target" -ForegroundColor Red
+    exit 1
+}
+
+# Multi-model runs live in the orchestrator (pforge-mcp/orchestrator/analysis-cli.mjs),
+# which validates --mode and the preset and writes .forge/analysis/<name>-<ts>.json.
+function Invoke-AnalysisOrchestrator([string]$Command, [string]$Target, [hashtable]$Parsed) {
+    $nodeArgs = @((Join-Path $RepoRoot 'pforge-mcp/orchestrator.mjs'), "--$Command", $Target)
+    if ($Parsed.Mode)   { $nodeArgs += @('--mode', $Parsed.Mode) }
+    if ($Parsed.Models) { $nodeArgs += @('--models', $Parsed.Models) }
+    if ($Parsed.Preset) { $nodeArgs += @('--preset', $Parsed.Preset) }
+    & node @nodeArgs
+    exit $LASTEXITCODE
+}
+
+# ─── Command: diagnose ─────────────────────────────────────────────────
+function Invoke-Diagnose {
+    $parsed = Get-AnalysisArgs
+    if (-not $parsed.Target) {
+        Write-Host "ERROR: Source file required." -ForegroundColor Red
+        Write-Host "  Usage: pforge diagnose <file> [--models m1,m2] [--quorum=<preset>]" -ForegroundColor Yellow
+        Write-Host "  Example: pforge diagnose src/services/billing.ts" -ForegroundColor Yellow
+        exit 1
+    }
+    if ($parsed.Mode) {
+        Write-Host "ERROR: --mode applies to pforge analyze only." -ForegroundColor Red
+        exit 1
+    }
+    $file = Resolve-AnalysisTarget $parsed.Target 'Source file'
+    Write-ManualSteps "diagnose" @(
+        "Send the file to each quorum model for an independent bug investigation"
+        "Synthesize root causes and fixes with the reviewer model"
+        "Save the report to .forge/analysis/diagnose-*"
+    )
+    Invoke-AnalysisOrchestrator 'diagnose' $file $parsed
+}
+
 function Invoke-Analyze {
-    if (-not $Arguments -or $Arguments.Count -eq 0) {
+    $parsed = Get-AnalysisArgs
+    if (-not $parsed.Target) {
         Write-Host "ERROR: Plan file required." -ForegroundColor Red
-        Write-Host "  Usage: pforge analyze <plan-file>" -ForegroundColor Yellow
+        Write-Host "  Usage: pforge analyze <plan-file> [--quorum[=<preset>]] [--models m1,m2] [--mode plan|file]" -ForegroundColor Yellow
         Write-Host "  Example: pforge analyze docs/plans/Phase-1-AUTH-PLAN.md" -ForegroundColor Yellow
         exit 1
     }
+    $planFile = Resolve-AnalysisTarget $parsed.Target 'Plan file'
 
-    $planFile = $Arguments[0]
-    if (-not (Test-Path $planFile)) {
-        $planFile = Join-Path $RepoRoot $planFile
+    if ($parsed.Quorum) {
+        Write-ManualSteps "analyze --quorum" @(
+            "Send the plan or source file to each quorum model for an independent review"
+            "Synthesize the reviews with the reviewer model"
+            "Save the report to .forge/analysis/"
+        )
+        Invoke-AnalysisOrchestrator 'analyze' $planFile $parsed
     }
-    if (-not (Test-Path $planFile)) {
-        Write-Host "ERROR: Plan file not found: $($Arguments[0])" -ForegroundColor Red
+
+    # The scorer reads its target as a plan; a source file used to be scored as an empty
+    # plan after a slow repo-wide scan (meta-bug #319). Mirrors resolveAnalyzeMode in
+    # pforge-mcp/analyze-mode.mjs: .md/.markdown are plans unless --mode says otherwise.
+    $analyzeMode = $parsed.Mode
+    if (-not $analyzeMode) {
+        $analyzeMode = if ([System.IO.Path]::GetExtension($planFile) -in @('.md', '.markdown')) { 'plan' } else { 'file' }
+    }
+    if ($analyzeMode -ne 'plan') {
+        Write-Host "ERROR: pforge analyze scores plan files only; '$($parsed.Target)' was read as a source file (mode '$analyzeMode')." -ForegroundColor Red
+        Write-Host "  For a code review, run: pforge analyze $($parsed.Target) --quorum   (multi-model; spends tokens)" -ForegroundColor Yellow
+        Write-Host "  For a bug investigation, run: pforge diagnose $($parsed.Target)" -ForegroundColor Yellow
+        Write-Host "  To score a Markdown file as a plan, pass --mode plan." -ForegroundColor Yellow
         exit 1
     }
 
@@ -2223,7 +2406,7 @@ function Invoke-Analyze {
         "Score traceability, coverage, completeness, and gates"
     )
 
-    $planContent = Get-Content $planFile -Raw
+    $planContent = Get-Content -LiteralPath $planFile -Raw
     $planName = [System.IO.Path]::GetFileNameWithoutExtension($planFile)
 
     Write-Host ""
@@ -2268,8 +2451,11 @@ function Invoke-Analyze {
         }
     }
 
-    # Extract slice references
-    $sliceCount = ([regex]::Matches($planContent, '(?m)^###\s+Slice\s+\d')).Count
+    # Extract slice references — accept h2/h3/h4 headers to match the canonical
+    # parser at pforge-mcp/orchestrator/plan-parser.mjs (/^#{2,4}\s+Slice\s+\d+\b/).
+    # Slice titles commonly use an em-dash separator (### Slice N — Title); the
+    # regex anchors on the leading digit so the separator is irrelevant.
+    $sliceCount = ([regex]::Matches($planContent, '(?m)^#{2,4}\s+Slice\s+\d+\b')).Count
 
     if ($allCriteria.Count -gt 0) {
         # Check if slices reference criteria via Traces to:
@@ -2296,7 +2482,7 @@ function Invoke-Analyze {
         Write-Host "  ✅ $sliceCount execution slices found" -ForegroundColor Green
     }
     else {
-        Write-Host "  ⚠️  No execution slices found (### Slice N pattern)" -ForegroundColor Yellow
+        Write-Host "  ⚠️  No execution slices found (## / ### / #### Slice N pattern)" -ForegroundColor Yellow
     }
 
     Write-Host ""
@@ -2316,34 +2502,16 @@ function Invoke-Analyze {
     $changedFiles = $changedFiles | Sort-Object -Unique | Where-Object { $_ }
 
     # Extract scope
-    $inScopePaths = @()
-    if ($planContent -match '(?s)### In Scope(.*?)(?=^###?\s|\z)') {
-        $inScopePaths = [regex]::Matches($Matches[1], '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
-    }
-    $forbiddenPaths = @()
-    if ($planContent -match '(?s)### Forbidden Actions(.*?)(?=^###?\s|\z)') {
-        $forbiddenPaths = [regex]::Matches($Matches[1], '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
-    }
+    $inScopePaths = Get-PlanSectionHints $planContent 'In Scope'
+    $forbiddenPaths = Get-PlanSectionHints $planContent 'Forbidden Actions'
 
     $violations = 0; $outOfScope = 0; $inScope = 0
     foreach ($file in $changedFiles) {
-        $isForbidden = $false
-        foreach ($fp in $forbiddenPaths) {
-            # Use .Contains (literal substring) instead of -like to avoid
-            # PowerShell wildcard interpretation when path hints include
-            # bracket/brace characters (e.g. "{steps: [], ...}" in scope lines).
-            if ($file.Contains($fp)) { $violations++; $isForbidden = $true; break }
+        switch ((Get-PlanScopeVerdict $file $forbiddenPaths $inScopePaths).Verdict) {
+            'forbidden' { $violations++ }
+            'in-scope' { $inScope++ }
+            default { $outOfScope++ }
         }
-        if ($isForbidden) { continue }
-
-        $isInScope = $false
-        if ($inScopePaths.Count -eq 0) { $isInScope = $true }
-        else {
-            foreach ($sp in $inScopePaths) {
-                if ($file.Contains($sp)) { $isInScope = $true; break }
-            }
-        }
-        if ($isInScope) { $inScope++ } else { $outOfScope++ }
     }
 
     $totalChanged = $changedFiles.Count
@@ -2379,16 +2547,13 @@ function Invoke-Analyze {
     $testFiles = @()
     foreach ($td in $testDirs) {
         $testDir = Join-Path $RepoRoot $td
-        if (Test-Path $testDir) {
-            $testFiles += Get-ChildItem -Path $testDir -Recurse -File -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $testDir -PathType Container) {
+            $testFiles += Get-AnalyzeFiles -Root $testDir
         }
     }
     # Also search project root with test patterns
-    foreach ($pattern in $testExtensions) {
-        $testFiles += Get-ChildItem -Path $RepoRoot -Filter $pattern -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -notmatch '(node_modules|bin|obj|dist|\.git|vendor)' }
-    }
-    $testFiles = $testFiles | Select-Object -Unique
+    $testFiles += Get-AnalyzeFiles -Root $RepoRoot -NamePatterns $testExtensions
+    $testFiles = @($testFiles | Sort-Object -Property FullName -Unique)
 
     $testedMust = 0; $untestedMust = @()
     if ($mustCriteria -and $mustCriteria.Count -gt 0) {
@@ -2397,7 +2562,9 @@ function Invoke-Analyze {
             $keywords = $criterion -replace '[^\w\s]', '' -split '\s+' | Where-Object { $_.Length -gt 4 } | Select-Object -First 3
             $found = $false
             foreach ($tf in $testFiles) {
-                $testContent = Get-Content $tf.FullName -Raw -ErrorAction SilentlyContinue
+                # -LiteralPath: on Windows PowerShell 5.1 a "[id]" route directory made -Path a
+                # wildcard, which hid the provider's -Raw parameter and aborted analyze (meta-bug #284).
+                $testContent = Get-Content -LiteralPath $tf.FullName -Raw -ErrorAction SilentlyContinue
                 if ($testContent) {
                     $matchCount = ($keywords | Where-Object { $testContent -match $_ }).Count
                     if ($matchCount -ge 2) { $found = $true; break }
@@ -2453,10 +2620,18 @@ function Invoke-Analyze {
         $scoreGates = 0
     }
 
-    # Gate command lint — catch errors that would fail at runtime
+    # Gate command lint — the parser contract run-plan's pre-flight enforces.
+    # Paths travel through env vars and a file:// URL: import('E:/...') is not a
+    # valid ESM specifier on Windows, so this lint was silently skipped there.
+    $savedEAP = $ErrorActionPreference
     try {
-        $lintOutput = node -e "import('$($RepoRoot -replace '\\','/')/pforge-mcp/orchestrator.mjs').then(m => { const r = m.lintGateCommands('$($planFile -replace '\\','/').replace(\"'\",\"\\'\")'); console.log(JSON.stringify(r)); })" 2>&1
-        $lintResult = $lintOutput | ConvertFrom-Json -ErrorAction SilentlyContinue
+        $ErrorActionPreference = 'Continue'
+        $env:PFORGE_LINT_MODULE = Join-Path $RepoRoot 'pforge-mcp/orchestrator/gate-helpers.mjs'
+        $env:PFORGE_LINT_PLAN = (Resolve-Path -LiteralPath $planFile).Path
+        $env:PFORGE_LINT_CWD = $RepoRoot
+        $lintScript = "const { pathToFileURL } = await import('node:url'); const m = await import(pathToFileURL(process.env.PFORGE_LINT_MODULE).href); process.stdout.write(JSON.stringify(m.lintGateCommands(process.env.PFORGE_LINT_PLAN, process.env.PFORGE_LINT_CWD)));"
+        $lintOutput = node --input-type=module -e $lintScript 2>$null
+        $lintResult = ($lintOutput -join "`n") | ConvertFrom-Json -ErrorAction SilentlyContinue
         if ($lintResult) {
             if ($lintResult.errors.Count -gt 0) {
                 Write-Host "  ❌ Gate lint: $($lintResult.errors.Count) error(s) — plan will fail at runtime" -ForegroundColor Red
@@ -2478,6 +2653,9 @@ function Invoke-Analyze {
         }
     } catch {
         # Gate lint is advisory — don't block analyze on lint failures
+    } finally {
+        $ErrorActionPreference = $savedEAP
+        Remove-Item Env:PFORGE_LINT_MODULE, Env:PFORGE_LINT_PLAN, Env:PFORGE_LINT_CWD -ErrorAction SilentlyContinue
     }
 
     # Check for completeness markers (deferred work)
@@ -2486,8 +2664,8 @@ function Invoke-Analyze {
     $markerCount = 0
     foreach ($file in $changedFiles) {
         $fullPath = Join-Path $RepoRoot $file
-        if (Test-Path $fullPath) {
-            $markerCount += (Select-String -Path $fullPath -Pattern $sweepRegex -CaseSensitive:$false -ErrorAction SilentlyContinue).Count
+        if (Test-Path -LiteralPath $fullPath) {
+            $markerCount += (Select-String -LiteralPath $fullPath -Pattern $sweepRegex -CaseSensitive:$false -ErrorAction SilentlyContinue).Count
         }
     }
 
@@ -2541,6 +2719,14 @@ function Invoke-Analyze {
 }
 
 # ─── Command: smith ────────────────────────────────────────────────────
+# Time since a cache timestamp, compared in UTC. ConvertFrom-Json turns an ISO
+# "...Z" string into a UTC DateTime; subtracting that from local Get-Date ignored
+# the offset, so ages were off by the machine's UTC offset.
+function Get-TimeSince($Timestamp) {
+    if ($Timestamp -is [datetime]) { return [datetime]::UtcNow - $Timestamp.ToUniversalTime() }
+    return [datetime]::UtcNow - [datetimeoffset]::Parse("$Timestamp", [Globalization.CultureInfo]::InvariantCulture).UtcDateTime
+}
+
 function Invoke-Smith {
     # Phase AUTO-UPDATE-01 Slice 2 — --refresh-version-cache flag
     if ($Arguments -contains '--refresh-version-cache') {
@@ -2803,7 +2989,7 @@ function Invoke-Smith {
     $settingsPath = Join-Path $RepoRoot ".vscode/settings.json"
     if (Test-Path $settingsPath) {
         try {
-            $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
+            $settings = ConvertFrom-Jsonc -Text (Get-Content $settingsPath -Raw)
 
             # chat.agent.enabled (may not exist in newer VS Code where it's default)
             if ($null -ne $settings.'chat.agent.enabled') {
@@ -2845,7 +3031,9 @@ function Invoke-Smith {
             }
         }
         catch {
-            Doctor-Fail ".vscode/settings.json has invalid JSON" "Fix the JSON syntax in .vscode/settings.json"
+            # Comments and trailing commas are already tolerated, so reaching
+            # here means the file is malformed as JSONC too.
+            Doctor-Fail ".vscode/settings.json is not valid JSONC" "Fix the syntax in .vscode/settings.json (comments and trailing commas are allowed)"
         }
     }
     else {
@@ -3071,7 +3259,7 @@ function Invoke-Smith {
     if (Test-Path $versionCheckCacheFile) {
         try {
             $cache = Get-Content $versionCheckCacheFile -Raw | ConvertFrom-Json
-            $cacheAge = (Get-Date) - [datetime]$cache.checkedAt
+            $cacheAge = Get-TimeSince $cache.checkedAt
             if ($cacheAge.TotalHours -lt $cacheMaxAgeHours -and $cache.latestVersion) {
                 $sourceVersion = $cache.latestVersion
                 $cacheValid = $true
@@ -3134,12 +3322,19 @@ function Invoke-Smith {
             Doctor-Warn "Installed v$templateVersion — latest is v$sourceVersion" "Run 'pforge self-update' to upgrade"
         }
         if ($cacheValid) {
-            $cacheAge = (Get-Date) - [datetime](Get-Content $versionCheckCacheFile -Raw | ConvertFrom-Json).checkedAt
+            $cacheAge = Get-TimeSince (Get-Content $versionCheckCacheFile -Raw | ConvertFrom-Json).checkedAt
             Write-Host "     (cached $([math]::Round($cacheAge.TotalMinutes))m ago)" -ForegroundColor DarkGray
         }
     }
     else {
         Doctor-Pass "Installed v$templateVersion (GitHub unreachable and no local source — skipping currency check)"
+    }
+
+    # #302 — guidance updates pforge update saved instead of overwriting the project's edits.
+    $pendingDir = Join-Path $RepoRoot ".forge/update-pending"
+    $pendingCount = if (Test-Path $pendingDir) { @(Get-ChildItem $pendingDir -Recurse -File -ErrorAction SilentlyContinue).Count } else { 0 }
+    if ($pendingCount -gt 0) {
+        Doctor-Warn "$pendingCount pending guidance update(s) in .forge/update-pending/ (your edited copies were kept)" "Review with 'pforge pending'"
     }
 
     Write-Host ""
@@ -3168,9 +3363,10 @@ function Invoke-Smith {
         try {
             $auCache = Get-Content $updateCacheFile -Raw | ConvertFrom-Json
             $auCheckedAt = $auCache.checkedAt
-            $auLastTag = $auCache.latestVersion
+            # update-check.mjs writes `latest`; older files used `latestVersion`.
+            $auLastTag = if ($auCache.latest) { $auCache.latest } else { $auCache.latestVersion }
             if ($auCheckedAt) {
-                $auCacheAge = [math]::Round(((Get-Date) - [datetime]$auCheckedAt).TotalMinutes)
+                $auCacheAge = [math]::Round((Get-TimeSince $auCheckedAt).TotalMinutes)
             }
         } catch {
             Write-Verbose "Could not parse update-check.json: $($_.Exception.Message)"
@@ -3306,11 +3502,27 @@ function Invoke-Smith {
         $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
         if ($nodeCmd) {
             $nodeVer = (node --version 2>$null) -replace '^v', ''
-            $nodeMajor = [int]($nodeVer -split '\.')[0]
-            if ($nodeMajor -ge 18) {
-                Doctor-Pass "Node.js v$nodeVer (sharp requires >= 18.17)"
-            } else {
-                Doctor-Fail "Node.js v$nodeVer — sharp requires >= 18.17" "Upgrade Node.js from https://nodejs.org/"
+            $nodeParts = $nodeVer -split '\.'
+            $nodeMajor = [int]$nodeParts[0]
+            $nodeMinor = if ($nodeParts.Count -gt 1) { [int]$nodeParts[1] } else { 0 }
+            # Floor = plan-forge-mcp engines.node; end-of-life dates from node-support.mjs.
+            $ns = $null
+            $nodeSupport = Join-Path $RepoRoot "pforge-mcp/node-support.mjs"
+            if (Test-Path $nodeSupport) {
+                try { $ns = (& node $nodeSupport 2>$null | Select-Object -Last 1) | ConvertFrom-Json } catch { $ns = $null }
+            }
+            if (-not $ns) {
+                $fallbackOk = $nodeMajor -gt 22 -or ($nodeMajor -eq 22 -and $nodeMinor -ge 12)
+                $ns = [pscustomobject]@{ version = $nodeVer; floor = "22.12.0"; status = $(if ($fallbackOk) { "ok" } else { "below-floor" }); eol = $null; daysLeft = $null }
+            }
+            switch ($ns.status) {
+                "below-floor" { Doctor-Fail "Node.js v$($ns.version) — plan-forge-mcp requires >= $($ns.floor)" "Upgrade to an LTS release (Node 24 or newer) from https://nodejs.org/" }
+                "eol"         { Doctor-Warn "Node.js v$($ns.version) reached end of life on $($ns.eol) and no longer gets security fixes" "Upgrade to Node 24 or newer from https://nodejs.org/" }
+                "eol-soon"    {
+                    Doctor-Pass "Node.js v$($ns.version) (plan-forge-mcp requires >= $($ns.floor))"
+                    Doctor-Warn "Node.js $nodeMajor reaches end of life on $($ns.eol) ($($ns.daysLeft) days)" "Plan an upgrade to Node 24 or newer"
+                }
+                default       { Doctor-Pass "Node.js v$($ns.version) (plan-forge-mcp requires >= $($ns.floor))" }
             }
         } else {
             Doctor-Fail "Node.js not found — required for image generation" "Install from https://nodejs.org/"
@@ -3375,10 +3587,18 @@ function Invoke-Smith {
             }
         }
 
-        # MCP version sync
+        # MCP version sync — only meaningful inside the Plan Forge repo itself.
+        # In a consuming project the root VERSION file holds the HOST app's
+        # version, so the two numbers are different namespaces and following the
+        # suggested fix would overwrite Plan Forge's version identity (meta-bug #253).
         $mcpPkgPath = Join-Path $RepoRoot "pforge-mcp/package.json"
         $versionPath = Join-Path $RepoRoot "VERSION"
-        if ((Test-Path $mcpPkgPath) -and (Test-Path $versionPath)) {
+        $rootPkgPath = Join-Path $RepoRoot "package.json"
+        $isPlanForgeRepo = $false
+        if (Test-Path $rootPkgPath) {
+            try { $isPlanForgeRepo = ((Get-Content $rootPkgPath -Raw | ConvertFrom-Json).name -eq 'plan-forge') } catch { $isPlanForgeRepo = $false }
+        }
+        if ($isPlanForgeRepo -and (Test-Path $mcpPkgPath) -and (Test-Path $versionPath)) {
             try {
                 $mcpPkg = Get-Content $mcpPkgPath -Raw | ConvertFrom-Json
                 $mcpVer = $mcpPkg.version
@@ -3558,56 +3778,25 @@ function Invoke-Smith {
 
     if ($hasHookFiles -or $hookConfig -or $hooksJsonConfig) {
         Write-Host "Lifecycle Hooks:" -ForegroundColor Cyan
-        $enumsCli = Join-Path $RepoRoot "pforge-mcp/bin/enums-cli.mjs"
-        if (Test-Path $enumsCli) {
-            $allExpectedHooks = @(node $enumsCli --enum HOOK_PASCAL 2>$null)
-            $hookNamesJson = node $enumsCli --enum HOOK_NAMES --format json 2>$null
-            $hookNamesObj  = $hookNamesJson | ConvertFrom-Json
-            $configKeyMap  = @{}
-            foreach ($prop in $hookNamesObj.PSObject.Properties) {
-                $configKeyMap[$prop.Name] = $prop.Value
-            }
-        } else {
-            # Fallback when pforge-mcp/bin/enums-cli.mjs is not present
-            $allExpectedHooks = @("SessionStart","PreToolUse","PostToolUse","Stop","PreDeploy","PostSlice","PreAgentHandoff","PostRun")
-            $configKeyMap = @{ SessionStart="sessionStart"; PreToolUse="preToolUse"; PostToolUse="postToolUse"; Stop="stop"; PreDeploy="preDeploy"; PostSlice="postSlice"; PreAgentHandoff="preAgentHandoff"; PostRun="postRun" }
-        }
-
-        $hookFiles = @()
-        if ($hasHookFiles) {
-            $hookFiles = Get-ChildItem -Path $hooksDir -File -Recurse | ForEach-Object { $_.BaseName }
-        }
-
+        # One check for both shells: pforge-mcp/hook-status.mjs prints "Hook|sources" per hook.
+        $allExpectedHooks = @()
         $hookCount = 0
         $hookSources = @{}
-        foreach ($hook in $allExpectedHooks) {
-            $foundInFiles = ($hookFiles | Where-Object { $_ -match $hook }) -ne $null -and ($hookFiles | Where-Object { $_ -match $hook }).Count -gt 0
-            $foundInConfig = $false
-            if ($hookConfig) {
-                $cfgKey = $configKeyMap[$hook]
-                if ($cfgKey) {
-                    $cfgVal = $hookConfig.$cfgKey
-                    # Treat as "configured" if the property exists and is non-null/non-false
-                    if ($null -ne $cfgVal -and $cfgVal -ne $false) { $foundInConfig = $true }
+        $hookStatusCli = @((Join-Path $RepoRoot "pforge-mcp/hook-status.mjs"), (Join-Path $PSScriptRoot "pforge-mcp/hook-status.mjs")) | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if ($hookStatusCli) {
+            foreach ($row in @(& node $hookStatusCli --project $RepoRoot 2>$null)) {
+                $parts = "$row" -split '\|', 2
+                if (-not $parts[0]) { continue }
+                $allExpectedHooks += $parts[0]
+                if ($parts.Count -gt 1 -and $parts[1]) {
+                    $hookCount++
+                    $hookSources[$parts[0]] = $parts[1] -replace ',', '+'
                 }
             }
-            $foundInHooksJson = $false
-            if ($hooksJsonConfig) {
-                # plan-forge.json uses PascalCase keys matching the hook name directly
-                $hjVal = $hooksJsonConfig.$hook
-                if ($null -ne $hjVal -and $hjVal -ne $false) { $foundInHooksJson = $true }
-            }
-            if ($foundInFiles -or $foundInConfig -or $foundInHooksJson) {
-                $hookCount++
-                $src = @()
-                if ($foundInFiles)     { $src += "file" }
-                if ($foundInConfig)    { $src += ".forge.json" }
-                if ($foundInHooksJson) { $src += "hooks/plan-forge.json" }
-                $hookSources[$hook] = ($src -join "+")
-            }
         }
-
-        if ($hookCount -eq $allExpectedHooks.Count) {
+        if ($allExpectedHooks.Count -eq 0) {
+            Doctor-Warn "Could not check lifecycle hooks (pforge-mcp/hook-status.mjs missing)" "Run 'pforge self-update'"
+        } elseif ($hookCount -eq $allExpectedHooks.Count) {
             Doctor-Pass "$hookCount/$($allExpectedHooks.Count) lifecycle hooks present (core + LiveGuard)"
         } elseif ($hookCount -gt 0) {
             $hookMissing = $allExpectedHooks | Where-Object { -not $hookSources.ContainsKey($_) }
@@ -3659,29 +3848,43 @@ function Invoke-Smith {
     $versionPath = Join-Path $RepoRoot "VERSION"
     $changelogPath = Join-Path $RepoRoot "CHANGELOG.md"
 
-    if (Test-Path $versionPath) {
+    if (-not $isPlanForgeDevRepo) {
+        # A project's own VERSION / CHANGELOG are its business — older installs copied
+        # Plan Forge's there and updates never refreshed them, so they are not the
+        # installed version. That comes from the packages, which must also agree.
+        $consistencyHelper = Join-Path $RepoRoot "pforge-mcp/install-consistency.mjs"
+        $consistency = $null
+        if (Test-Path $consistencyHelper) {
+            try { $consistency = (& node $consistencyHelper --project $RepoRoot 2>$null | Select-LastJsonLine) | ConvertFrom-Json } catch { $consistency = $null }
+        }
+        if ($consistency -and $consistency.frameworkVersion) {
+            if (@($consistency.issues).Count -eq 0) {
+                Doctor-Pass "Plan Forge v$($consistency.frameworkVersion) installed (packages agree)"
+            } else {
+                foreach ($issue in @($consistency.issues)) { Doctor-Warn $issue.message $issue.fix }
+            }
+        }
+        if (Test-Path $versionPath) { Doctor-Pass "Project VERSION: $((Get-Content $versionPath -Raw).Trim()) (your project's file; Plan Forge does not change it)" }
+        if (Test-Path $changelogPath) { Doctor-Pass "CHANGELOG.md present (tracks your project, not Plan Forge)" }
+    } elseif (Test-Path $versionPath) {
         $currentVer = (Get-Content $versionPath -Raw).Trim()
         Doctor-Pass "VERSION: $currentVer"
     } else {
         Doctor-Warn "VERSION file not found"
     }
 
-    if (Test-Path $changelogPath) {
+    if ($isPlanForgeDevRepo -and (Test-Path $changelogPath)) {
         $clContent = Get-Content $changelogPath -Raw
         if ($clContent -match "\[v?$([regex]::Escape($currentVer))\]|## v?$([regex]::Escape($currentVer))") {
             Doctor-Pass "CHANGELOG.md has entry for v$currentVer"
         } elseif ($currentVer -match '-dev\b') {
             # Between-release state — '-dev' versions don't ship a CHANGELOG entry until cut.
             Doctor-Pass "CHANGELOG.md present (v$currentVer is between-release; entry added at release cut)"
-        } elseif ($isPlanForgeDevRepo) {
+        } else {
             # Framework repo: VERSION == release cadence, so every bump needs a CHANGELOG line.
             Doctor-Warn "CHANGELOG.md missing entry for v$currentVer" "Add a '## [$currentVer] — <date>' section with release notes"
-        } else {
-            # Downstream consumer: VERSION tracks the pforge framework, not the app's own version.
-            # Don't grade consumer CHANGELOGs by framework version — just note the framework version.
-            Doctor-Pass "CHANGELOG.md present (framework v$currentVer — downstream CHANGELOG tracks your app, not pforge)"
         }
-    } else {
+    } elseif ($isPlanForgeDevRepo) {
         Doctor-Warn "CHANGELOG.md not found"
     }
 
@@ -3728,7 +3931,7 @@ function Invoke-Smith {
                 if ($q.reviewerModel) {
                     Doctor-Pass "Reviewer model: $($q.reviewerModel)"
                 } else {
-                    Doctor-Pass "Reviewer model: default (claude-opus-4.7)"
+                    Doctor-Pass "Reviewer model: default (claude-opus-5.5)"
                 }
 
                 Write-Host ""
@@ -4223,7 +4426,7 @@ function Invoke-Smith {
 function Invoke-RunPlan {
     if ($Arguments.Count -lt 1) {
         Write-Host "ERROR: Missing plan path" -ForegroundColor Red
-        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--worker <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" -ForegroundColor Yellow
+        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--worker <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--with-grok] [--with-grok-cli] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" -ForegroundColor Yellow
         exit 1
     }
 
@@ -4270,6 +4473,8 @@ function Invoke-RunPlan {
     $noQuorum    = $Arguments -contains '--no-quorum'
     $manualImport = $Arguments -contains '--manual-import'
     $strictGates = $Arguments -contains '--strict-gates'
+    $withGrok    = $Arguments -contains '--with-grok'
+    $withGrokCli = $Arguments -contains '--with-grok-cli'
     $model       = $null
     $resumeFrom  = $null
     $quorumArg   = $null
@@ -4344,6 +4549,8 @@ function Invoke-RunPlan {
     if ($quorumThreshold) { $nodeArgs += '--quorum-threshold'; $nodeArgs += $quorumThreshold }
     if ($manualImport)    { $nodeArgs += '--manual-import' }
     if ($strictGates)     { $nodeArgs += '--strict-gates' }
+    if ($withGrokCli)     { $nodeArgs += '--with-grok-cli' }
+    elseif ($withGrok)    { $nodeArgs += '--with-grok' }
     if ($manualImportSource) { $nodeArgs += '--manual-import-source'; $nodeArgs += $manualImportSource }
     if ($manualImportReason) { $nodeArgs += '--manual-import-reason'; $nodeArgs += $manualImportReason }
     if ($onlySlices)      { $nodeArgs += '--only-slices'; $nodeArgs += $onlySlices }
@@ -4394,12 +4601,7 @@ function Invoke-RunPlan {
         $stamp = (Get-Date -Format 'yyyyMMdd-HHmmss')
         $orchLog = Join-Path $orchLogsDir "orch-$stamp.log"  # combined stdout+stderr
 
-        # Build a PowerShell command string that runs node with the same args in
-        # foreground mode inside the hidden pwsh host. Single-quote each arg so
-        # paths with spaces are handled correctly.
-        $quotedNodeArgs = ($nodeArgs | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }) -join ' '
-        $orchLogPs     = "'" + ($orchLog -replace "'", "''") + "'"
-        $innerCmd      = "& node $quotedNodeArgs *>&1 | Tee-Object -FilePath $orchLogPs"
+        $innerCmd = Get-BackgroundHostCommand -NodeArgs $nodeArgs -LogPath $orchLog
 
         $proc = Start-Process -FilePath 'pwsh' -PassThru -WindowStyle Hidden `
             -ArgumentList '-NoProfile', '-NoLogo', '-NonInteractive', '-Command', $innerCmd
@@ -4418,6 +4620,17 @@ function Invoke-RunPlan {
     }
 }
 
+# The command the hidden pwsh host runs for background run-plan: node in the
+# foreground with merged output teed to the log. Single-quoting each arg keeps
+# paths with spaces intact. A hidden console uses the OEM code page, so without
+# the UTF-8 setting node's output reached the log as mojibake.
+function Get-BackgroundHostCommand {
+    param([string[]]$NodeArgs, [string]$LogPath)
+    $quote = { param($value) "'" + ($value -replace "'", "''") + "'" }
+    $quotedNodeArgs = ($NodeArgs | ForEach-Object { & $quote $_ }) -join ' '
+    return "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(`$false); & node $quotedNodeArgs *>&1 | Tee-Object -FilePath $(& $quote $LogPath)"
+}
+
 # ─── Command: version-bump (Fix 3 + Fix 10) ───────────────────────────
 function Get-VersionTargets {
     param([string]$newVersion)
@@ -4431,6 +4644,17 @@ function Get-VersionTargets {
         [PSCustomObject]@{ File = "README.md";                  Strategy = 'RegexReplace'; Pattern = 'v1\.0 → v[\d.]+';                       Replace = "v1.0 → v$($newVersion -replace '\.\d+$', '')";                                                  Desc = "README track record";       Optional = $true  },
         [PSCustomObject]@{ File = "ROADMAP.md";                 Strategy = 'RegexReplace'; Pattern = '\*\*v[\d.]+\*\* \(\d{4}-\d{2}-\d{2}\)'; Replace = "**v$newVersion** ($(Get-Date -Format 'yyyy-MM-dd'))"; Desc = "ROADMAP current release";    Optional = $false }
     )
+}
+
+# ─── Command: pending (#302) ───────────────────────────────────────────
+function Invoke-Pending {
+    $helper = Join-Path $RepoRoot "pforge-mcp/update-pending.mjs"
+    if (-not (Test-Path $helper)) {
+        Write-Host "ERROR: pforge-mcp/update-pending.mjs not found. Run 'pforge self-update' to install it." -ForegroundColor Red
+        exit 1
+    }
+    & node $helper @Arguments --project $RepoRoot
+    exit $LASTEXITCODE
 }
 
 function Invoke-VersionBump {
@@ -6081,6 +6305,24 @@ function Invoke-Tour {
 }
 
 # ─── Command: self-update ──────────────────────────────────────────────
+# When the update replaced pforge.ps1 itself, this session ran the OLD update
+# logic, which does not know about anything a newer release added (for example
+# .github/automations in 3.31). Re-run update from the same downloaded release
+# with the NEW wrapper so those reach the project too. Files the first pass
+# already wrote are identical, so they are left alone.
+function Invoke-SelfUpdateSecondPass {
+    if (-not $script:UpdateWrapperChanged -or -not $script:UpdateSourceDir -or -not (Test-Path $script:UpdateSourceDir)) { return }
+    $pforgeScript = Join-Path $RepoRoot "pforge.ps1"
+    if (-not (Test-Path $pforgeScript)) { return }
+    Write-Host ""
+    Write-Host "Applying the new release's update steps (pforge.ps1 itself was updated)..." -ForegroundColor DarkCyan
+    $hostExe = (Get-Process -Id $PID).Path
+    & $hostExe -NoProfile -ExecutionPolicy Bypass -File $pforgeScript update $script:UpdateSourceDir --force --yes
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  ⚠ The second update pass exited $LASTEXITCODE. Run 'pforge update' once more to finish." -ForegroundColor Yellow
+    }
+}
+
 function Invoke-SelfUpdate {
     Write-ManualSteps "self-update" @(
         "Force-refresh the update check (bypass 24h cache)"
@@ -6128,8 +6370,26 @@ import { checkForUpdate } from './pforge-mcp/update-check.mjs';
 const r = await checkForUpdate({ currentVersion: process.argv[1], projectDir: process.argv[2], force: true });
 console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
 "@
-    $currentVersion = (Get-Content (Join-Path $RepoRoot "VERSION") -Raw).Trim()
-    $checkResult = & node --input-type=module -e $checkScript $currentVersion $RepoRoot 2>&1 | Select-Object -Last 1
+    # The INSTALLED Plan Forge version comes from .forge.json's templateVersion —
+    # NOT the project-root VERSION file, which in most consumer projects holds
+    # the consumer's OWN application version. Reading VERSION here misreports a
+    # project at (say) app-version 3.32.0 as "Plan Forge 3.32.0", which then
+    # blocks self-update as a false downgrade.
+    $currentVersion = $null
+    if (Test-Path $forgeJson) {
+        try {
+            $tvCfg = Get-Content $forgeJson -Raw | ConvertFrom-Json
+            if ($tvCfg.templateVersion) { $currentVersion = ([string]$tvCfg.templateVersion).Trim() }
+        } catch { Write-Verbose "Could not read templateVersion from .forge.json: $($_.Exception.Message)" }
+    }
+    if (-not $currentVersion) {
+        # Fallback: Plan Forge's own dev repo (no .forge.json) or a legacy
+        # install missing templateVersion — there the root VERSION is Plan Forge's.
+        $pfVersionFile = Join-Path $RepoRoot "VERSION"
+        if (Test-Path $pfVersionFile) { $currentVersion = (Get-Content $pfVersionFile -Raw).Trim() }
+    }
+    if (-not $currentVersion) { $currentVersion = "unknown" }
+    $checkResult = & node --input-type=module -e $checkScript $currentVersion $RepoRoot 2>&1 | Select-LastJsonLine
     try {
         $checkJson = $checkResult | ConvertFrom-Json
     } catch {
@@ -6217,12 +6477,24 @@ console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
         }
     }
 
-    # Delegate to existing update --from-github
+    # Delegate to existing update --from-github. The user confirmed above (or
+    # passed --yes), so update must not ask again: unattended, its unanswered
+    # prompt cancelled the install while self-update reported success.
     Write-Host "" -ForegroundColor White
-    $updateArgs = @('--from-github', '--tag', $latestTag)
+    $updateArgs = @('--from-github', '--tag', $latestTag, '--yes', '--keep-cache')
     if ($forceUpdate) { $updateArgs += '--force' }
+    if ($Arguments -contains '--overwrite-customized') { $updateArgs += '--overwrite-customized' }
     $script:Arguments = $updateArgs
     Invoke-Update
+
+    if (-not $script:UpdateApplied) {
+        Clear-GitHubUpdateCache
+        Write-Host ""
+        Write-Host "  ✗ self-update: $latestTag was not installed — the update did not apply any files (see above)." -ForegroundColor Red
+        exit 1
+    }
+    Invoke-SelfUpdateSecondPass
+    Clear-GitHubUpdateCache
 
     # --verify: run 'pforge check' + 'pforge smith' in subprocesses so the
     # just-updated wrapper code is exercised (the running session still has
@@ -7852,6 +8124,7 @@ switch ($Command) {
     'update'       { Invoke-Update }
     'self-update'  { Invoke-SelfUpdate }
     'analyze'      { Invoke-Analyze }
+    'diagnose'     { Invoke-Diagnose }
     'run-plan'     { Invoke-RunPlan }
     'org-rules'    { Invoke-OrgRules }
     'drift'        { Invoke-Drift }
@@ -7868,6 +8141,7 @@ switch ($Command) {
     'quorum-analyze'  { Invoke-QuorumAnalyze }
     'health-trend'    { Invoke-HealthTrend }
     'version-bump' { Invoke-VersionBump }
+    'pending'      { Invoke-Pending }
     'smith'        { Invoke-Smith }
     'testbed-happypath' { Invoke-TestbedHappypath }
     'forge-home-cleanup' { Invoke-ForgeHomeCleanup }

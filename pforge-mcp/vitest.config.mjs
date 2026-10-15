@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 
 /** Strip shebang lines from source files — required for Vite's AsyncFunction runtime */
 const stripShebang = {
@@ -16,8 +17,102 @@ const stripShebang = {
 // invoker's CWD (e.g. `npx --prefix pforge-mcp vitest run` from repo root).
 const configDir = fileURLToPath(new URL(".", import.meta.url));
 
+// Sibling-package source roots (forward slashes for Vite alias replacements).
+// pforge-mcp's vitest already runs ../pforge-sdk/tests/**, and a handful of
+// pforge-mcp tests import the peer packages via their PUBLIC entry
+// (`pforge-sdk/chunker`, `@pforge/pforge-master`). CI installs dependencies
+// from pforge-mcp/ in isolation (npm stops at the first package.json and never
+// links the sibling workspaces), so those bare specifiers do not resolve there.
+// Map them to the peers' source here so resolution is deterministic across both
+// the workspace-linked local run and CI's isolated install — without declaring
+// a file: dependency that would churn the shared lockfile. The test sources
+// keep their public-entry imports, so the bug-219 deep-import guard stays green.
+const sdkSrc = fileURLToPath(new URL("../pforge-sdk/src/", import.meta.url)).replace(/\\/g, "/");
+const masterRoot = fileURLToPath(new URL("../pforge-master/", import.meta.url)).replace(/\\/g, "/");
+
+// `pforge self-update` ships pforge-mcp/tests/** but not the source-repo tooling those
+// suites exercise, so a healthy consumer install saw `npm test` go red (#249). Each entry
+// maps a repo-root asset to the suites that need it; a suite is excluded only when its
+// asset is genuinely absent. In this repo every asset exists, so SOURCE_ONLY_EXCLUDES is
+// empty and nothing is skipped — a typo'd path would drop real coverage here, which
+// tests/consumer-test-surface.test.mjs asserts against.
+const SOURCE_ONLY_SUITES = {
+  "../setup.sh": [
+    "tests/setup-node-floor-path.test.mjs",
+    "tests/release-archive.test.mjs",
+    "tests/setup-openbrain-prompt.test.mjs",
+    "tests/brain-cli.test.mjs",
+    "tests/crucible-smith-panel.test.mjs",
+    "tests/best-defaults-preset.test.mjs",
+  ],
+  "../.github/instructions/release-checklist.instructions.md": [
+    "tests/consumer-test-surface.test.mjs",
+    "tests/changelog-format.test.mjs",
+  ],
+  "../.github/agents/plan-health-auditor.agent.md": ["tests/plan-health-auditor.test.mjs"],
+  // The stub modules, not catalog.json: setup installs the catalog in projects but not the stubs.
+  "../extensions/notify-slack/index.mjs": ["tests/notifications-stubs.test.mjs"],
+  "../docs/index.html": ["tests/docs-nav.smoke.test.mjs"],
+  "../scripts/audit": [
+    "tests/audit-cli-parity.test.mjs",
+    "tests/clean-code-delta.test.mjs",
+    "tests/clean-code-no-regression.test.mjs",
+    "tests/dependency-direction.test.mjs",
+    "tests/test-smells-scanner.test.mjs",
+    "tests/testbed-happypath.test.mjs",
+    "tests/preset-quality.test.mjs",
+    "tests/boyscout-delta-rules.test.mjs",
+    "tests/preset-build-manifest.test.mjs",
+  ],
+  "../scripts/forge-home-cleanup.mjs": ["tests/forge-home-cleanup.test.mjs"],
+  "../scripts/sync-versions.mjs": ["tests/version-sync.test.mjs"],
+  "../scripts/check-model-drift.mjs": ["tests/model-drift.test.mjs"],
+  "../scripts/benchmark": ["tests/sdk-parity-benchmark.test.mjs"],
+  // smith-golden compares smith's output on this repository with a recorded golden.
+  "../scripts/release": ["tests/release-harness.test.mjs", "tests/release-ship.test.mjs", "tests/smith-golden.test.mjs"],
+  "../scripts/build-agent-plugin.mjs": ["tests/agent-plugin.test.mjs"],
+  "../templates/.github/agents/specifier.agent.md": ["tests/planning-guidance.test.mjs"],
+  "../presets/shared/skills/code-review/SKILL.md": ["tests/review-guidance.test.mjs"],
+  "../pforge-master": [
+    "tests/auditor-automation-baseline.test.mjs",
+    "tests/forge-master.advisory.test.mjs",
+  ],
+  "../pforge-sdk": [
+    "tests/lattice-chunker-treesitter.test.mjs",
+    "tests/notifications-webhook.test.mjs",
+  ],
+  "../docs/manual": ["tests/manual-chapter-headings.test.mjs"],
+  "../docs/capabilities.md": [
+    "tests/capabilities-doc-sync.test.mjs",
+    "tests/orchestrator-complexity.test.mjs",
+  ],
+  "../docs/plans/testbed-scenarios": ["tests/testbed-dashboard-ui.test.mjs", "tests/testbed-auditor-automation.test.mjs"],
+  "../templates": [
+    "tests/baselines.test.mjs",
+    "tests/diff-classify-hook-staged-diff.test.mjs",
+    "tests/forbidden-matcher.test.mjs",
+    "tests/full-suite-regression.test.mjs",
+    "tests/issue-257-memory-enumeration.test.mjs",
+    "tests/meta-287-hook-launchers.test.mjs",
+    "tests/automation-templates.test.mjs",
+  ],
+  "../presets": ["tests/tempering-runner.test.mjs"],
+};
+
+export const SOURCE_ONLY_EXCLUDES = Object.entries(SOURCE_ONLY_SUITES)
+  .filter(([asset]) => !existsSync(fileURLToPath(new URL(asset, import.meta.url))))
+  .flatMap(([, suites]) => suites);
+
 export default defineConfig({
   plugins: [stripShebang],
+  resolve: {
+    alias: [
+      { find: /^@pforge\/pforge-master$/, replacement: `${masterRoot}src/index.mjs` },
+      { find: /^@pforge\/pforge-master\/(.*)$/, replacement: `${masterRoot}$1` },
+      { find: /^pforge-sdk$/, replacement: `${sdkSrc}index.mjs` },
+      { find: /^pforge-sdk\/(.*)$/, replacement: `${sdkSrc}$1.mjs` },
+    ],
+  },
   test: {
     environment: "node",
     // Use forked processes to avoid Windows libuv UV_HANDLE_CLOSING assertions
@@ -25,7 +120,15 @@ export default defineConfig({
     pool: "forks",
     root: configDir,
     include: ["tests/**/*.test.mjs", "../pforge-sdk/tests/**/*.test.mjs"],
-    exclude: ["**/.forge/**", "**/node_modules/**"],
+    exclude: ["**/.forge/**", "**/node_modules/**", ...SOURCE_ONLY_EXCLUDES],
     hookTimeout: 30000,
+    // Matches hookTimeout: much of this suite shells out to real CLI probes
+    // (detectWorkers, probeQuorumModelAvailability, spawnWorker), which the
+    // 5000ms default could not cover once vitest 4 added per-test overhead.
+    testTimeout: 30000,
+    // Runs started by tests must not ask the real Copilot runtime for its model
+    // list (copilot-live-models.mjs): it is slow, needs a signed-in user, and is
+    // not what any suite is testing. copilot-live-models.test.mjs clears this itself.
+    env: { PFORGE_LIVE_MODELS: "0" },
   },
 });

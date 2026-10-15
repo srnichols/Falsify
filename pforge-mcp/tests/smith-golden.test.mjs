@@ -9,9 +9,9 @@
  * surface here.
  *
  * The test is skipped on CI / non-Windows runners where pforge.ps1 cannot
- * run — use the companion pforge.sh path for that case.
- *
- * Testbed: E:\GitHub\plan-forge-testbed  (read-only; must NOT be modified)
+ * run — use the companion pforge.sh path for that case — and wherever no
+ * testbed resolves (testbed.path in .forge.json, or a plan-forge-testbed
+ * clone next to the repo). The testbed is read-only; never modify it.
  */
 
 import { describe, it, expect } from "vitest";
@@ -19,16 +19,25 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveTestbedPath } from "../testbed/scenarios.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = resolve(HERE, "fixtures");
 const GOLDEN = resolve(FIXTURES, "smith-golden-pre-enums.txt");
 
-const TESTBED = "E:\\GitHub\\plan-forge-testbed";
 const PFORGE_PS1 = resolve(HERE, "..", "..", "pforge.ps1");
 
+function findTestbed() {
+  try {
+    return resolveTestbedPath({}, { projectRoot: resolve(HERE, "..", "..") });
+  } catch {
+    return null;
+  }
+}
+
+const TESTBED = findTestbed();
 const isWindows = process.platform === "win32";
-const testbedExists = existsSync(TESTBED);
+const testbedExists = Boolean(TESTBED) && existsSync(TESTBED);
 const ps1Exists = existsSync(PFORGE_PS1);
 
 /** Strip ANSI escape sequences so golden diffs are color-independent. */
@@ -42,11 +51,18 @@ function stripAnsi(s) {
 function normalize(text) {
   return (
     stripAnsi(text)
+      // CRLF first: several rules below end in "\n", and pwsh on Windows emits "\r\n".
+      .replace(/\r\n/g, "\n")
       // Semver-like version strings: v1.2.3, v1.2.3.windows.4, 1.2.3.windows.4
       .replace(/v\d+\.\d+\.\d+(?:\.\S*)?/g, "v<version>")
       .replace(/\b\d+\.\d+\.\d+(?:\.\S+)?\b/g, "<version>")
       // Cache age: "(cached 95m ago)" → "(cached <age>)"
       .replace(/\(cached \d+[smhd]+ ago\)/g, "(cached <age>)")
+      // A cache-hit hint is optional after a cold lookup.
+      .replace(/^[^\S\n]*\(cached <age>\)\n/gm, "")
+      // Auto-update status: cache age and last-check time change every run
+      .replace(/Cache age: -?\d+m/g, "Cache age: <age>")
+      .replace(/Last check: [^\n|]+/g, "Last check: <time>")
       // gh-copilot agentic status: varies by environment (login session, flags)
       .replace(/gh-copilot v<version>[^\n]*/g, "gh-copilot v<version> <copilot-agent-status>")
       // copilot-coding-agent: check result changes with gh auth state.
@@ -55,6 +71,11 @@ function normalize(text) {
       // graceful fallback). All three normalize to the same placeholder so the
       // golden fixture is forward- and backward-compatible.
       .replace(/copilot-coding-agent (?:v\S*|\(version unknown\))[^\n]*/g, "copilot-coding-agent <coding-agent-status>")
+      // grok worker probe: present-and-versioned on a machine with the CLI,
+      // "not found on PATH" plus a FIX line without it. Same environment-varying
+      // class as gh-copilot above; the FIX line is dropped so both shapes collapse.
+      .replace(/[^\S\n]*(?:✅|Γ£à|⚠️|⚠|ΓÜá∩╕Å)[^\n]*\bgrok\b[^\n]*\(agent worker\)[^\n]*/g, "  grok <worker-status>")
+      .replace(/[^\S\n]+FIX: irm https:\/\/x\.ai\/cli\/install[^\n]*\n?/g, "")
       // Image API key presence: XAI_API_KEY / OPENAI_API_KEY vary by environment
       .replace(/[^\S\n]*(?:✓|✅|Γ£à)[^\n]*API_KEY[^\n]*/g, "  <api-key-present>")
       .replace(/[^\S\n]*(?:✓|✅|Γ£à)[^\n]*Grok Aurora[^\n]*/g, "  <api-key-present>")
@@ -64,8 +85,32 @@ function normalize(text) {
       // environment-agnostic regardless of how many keys are configured.
       // Also consume any immediately-following blank line (left by FIX-line removal).
       .replace(/(?:  <api-key-present>\n?|  <no-api-keys>\n?)+\n?/g, "  <api-key-section>\n")
+      // Testbed state, not smith's structure: the installed version may be a -dev
+      // build or behind the latest release, and the instruction-file and tool
+      // counts grow with every upgrade. Each upgrade used to break this golden.
+      .replace(/<version>-dev\b/g, "<version>")
+      .replace(/[^\S\n]*(?:✅|Γ£à)[^\n]*Up to date \(v<version>\)/g, "  <version-currency>")
+      .replace(/[^\S\n]*(?:⚠️|⚠|ΓÜá∩╕Å)[^\n]*Installed v<version> — latest is v<version>\n[^\S\n]+FIX: Run 'pforge self-update'[^\n]*/g, "  <version-currency>")
+      .replace(/\b\d+ instruction files\b/g, "<n> instruction files")
+      // Present only once the testbed's pforge-mcp ships install-consistency.mjs (3.31.2+).
+      .replace(/[^\S\n]*(?:✅|Γ£à)[^\n]*Plan Forge v<version> installed \(packages agree\)\n/g, "")
+      .replace(/\b\d+ MCP tools\b/g, "<n> MCP tools")
+      // Generated capability surface: cli-schema.json is gitignored and appears only once
+      // the testbed's MCP server has started, so smith passes or warns depending on that.
+      .replace(/[^\S\n]*(?:✅|Γ£à)[^\n]*tools\.json \+ cli-schema\.json[^\n]*\n/g, "  <capability-surface>\n")
+      .replace(/[^\S\n]*(?:⚠️|⚠|ΓÜá∩╕Å)[^\n]*tools\.json or cli-schema\.json missing\n[^\S\n]+FIX:[^\n]*\n/g, "  <capability-surface>\n")
+      // Run history: every plan run on the testbed changes these numbers, and the
+      // quorum line appears only after a quorum run.
+      .replace(/Cost: \$\d+(?:\.\d+)?/g, "Cost: $<n>")
+      .replace(/\b\d+ run\(s\) in \.forge\/runs\//g, "<n> run(s) in .forge/runs/")
+      .replace(/Model performance: \d+ records/g, "Model performance: <n> records")
+      .replace(/LiveGuard memories: \d+ captured/g, "LiveGuard memories: <n> captured")
+      .replace(/OpenBrain queue: \d+ thought/g, "OpenBrain queue: <n> thought")
+      .replace(/\b\d+ manual-import bypass/g, "<n> manual-import bypass")
+      .replace(/[^\S\n]*(?:✅|Γ£à)[^\n]*Quorum history present[^\n]*\n/g, "")
       // Results summary: pass/fail/warning counts vary with environment state
       .replace(/Results:\s+\d+ passed\s*\|\s*\d+ failed\s*\|\s*\d+ warnings/g, "Results: <summary>")
+      .replace(/\b\d+ warning\(s\) — review/g, "<n> warning(s) — review")
       // "Fix the N issue(s) above" count varies
       .replace(/Fix the \d+ issue\(s\) above[^\n]*/g, "Fix <n> issue(s) above")
       // Box-drawing characters (U+2500–U+257F) and CP850 mojibake variants
@@ -75,8 +120,7 @@ function normalize(text) {
       .replace(/[─━╔╗╚╝║═╠╣╦╩╬┌┐└┘├┤┬┴┼│\u2500-\u257F]+/g, "<box>")
       // Windows-1252 / CP850 mojibake of the same box chars (ΓòöΓòÉΓòÉ… etc.)
       .replace(/[\u0393\u00F2\u00F6\u00DC\u00C9\u00C7\u00C6\u00C8\u00C4\u00C3\u00BF]+/g, "<box>")
-      // Trailing whitespace and CRLF → LF
-      .replace(/\r\n/g, "\n")
+      // Trailing whitespace
       .replace(/ +\n/g, "\n")
   );
 }
@@ -85,7 +129,7 @@ function runSmith() {
   return spawnSync(
     "pwsh",
     ["-NonInteractive", "-NoProfile", "-File", PFORGE_PS1, "smith"],
-    { cwd: TESTBED, encoding: "utf-8", timeout: 60_000 }
+    { cwd: TESTBED, encoding: "utf-8", timeout: 150_000 }
   );
 }
 
@@ -96,10 +140,34 @@ let _smithOutput = null;
 function getSmithOutput() {
   if (_smithOutput === null) {
     const result = runSmith();
-    _smithOutput = result.stdout + result.stderr;
+    // Without this guard a timeout yields null stdout, and the golden comparison
+    // reports a content diff instead of the real cause.
+    if (result.error) {
+      throw new Error(
+        `pforge smith did not complete (${result.error.code || result.error.message}) — ` +
+          "golden comparison skipped. This test shells out to a full pwsh CLI run, so it " +
+          "is the most load-sensitive file in the suite; re-run it in isolation to confirm."
+      );
+    }
+    _smithOutput = (result.stdout || "") + (result.stderr || "");
   }
   return _smithOutput;
 }
+
+describe("smith-golden cache normalization", () => {
+  const cold = "Version Currency:\n  Up to date (v3.33.0)\n\nAuto-update:\n  disabled\n";
+
+  it("compares cold and warm cache output identically", () => {
+    const warm = cold.replace("\n\nAuto-update:", "\n    (cached 12m ago)\n\nAuto-update:");
+    expect(normalize(warm)).toBe(normalize(cold));
+  });
+
+  it("keeps non-cache diagnostic lines", () => {
+    const diagnostic = cold.replace("\n\nAuto-update:", "\n    Warning: package versions disagree\n\nAuto-update:");
+    expect(normalize(diagnostic)).toContain("Warning: package versions disagree");
+    expect(normalize(diagnostic)).not.toBe(normalize(cold));
+  });
+});
 
 describe("smith-golden: pforge smith output stability", () => {
   it.skipIf(!canRun)(
@@ -109,7 +177,7 @@ describe("smith-golden: pforge smith output stability", () => {
       expect(output).toMatch(/8\/8 lifecycle hooks present/);
       expect(output).not.toMatch(/Missing hooks:.*PostRun/);
     },
-    90_000
+    180_000
   );
 
   it.skipIf(!canRun)(
@@ -137,6 +205,6 @@ describe("smith-golden: pforge smith output stability", () => {
 
       expect(actual).toBe(expected);
     },
-    90_000
+    180_000
   );
 });

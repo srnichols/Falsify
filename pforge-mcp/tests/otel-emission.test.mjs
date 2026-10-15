@@ -11,7 +11,7 @@
  *     slice-started, run-started events
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -114,12 +114,38 @@ describe("initOtel", () => {
   it("returns a promise when gate is open (graceful on missing packages)", async () => {
     process.env.OTEL_ENABLED = "true";
     const result = initOtel();
-    // Returns a promise (SDK bootstrap) — may resolve to null if packages absent
+    // Returns a promise (SDK bootstrap)
     expect(result).not.toBeNull();
     expect(typeof result.then).toBe("function");
-    // Await — should resolve to null (optional deps not installed in test env)
+    // Resolves to null when the optional OTel packages are absent, or to a
+    // started NodeSDK when they are installed (e.g. pulled in transitively).
+    // Either outcome is the graceful contract.
     const sdk = await result;
-    expect(sdk).toBeNull();
+    if (sdk === null) {
+      expect(sdk).toBeNull();
+    } else {
+      expect(typeof sdk.shutdown).toBe("function");
+      // Tear down so the live exporter does not leak into other tests.
+      await sdk.shutdown();
+    }
+  });
+
+  it("warns actionably when the gate is open but the SDK cannot load", async () => {
+    process.env.OTEL_ENABLED = "true";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const sdk = await initOtel();
+      // Only assert the diagnostic when the packages really are absent; if a
+      // future install makes them resolvable this test must not fail spuriously.
+      if (sdk === null) {
+        expect(warn).toHaveBeenCalled();
+        const msg = warn.mock.calls.map((c) => c.join(" ")).join("\n");
+        expect(msg).toMatch(/otel/i);
+        expect(msg).toMatch(/@opentelemetry\/api/);
+      }
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

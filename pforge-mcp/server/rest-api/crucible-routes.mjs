@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -42,7 +42,9 @@ export function _registerCrucibleHotspotRoutes(app) {
       if (typeof id !== "string" || !id) {
         return res.status(400).json({ error: "id is required" });
       }
-      const result = crucibleHandleAsk({ id, answer, questionId, projectDir: PROJECT_DIR, hub: activeHub });
+      // The dashboard renders a live preview pane, so it opts into the draft
+      // that MCP callers now omit (issue #245).
+      const result = crucibleHandleAsk({ id, answer, questionId, projectDir: PROJECT_DIR, hub: activeHub, includeDraft: true });
       res.json(result);
     } catch (err) {
       // Issue #138 — surface ASK_QUESTION_MISMATCH as 409 with the expected
@@ -215,7 +217,7 @@ export function _registerCrucibleHotspotRoutes(app) {
       }
 
       if (!cached) {
-        const raw = execSync(`git log --format=format: --name-only --since="${since}"`, { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30_000 });
+        const raw = execFileSync("git", ["log", "--format=format:", "--name-only", `--since=${since}`], { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30_000 });
         const counts = {};
         for (const line of raw.split("\n")) {
           const f = line.trim();

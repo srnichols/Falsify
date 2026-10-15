@@ -25,9 +25,15 @@
       "runRegressionGuard": true,
       "injectContext": true,
       "minAlertSeverity": "medium"
+    },
+    "postRun": {
+      "invokeAuditor": {
+        "onFailure": false,
+        "everyNRuns": null
+      }
     }
   },
-  "templateVersion": "3.22.0-dev",
+  "templateVersion": "3.33.0",
   "modelRouting": {
     "default": "claude-opus-4.6"
   },
@@ -36,7 +42,7 @@
     "costAnomaly": {
       "enabled": true,
       "medianWindow": 20,
-      "ratio": 2.0
+      "ratio": 2
     },
     "competitive": {
       "enabled": false

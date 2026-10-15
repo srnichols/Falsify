@@ -1,7 +1,8 @@
 /** Plan Forge — Phase-55 S1: self-test sub-module (extracted from run-plan.mjs) */
 
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdtempSync, copyFileSync, rmSync, mkdirSync } from "node:fs";
+import { resolve, join } from "node:path";
+import { tmpdir } from "node:os";
 import { parsePlan, buildDAG } from "../plan-parser.mjs";
 import { OrchestratorEventBus } from "../event-bus.mjs";
 import { SequentialScheduler, ParallelScheduler, runGate, detectScopeConflicts } from "../schedulers.mjs";
@@ -11,7 +12,11 @@ import { calculateSliceCost, buildCostBreakdown, loadQuorumConfig } from "../quo
 import { getCostReport } from "../forge-io.mjs";
 import { scoreSliceComplexity } from "../review-watcher.mjs";
 import { inferSliceType, recommendModel } from "../model-scoring.mjs";
-import { GATE_ALLOWED_PREFIXES } from "../constants.mjs";
+import { DEFAULT_ROUTING_MODEL, GATE_ALLOWED_PREFIXES } from "../constants.mjs";
+import { MODEL_PRICING } from "../../cost-service.mjs";
+
+/** Cost assertions compare USD floats to this tolerance. */
+const COST_TOLERANCE_USD = 0.0001;
 
 // ─── Self-Test ────────────────────────────────────────────────────────
 
@@ -204,7 +209,7 @@ function _selfTestEstimateMode(assert, buildEstimate) {
     const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
     if (existsSync(examplePlan)) {
       const plan = parsePlan(examplePlan);
-      const est = buildEstimate({ plan, model: "claude-sonnet-4.6", cwd: process.cwd() });
+      const est = buildEstimate({ plan, model: "claude-sonnet-5.5", cwd: process.cwd() });
       assert("Estimate has slice count", est.sliceCount > 0);
       assert("Estimate has cost", est.estimatedCostUSD >= 0);
       assert("Estimate has tokens", est.tokens.estimatedInput > 0);
@@ -219,16 +224,34 @@ function _selfTestEstimateMode(assert, buildEstimate) {
 
 async function _selfTestDryRun(assert, runPlan) {
   console.log("\n─── Full Run (Dry-Run) ───");
+  const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
+  if (!existsSync(examplePlan)) return;
+
+  // Run against a scratch project rather than the repo. The example plan carries
+  // no crucibleId, so runPlan needs the manual-import bypass — and that bypass
+  // appends to .forge/crucible/manual-imports.jsonl. Writing self-test noise
+  // into a governance audit trail on every run is not acceptable, and runPlan
+  // requires the plan to sit inside the project dir, so copy it in.
+  let scratch = null;
   try {
-    const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
-    if (existsSync(examplePlan)) {
-      const result = await runPlan(examplePlan, { dryRun: true, cwd: process.cwd() });
-      assert("Dry-run returns status", result.status === "dry-run");
-      assert("Dry-run returns plan object", !!result.plan);
-      assert("Dry-run plan has slices", result.plan.slices.length > 0);
-    }
+    scratch = mkdtempSync(join(tmpdir(), "pforge-selftest-"));
+    mkdirSync(join(scratch, "docs", "plans"), { recursive: true });
+    const scratchPlan = join(scratch, "docs", "plans", "Phase-DOTNET-EXAMPLE.md");
+    copyFileSync(examplePlan, scratchPlan);
+
+    const result = await runPlan(scratchPlan, {
+      dryRun: true,
+      cwd: scratch,
+      manualImport: true,
+      manualImportReason: "orchestrator self-test fixture",
+    });
+    assert("Dry-run returns status", result.status === "dry-run");
+    assert("Dry-run returns plan object", !!result.plan);
+    assert("Dry-run plan has slices", result.plan?.slices?.length > 0);
   } catch (err) {
     assert(`Dry-run: ${err.message}`, false);
+  } finally {
+    if (scratch) rmSync(scratch, { recursive: true, force: true });
   }
 }
 
@@ -238,10 +261,10 @@ function _selfTestModelRouting(assert, loadModelRouting, resolveModel) {
     const routing = loadModelRouting(process.cwd());
     assert("loadModelRouting returns object", typeof routing === "object");
     assert("Has default key", "default" in routing);
-    assert("CLI override wins", resolveModel("claude-sonnet-4.6", { default: "gpt-5" }, null) === "claude-sonnet-4.6");
+    assert("CLI override wins", resolveModel("claude-sonnet-5.5", { default: "gpt-5" }, null) === "claude-sonnet-5.5");
     assert("Routing default when CLI is auto", resolveModel("auto", { default: "gpt-5" }, null) === "gpt-5");
     assert("Null when both auto", resolveModel(null, { default: "auto" }, null) === null);
-    assert("Default is claude-opus-4.6 when no .forge.json", loadModelRouting("/nonexistent-path-pforge-test").default === "claude-opus-4.6");
+    assert(`Default is ${DEFAULT_ROUTING_MODEL} when no .forge.json`, loadModelRouting("/nonexistent-path-pforge-test").default === DEFAULT_ROUTING_MODEL);
   } catch (err) {
     assert(`Model routing: ${err.message}`, false);
   }
@@ -281,22 +304,27 @@ function _selfTestErrorPaths(assert) {
 function _selfTestCostCalculation(assert) {
   console.log("\n─── Cost Calculation ───");
   try {
-    const cost1 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "claude-sonnet-4.6" });
+    // Expected cost comes from the pricing table, so a model refresh cannot silently break this check.
+    const sonnet = MODEL_PRICING["claude-sonnet-5.5"];
+    const cost1 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "claude-sonnet-5.5" });
     assert("Cost calculated for Claude Sonnet", cost1.cost_usd > 0);
-    assert("Cost has model", cost1.model === "claude-sonnet-4.6");
-    assert("Cost matches expected", Math.abs(cost1.cost_usd - 0.0105) < 0.0001);
+    assert("Cost has model", cost1.model === "claude-sonnet-5.5");
+    assert("Cost matches expected", Math.abs(cost1.cost_usd - (1000 * sonnet.input + 500 * sonnet.output)) < COST_TOLERANCE_USD);
     const cost2 = calculateSliceCost({ tokens_in: null, tokens_out: 100, model: "unknown-model" });
     assert("Unknown model uses default pricing", cost2.cost_usd > 0);
     assert("Null tokens_in treated as 0", cost2.tokens_in === 0);
-    const cost3 = calculateSliceCost({ tokens_in: 500000, tokens_out: 5000, model: "claude-opus-4.6", premiumRequests: 3 }, "gh-copilot");
-    assert("CLI worker uses premium request rate", cost3.cost_usd === 0.03);
-    assert("CLI worker preserves token counts", cost3.tokens_in === 500000);
+    const cost3 = calculateSliceCost({ tokens_in: 500000, tokens_out: 5000, model: "claude-opus-5.5", premiumRequests: 3 }, "claude");
+    const flatRateCost = cost3.cost_usd;
+    assert("Flat CLI worker uses premium request rate", flatRateCost === 0.03);
+    assert("Flat CLI worker preserves token counts", cost3.tokens_in === 500000);
+    const costGh = calculateSliceCost({ tokens_in: 500000, tokens_out: 5000, model: "claude-opus-5.5", premiumRequests: 3 }, "gh-copilot");
+    assert("gh-copilot worker uses token pricing", costGh.cost_usd > flatRateCost);
     const cost4 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "grok-4" }, "api-xai");
     assert("API worker uses token pricing", cost4.cost_usd > 0);
-    assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.0025) < 0.0001);
+    assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.0025) < COST_TOLERANCE_USD);
     const mockResults = [
-      { number: "1", tokens: { tokens_in: 500, tokens_out: 200, model: "claude-sonnet-4.6" }, status: "passed" },
-      { number: "2", tokens: { tokens_in: 300, tokens_out: 100, model: "gpt-5-mini" }, status: "passed" },
+      { number: "1", tokens: { tokens_in: 500, tokens_out: 200, model: "claude-sonnet-5.5" }, status: "passed" },
+      { number: "2", tokens: { tokens_in: 300, tokens_out: 100, model: "gpt-6-luna" }, status: "passed" },
       { number: "3", status: "skipped" },
     ];
     const breakdown = buildCostBreakdown(mockResults);

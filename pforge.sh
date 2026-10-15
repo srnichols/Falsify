@@ -24,6 +24,39 @@ REPO_ROOT="$(find_repo_root)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ─── Helpers ───────────────────────────────────────────────────────────
+
+# ─── JSON reads (#297) ─────────────────────────────────────────────────
+# Node is a Plan Forge prerequisite; Python is not. In Git Bash on Windows,
+# the Python on PATH is usually the native Store build, which cannot open /c/... or
+# /tmp/... paths, and grep rejects Perl regexes outside UTF-8 locales. File
+# paths go in as separate arguments so MSYS converts them for node.exe.
+# Prints the value at a dot path: strings as-is, booleans as true/false,
+# objects and arrays as JSON; the fallback (default empty) when the value is
+# missing or null, or the JSON cannot be read.
+_PF_JSON_GET_JS='const fs = require("fs");
+const [src, keyPath, fallback = ""] = process.argv.slice(1);
+let value;
+try {
+  value = JSON.parse(fs.readFileSync(src === "-" ? 0 : src, "utf8"));
+  for (const key of keyPath ? keyPath.split(".") : []) value = value == null ? undefined : value[key];
+} catch { value = undefined; }
+if (value === undefined || value === null) process.stdout.write(fallback);
+else process.stdout.write(typeof value === "object" ? JSON.stringify(value) : String(value));'
+
+# json_get <file> <dot.path> [fallback]
+json_get() {
+    if [ -f "$1" ]; then
+        node -e "$_PF_JSON_GET_JS" "$1" "$2" "${3:-}" 2>/dev/null || printf '%s' "${3:-}"
+    else
+        printf '%s' "${3:-}"
+    fi
+}
+
+# json_pick <dot.path> [fallback] — the same, reading JSON from stdin.
+json_pick() {
+    node -e "$_PF_JSON_GET_JS" - "$1" "${2:-}" 2>/dev/null || printf '%s' "${2:-}"
+}
+
 print_manual_steps() {
     local title="$1"; shift
     echo ""
@@ -124,10 +157,14 @@ COMMANDS:
   ext list          List installed extensions
   ext remove <name> Remove an installed extension
   ext publish <p>   Validate and generate catalog entry for publishing
-  update [source]   Update framework files from Plan Forge source (preserves customizations)
+  update [source]   Update framework files from Plan Forge source (keeps guidance files you edited)
+                      Flags: --dry-run, --yes/-y (no prompt), --force (no prompt; re-apply the same version), --overwrite-customized (replace edited guidance; backups kept)
   self-update       Check for and install the latest Plan Forge release from GitHub
-                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after)
+                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),
+                             --overwrite-customized
   analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
+                      Flags: --quorum[=<preset>] or --models m1,m2 (multi-model review, also of source files), --mode plan|file
+  diagnose <file>   Multi-model bug investigation — root causes and fixes. Flags: --models m1,m2, --quorum=<preset>
   run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
   drift             Score codebase against architecture guardrail rules — track drift over time
@@ -182,6 +219,7 @@ COMMANDS:
   sync-memories     Generate .github/copilot-memory-hints.md from forge decisions (trajectory notes, auto-skills, brain)
   sync-instructions Generate .github/copilot-instructions.md from forge project context (profile, principles, config)
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
+  pending           List, diff, apply or discard guidance updates pforge update saved instead of overwriting your edits
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
   forge-home-cleanup Archive ephemeral .forge/ files (logs, tmp, release notes) and prune old archive slots
@@ -403,9 +441,9 @@ cmd_branch() {
     fi
 
     local branch_name
-    branch_name="$(grep -oP '\*\*Branch\*\*:\s*`\K[^`]+' "$plan_file" 2>/dev/null || true)"
+    branch_name="$(sed -n 's/.*\*\*Branch\*\*:[[:space:]]*`\([^`]*\).*/\1/p' "$plan_file" 2>/dev/null | head -1 || true)"
     if [ -z "$branch_name" ]; then
-        branch_name="$(grep -oP '\*\*Branch\*\*:\s*"\K[^"]+' "$plan_file" 2>/dev/null || true)"
+        branch_name="$(sed -n 's/.*\*\*Branch\*\*:[[:space:]]*"\([^"]*\).*/\1/p' "$plan_file" 2>/dev/null | head -1 || true)"
     fi
 
     if [ -z "$branch_name" ] || [ "$branch_name" = "trunk" ]; then
@@ -607,6 +645,85 @@ cmd_sweep() {
     fi
 }
 
+# ─── Plan scope hints (shared by diff + analyze) ───────────────────────
+# Backticked hints from every "## <Heading>" section of a plan, each section
+# stopping at the next heading. The previous awk range ended on its own
+# heading line, so both lists were always empty here — while pforge.ps1 ran
+# the section to EOF (meta-bugs #283, #286). Only single-token hints with a
+# letter or digit can name a path; prose such as "git push --force" or "*" is
+# ignored. Twin of pforge.ps1 Get-PlanSectionHints and the check-forbidden hooks.
+plan_section_hints() {
+    printf '%s\n' "$1" | awk -v heading="$2" '
+        /^##+[ \t]/ {
+            text = $0
+            sub(/^##+[ \t]+/, "", text)
+            after = substr(text, length(heading) + 1, 1)
+            in_section = (index(text, heading) == 1 && after !~ /[A-Za-z0-9_]/)
+            next
+        }
+        in_section { print }
+    ' | grep -oE '`[^`]+`' | tr -d '`' \
+      | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+      | grep -v '[[:space:]]' | grep '[A-Za-z0-9]' || true
+}
+
+# One ERE per hint line, in order. Hints are literal text with "*" as the only
+# wildcard; a bare word (letters, digits, "_", "-") matches only a whole path
+# segment, so prose tokens such as `true` or `0` cannot match arbitrary paths.
+# Same rule as pforge.ps1 Test-PlanPathHint (meta-bug #286).
+plan_hint_regexes() {
+    [ -n "$1" ] || return 0
+    printf '%s\n' "$1" | sed -E \
+        -e 's#\\#/#g' \
+        -e 's/[].[^$+?(){}|]/\\&/g' \
+        -e 's/\*/.*/g' \
+        -e 's#^[A-Za-z0-9_-]+$#(^|/)&($|/)#'
+}
+
+# Fill the parallel FORBIDDEN_HINTS/FORBIDDEN_RES and INSCOPE_HINTS/INSCOPE_RES
+# arrays once per command. Compiling per file × hint took minutes on large plans.
+load_plan_scope_hints() {
+    local hints regexes hint re
+    FORBIDDEN_HINTS=(); FORBIDDEN_RES=(); INSCOPE_HINTS=(); INSCOPE_RES=()
+    hints="$(plan_section_hints "$1" "Forbidden Actions")"
+    regexes="$(plan_hint_regexes "$hints")"
+    while IFS= read -r hint && IFS= read -r re <&3; do
+        [ -n "$hint" ] || continue
+        FORBIDDEN_HINTS+=("$hint"); FORBIDDEN_RES+=("$re")
+    done <<< "$hints" 3<<< "$regexes"
+    hints="$(plan_section_hints "$1" "In Scope")"
+    regexes="$(plan_hint_regexes "$hints")"
+    while IFS= read -r hint && IFS= read -r re <&3; do
+        [ -n "$hint" ] || continue
+        INSCOPE_HINTS+=("$hint"); INSCOPE_RES+=("$re")
+    done <<< "$hints" 3<<< "$regexes"
+}
+
+# Set PLAN_VERDICT (forbidden | in-scope | unplanned) and PLAN_VERDICT_HINT for
+# one changed file, case-insensitively. A plan without In Scope hints allows
+# every non-forbidden file. Twin of pforge.ps1 Get-PlanScopeVerdict.
+plan_scope_verdict() {
+    local file="$1" i n had_nocasematch=0
+    PLAN_VERDICT="unplanned"; PLAN_VERDICT_HINT=""
+    shopt -q nocasematch && had_nocasematch=1
+    shopt -s nocasematch
+    n=${#FORBIDDEN_RES[@]}
+    for ((i = 0; i < n; i++)); do
+        if [[ "$file" =~ ${FORBIDDEN_RES[$i]} ]]; then
+            PLAN_VERDICT="forbidden"; PLAN_VERDICT_HINT="${FORBIDDEN_HINTS[$i]}"
+            break
+        fi
+    done
+    if [ "$PLAN_VERDICT" != "forbidden" ]; then
+        n=${#INSCOPE_RES[@]}
+        [ "$n" -eq 0 ] && PLAN_VERDICT="in-scope"
+        for ((i = 0; i < n; i++)); do
+            if [[ "$file" =~ ${INSCOPE_RES[$i]} ]]; then PLAN_VERDICT="in-scope"; break; fi
+        done
+    fi
+    [ "$had_nocasematch" -eq 1 ] || shopt -u nocasematch
+}
+
 # ─── Command: diff ─────────────────────────────────────────────────────
 cmd_diff() {
     if [ $# -eq 0 ]; then
@@ -629,7 +746,7 @@ cmd_diff() {
     # Get changed files
     local changed
     changed="$(git diff --name-only 2>/dev/null; git diff --cached --name-only 2>/dev/null)"
-    changed="$(echo "$changed" | sort -u | grep -v '^$')"
+    changed="$(echo "$changed" | sort -u | grep -v '^$' || true)"
 
     if [ -z "$changed" ]; then
         echo "No changed files detected."
@@ -638,18 +755,7 @@ cmd_diff() {
 
     local plan_content
     plan_content="$(cat "$plan_file")"
-
-    # Extract forbidden paths (backtick-wrapped in Forbidden Actions section)
-    local forbidden_section
-    forbidden_section="$(echo "$plan_content" | awk '/### Forbidden Actions/,/^###? /' || true)"
-    local forbidden_paths
-    forbidden_paths="$(echo "$forbidden_section" | grep -oE '`[^`]+`' | tr -d '`' || true)"
-
-    # Extract in-scope paths
-    local inscope_section
-    inscope_section="$(echo "$plan_content" | awk '/### In Scope/,/^###? /' || true)"
-    local inscope_paths
-    inscope_paths="$(echo "$inscope_section" | grep -oE '`[^`]+`' | tr -d '`' || true)"
+    load_plan_scope_hints "$plan_content"
 
     echo ""
     local file_count
@@ -662,40 +768,20 @@ cmd_diff() {
 
     while IFS= read -r file; do
         [ -z "$file" ] && continue
-
-        # Check forbidden
-        local is_forbidden=false
-        while IFS= read -r fp; do
-            [ -z "$fp" ] && continue
-            if [[ "$file" == *"$fp"* ]]; then
-                echo "  🔴 FORBIDDEN  $file  (matches: $fp)"
+        plan_scope_verdict "$file"
+        case "$PLAN_VERDICT" in
+            forbidden)
+                echo "  🔴 FORBIDDEN  $file  (matches: $PLAN_VERDICT_HINT)"
                 violations=$((violations + 1))
-                is_forbidden=true
-                break
-            fi
-        done <<< "$forbidden_paths"
-        $is_forbidden && continue
-
-        # Check in-scope
-        local is_in_scope=false
-        if [ -z "$inscope_paths" ]; then
-            is_in_scope=true
-        else
-            while IFS= read -r sp; do
-                [ -z "$sp" ] && continue
-                if [[ "$file" == *"$sp"* ]]; then
-                    is_in_scope=true
-                    break
-                fi
-            done <<< "$inscope_paths"
-        fi
-
-        if $is_in_scope; then
-            echo "  ✅ IN SCOPE   $file"
-        else
-            echo "  🟡 UNPLANNED  $file  (not in Scope Contract)"
-            out_of_scope=$((out_of_scope + 1))
-        fi
+                ;;
+            in-scope)
+                echo "  ✅ IN SCOPE   $file"
+                ;;
+            *)
+                echo "  🟡 UNPLANNED  $file  (not in Scope Contract)"
+                out_of_scope=$((out_of_scope + 1))
+                ;;
+        esac
     done <<< "$changed"
 
     echo ""
@@ -771,7 +857,7 @@ cmd_ext_search() {
     # Parse with grep/sed (no jq dependency)
     local found=0
     local ids
-    ids="$(echo "$catalog" | grep -oP '"id"\s*:\s*"\K[^"]+' || true)"
+    ids="$(printf '%s' "$catalog" | node -e 'const ids = []; const walk = (v) => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { if (k === "id" && typeof x === "string") ids.push(x); else walk(x); } }; walk(JSON.parse(require("fs").readFileSync(0, "utf8"))); console.log(ids.join("\n"));' 2>/dev/null || true)"
 
     for id in $ids; do
         local name desc category verified
@@ -926,8 +1012,7 @@ cmd_ext_install() {
     fi
 
     local ext_name
-    ext_name="$(python3 -c "import json; print(json.load(open('$ext_path/extension.json'))['name'])" 2>/dev/null || \
-               grep -oP '"name"\s*:\s*"\K[^"]+' "$ext_path/extension.json" | head -1)"
+    ext_name="$(json_get "$ext_path/extension.json" name)"
 
     print_manual_steps "ext install" \
         "Copy extension folder to .forge/extensions/$ext_name/" \
@@ -975,7 +1060,7 @@ cmd_ext_list() {
     fi
 
     local count
-    count="$(python3 -c "import json; d=json.load(open('$ext_json')); print(len(d.get('extensions',[])))" 2>/dev/null || echo "0")"
+    count="$(json_get "$ext_json" extensions.length 0)"
 
     if [ "$count" = "0" ]; then
         echo "No extensions installed."
@@ -985,14 +1070,9 @@ cmd_ext_list() {
     echo ""
     echo "Installed Extensions:"
     echo "─────────────────────"
-    python3 -c "
-import json
-d = json.load(open('$ext_json'))
-for e in d.get('extensions', []):
-    print(f\"  {e['name']} v{e['version']}  (installed {e.get('installedDate','unknown')})\")
-" 2>/dev/null || grep -oP '"name"\s*:\s*"\K[^"]+' "$ext_json" | while read -r name; do
-        echo "  $name"
-    done
+    node -e 'const { extensions = [] } = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+for (const e of extensions) console.log(`  ${e.name} v${e.version}  (installed ${e.installedDate || "unknown"})`);' "$ext_json" 2>/dev/null \
+        || echo "  (could not read $ext_json)"
     echo ""
 }
 
@@ -1069,7 +1149,7 @@ cmd_ext_publish() {
     local ext_json_file="$ext_path/extension.json"
     local id name description author version download_url repository license category effect
 
-    _ext_field() { grep -oP "\"$1\"\s*:\s*\"\K[^\"]+" "$ext_json_file" | head -1; }
+    _ext_field() { json_get "$ext_json_file" "$1"; }
 
     id="$(_ext_field id)"
     name="$(_ext_field name)"
@@ -1127,42 +1207,29 @@ cmd_ext_publish() {
 
     # Extract optional provides counts
     local inst_count agents_count prompts_count skills_count
-    if command -v python3 >/dev/null 2>&1; then
-        inst_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('instructions',0))" 2>/dev/null || echo "0")"
-        agents_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('agents',0))" 2>/dev/null || echo "0")"
-        prompts_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('prompts',0))" 2>/dev/null || echo "0")"
-        skills_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('skills',0))" 2>/dev/null || echo "0")"
-    else
-        inst_count=0; agents_count=0; prompts_count=0; skills_count=0
-    fi
+    inst_count="$(json_get "$ext_json_file" provides.instructions 0)"
+    agents_count="$(json_get "$ext_json_file" provides.agents 0)"
+    prompts_count="$(json_get "$ext_json_file" provides.prompts 0)"
+    skills_count="$(json_get "$ext_json_file" provides.skills 0)"
 
     local speckit_compat
-    speckit_compat="$(grep -oP '"speckit_compatible"\s*:\s*\K(true|false)' "$ext_json_file" | head -1)"
+    speckit_compat="$(json_get "$ext_json_file" speckit_compatible)"
     [ -z "$speckit_compat" ] && speckit_compat="false"
 
     local planforge_ver
-    planforge_ver="$(grep -oP '"planforge_version"\s*:\s*"\K[^\"]+"' "$ext_json_file" | head -1 | tr -d '"')"
+    planforge_ver="$(json_get "$ext_json_file" planforge_version)"
     [ -z "$planforge_ver" ] && planforge_ver=">=1.2.0"
 
     local tags_json
-    if command -v python3 >/dev/null 2>&1; then
-        tags_json="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(json.dumps(d.get('tags', [])))" 2>/dev/null || echo "[]")"
-    else
-        tags_json="[]"
-    fi
+    tags_json="$(json_get "$ext_json_file" tags '[]')"
 
     local now
     now="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
 
     # Build Spec Kit files arrays (instructions→rules, agents→agents)
     local speckit_rules speckit_agents
-    if command -v python3 >/dev/null 2>&1; then
-        speckit_rules="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(json.dumps(d.get('files',{}).get('instructions',[])+d.get('files',{}).get('rules',[])))" 2>/dev/null || echo "[]")"
-        speckit_agents="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(json.dumps(d.get('files',{}).get('agents',[])))" 2>/dev/null || echo "[]")"
-    else
-        speckit_rules="[]"
-        speckit_agents="[]"
-    fi
+    speckit_rules="$(node -e 'const { files = {} } = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(JSON.stringify([...(files.instructions || []), ...(files.rules || [])]));' "$ext_json_file" 2>/dev/null || echo "[]")"
+    speckit_agents="$(json_get "$ext_json_file" files.agents '[]')"
 
     echo ""
     echo "✓ Validation passed — extension is ready to publish."
@@ -1235,13 +1302,122 @@ _pf_sha256() {
     fi
 }
 
+# ─── Update guard (#280) ──────────────────────────────────────────────
+# Guidance files (instructions, prompts, agents, skills, hooks, automations, runbooks) go
+# through pforge-mcp/update-guard.mjs, as in pforge.ps1. It replaces only files
+# the project has not changed, keeps customized ones (saving the new version
+# under .forge/update-pending/), and renders setup's placeholders.
+_PF_GUIDANCE_PATH_RE='^(\.github/(prompts|instructions|agents|skills|hooks|automations)/|docs/plans/)'
+
+# Prints the guard to use: the source's copy (its index knows the newest shipped
+# versions), else the project's installed copy (e.g. when the source is an older
+# release). Prints nothing when Node or both copies are missing; update then
+# compares guidance files byte for byte, as releases before the guard did.
+_pf_resolve_update_guard() {
+    command -v node >/dev/null 2>&1 || return 0
+    local root
+    for root in "$1" "$2"; do
+        if [ -f "$root/pforge-mcp/update-guard.mjs" ] && [ -f "$root/pforge-mcp/shipped-guidance-hashes.json" ]; then
+            echo "$root/pforge-mcp/update-guard.mjs"
+            return 0
+        fi
+    done
+}
+
+# _pf_update_guard <guard> <plan|apply> <source-root> <project-root> [flags...] -- <"src|dst|name">...
+# Runs the guard on the listed entries and prints its tab-separated output.
+# Paths go to Node relative to the two roots, so no shell has to translate them.
+_pf_update_guard() {
+    local guard="$1" mode="$2" src_root="$3" proj_root="$4"
+    shift 4
+    local flags=()
+    while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do flags+=("$1"); shift; done
+    [ "$#" -gt 0 ] && shift
+    local list entry src dst rc=0
+    list="$(mktemp)"
+    for entry in "$@"; do
+        src="${entry%%|*}"
+        dst="${entry#*|}"; dst="${dst%%|*}"
+        printf '%s\t%s\n' "${src#"$src_root"/}" "${dst#"$proj_root"/}"
+    done > "$list"
+    node "$guard" "$mode" --source "$src_root" --project "$proj_root" --list "$list" ${flags[@]+"${flags[@]}"} || rc=$?
+    rm -f "$list"
+    return "$rc"
+}
+
+# _pf_update_needed <src> <dst> — mirrors Test-UpdateNeeded in pforge.ps1 (#280).
+# Updaters before the guard copied guidance files with setup's placeholders
+# unrendered; such a file matches the source byte for byte. While the guard is
+# active (_pf_fillable_tokens is set by cmd_update), a guidance Markdown file
+# that still holds a placeholder .forge.json can fill is offered too.
+_pf_update_needed() {
+    local src="$1" dst="$2" rel token
+    [ "$(_pf_sha256 "$src")" != "$(_pf_sha256 "$dst")" ] && return 0
+    [ -n "${_pf_fillable_tokens:-}" ] || return 1
+    case "$dst" in *.md) ;; *) return 1 ;; esac
+    rel="${dst#"$REPO_ROOT"/}"
+    [[ "$rel" =~ $_PF_GUIDANCE_PATH_RE ]] || return 1
+    while IFS= read -r token; do
+        if [ -n "$token" ] && grep -qF -- "$token" "$dst"; then return 0; fi
+    done <<< "$_pf_fillable_tokens"
+    return 1
+}
+
+# Removes the release tarball and extract dir that 'update --from-github'
+# downloaded, unless --keep-cache (#298). Reads cmd_update's locals, so it is
+# safe to call on every exit path.
+# Add missing modelRouting / hooks defaults to .forge.json (pforge-mcp/migrate-forge-config.mjs,
+# shared with pforge.ps1). Idempotent, so it also runs when the install is already current.
+# The JSON result of a Node helper run with 2>&1: the last line starting with "{",
+# or the last line when there is none (so an error message still surfaces). Node
+# can print deprecation warnings after the JSON, which made `tail -1` read a warning.
+_pf_last_json() {
+    awk '/^[[:space:]]*\{/ { j = $0 } { l = $0 } END { print (j != "" ? j : l) }'
+}
+
+_pf_migrate_forge_config() {
+    local project_root="$1" source_root="$2" migrator="" candidate="" key=""
+    for candidate in "$project_root/pforge-mcp/migrate-forge-config.mjs" "$source_root/pforge-mcp/migrate-forge-config.mjs"; do
+        if [ -f "$candidate" ]; then migrator="$candidate"; break; fi
+    done
+    [ -n "$migrator" ] || return 0
+    while IFS= read -r key; do
+        [ -n "$key" ] && echo "  ✅ Added $key to .forge.json"
+    done < <(node "$migrator" --project "$project_root" 2>/dev/null | tr -d '\r' || true)
+    return 0
+}
+
+_pf_gh_cleanup() {
+    $from_github || return 0
+    [ -n "$gh_tarball" ] || return 0
+    _PF_UPDATE_CACHE_PATHS=("$gh_tarball" "$gh_extract_dir")
+    if $keep_cache; then
+        echo "  Cache preserved (--keep-cache): $gh_tarball"
+        return 0
+    fi
+    local removed=false
+    if [ -f "$gh_tarball" ]; then rm -f "$gh_tarball"; removed=true; fi
+    if [ -n "$gh_extract_dir" ] && [ -d "$gh_extract_dir" ]; then rm -rf "$gh_extract_dir"; removed=true; fi
+    if $removed; then echo "  Cleaned up cache files."; fi
+    return 0
+}
+
 cmd_update() {
-    local dry_run=false force=false source_path="" from_github=false keep_cache=false gh_tag="" allow_dev=false
+    local dry_run=false force=false source_path="" from_github=false keep_cache=false gh_tag="" allow_dev=false overwrite_customized=false
+    # --yes only answers the confirmation prompt; --force also re-applies the same version.
+    local auto_yes=false
+    # Read by cmd_self_update: whether files were applied, and what the second pass needs.
+    _PF_UPDATE_APPLIED=0
+    _PF_UPDATE_WRAPPER_CHANGED=false
+    _PF_UPDATE_SOURCE_DIR=""
+    _PF_UPDATE_CACHE_PATHS=()
 
     for arg in "$@"; do
         case "$arg" in
             --dry-run|--check) dry_run=true ;;
             --force)   force=true ;;
+            --yes|-y)  auto_yes=true ;;
+            --overwrite-customized) overwrite_customized=true ;;
             --from-github) from_github=true ;;
             --keep-cache) keep_cache=true ;;
             --allow-dev) allow_dev=true ;;
@@ -1279,22 +1455,22 @@ cmd_update() {
         local tag_args=("resolve-tag")
         if [ -n "$gh_tag" ]; then tag_args+=("--tag" "$gh_tag"); fi
         local tag_result
-        tag_result="$(node "$node_helper" "${tag_args[@]}" 2>&1 | tail -1)"
+        tag_result="$(node "$node_helper" "${tag_args[@]}" 2>&1 | _pf_last_json)"
         local tag_ok
-        tag_ok="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('ok',''))" 2>/dev/null || echo "")"
+        tag_ok="$(printf '%s' "$tag_result" | json_pick ok)"
         if [ "$tag_ok" != "True" ] && [ "$tag_ok" != "true" ]; then
             local err_code err_msg
-            err_code="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('code',''))" 2>/dev/null || echo "ERR_UNKNOWN")"
-            err_msg="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('message',''))" 2>/dev/null || echo "$tag_result")"
+            err_code="$(printf '%s' "$tag_result" | json_pick code ERR_UNKNOWN)"
+            err_msg="$(printf '%s' "$tag_result" | json_pick message "$tag_result")"
             echo "ERROR: $err_code — $err_msg" >&2
             exit 1
         fi
-        resolved_tag="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tag',''))" 2>/dev/null)"
+        resolved_tag="$(printf '%s' "$tag_result" | json_pick tag)"
         echo "  Tag: $resolved_tag"
 
         # Drift warning — source repo has a newer tag than the latest Release
         local drift_msg
-        drift_msg="$(echo "$tag_result" | python3 -c "import json,sys; d=json.load(sys.stdin); w=d.get('warning') or {}; print(w.get('message',''))" 2>/dev/null || echo "")"
+        drift_msg="$(printf '%s' "$tag_result" | json_pick warning.message)"
         if [ -n "$drift_msg" ]; then
             echo "" >&2
             echo "WARNING: Release/tag drift detected" >&2
@@ -1305,24 +1481,27 @@ cmd_update() {
         # Download tarball
         echo "Downloading release tarball..."
         local dl_result
-        dl_result="$(node "$node_helper" download --tag "$resolved_tag" --project-dir "$REPO_ROOT" 2>&1 | tail -1)"
+        dl_result="$(node "$node_helper" download --tag "$resolved_tag" --project-dir "$REPO_ROOT" 2>&1 | _pf_last_json)"
         local dl_ok
-        dl_ok="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('ok',''))" 2>/dev/null || echo "")"
+        dl_ok="$(printf '%s' "$dl_result" | json_pick ok)"
         if [ "$dl_ok" != "True" ] && [ "$dl_ok" != "true" ]; then
             local err_code err_msg
-            err_code="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('code',''))" 2>/dev/null || echo "ERR_UNKNOWN")"
-            err_msg="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('message',''))" 2>/dev/null || echo "$dl_result")"
+            err_code="$(printf '%s' "$dl_result" | json_pick code ERR_UNKNOWN)"
+            err_msg="$(printf '%s' "$dl_result" | json_pick message "$dl_result")"
             echo "ERROR: $err_code — $err_msg" >&2
             exit 1
         fi
-        gh_tarball="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('path',''))" 2>/dev/null)"
-        gh_sha256="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('sha256',''))" 2>/dev/null)"
-        gh_size_bytes="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('sizeBytes',''))" 2>/dev/null)"
+        gh_tarball="$(printf '%s' "$dl_result" | json_pick path)"
+        gh_sha256="$(printf '%s' "$dl_result" | json_pick sha256)"
+        gh_size_bytes="$(printf '%s' "$dl_result" | json_pick sizeBytes)"
         echo "  Downloaded: $gh_tarball ($gh_size_bytes bytes)"
         echo "  SHA-256: $gh_sha256"
 
         # Extract tarball
         command -v tar >/dev/null 2>&1 || { echo "ERROR: ERR_NO_TAR — tar not found. Install tar for your platform." >&2; exit 1; }
+        if command -v cygpath >/dev/null 2>&1; then
+            gh_tarball="$(cygpath -u "$gh_tarball")"
+        fi
         local safe_name
         safe_name="$(echo "$resolved_tag" | sed 's/[^a-zA-Z0-9._-]/_/g')"
         gh_extract_dir="$(dirname "$gh_tarball")/update-$safe_name"
@@ -1366,7 +1545,8 @@ cmd_update() {
         local pref_config_path="$REPO_ROOT/.forge.json"
         if [ -f "$pref_config_path" ]; then
             local pref_raw
-            pref_raw="$(python3 -c "import json; v=json.load(open('$pref_config_path')).get('updateSource',''); print(v if v in ('auto','github-tags','local-sibling') else '')" 2>/dev/null || echo "")"
+            pref_raw="$(json_get "$pref_config_path" updateSource)"
+            case "$pref_raw" in auto|github-tags|local-sibling) ;; *) pref_raw="" ;; esac
             if [ -n "$pref_raw" ]; then update_source_pref="$pref_raw"; fi
         fi
 
@@ -1459,14 +1639,31 @@ cmd_update() {
     local config_path="$REPO_ROOT/.forge.json"
     local current_version="unknown" current_preset_raw="custom"
 
+    local preset_note=""
+    current_preset_raw=""
     if [ -f "$config_path" ]; then
-        current_version="$(python3 -c "import json; print(json.load(open('$config_path')).get('templateVersion','unknown'))" 2>/dev/null || \
-                           grep -oP '"templateVersion":\s*"\K[^"]+' "$config_path" 2>/dev/null | head -1 || echo "unknown")"
-        current_preset_raw="$(python3 -c "
-import json
-v = json.load(open('$config_path')).get('preset', 'custom')
-print(v if isinstance(v, str) else ','.join(v))
-" 2>/dev/null || grep -oP '"preset":\s*"\K[^"]+' "$config_path" 2>/dev/null | head -1 || echo "custom")"
+        current_version="$(node -p "JSON.parse(require('node:fs').readFileSync(0,'utf8')).templateVersion || 'unknown'" < "$config_path")"
+        current_preset_raw="$(node -p "const config=JSON.parse(require('node:fs').readFileSync(0,'utf8')); Array.isArray(config.preset) ? config.preset.join(',') : (config.preset || '')" < "$config_path")"
+    fi
+    # No .forge.json (or no preset in it): detect the stack like setup --auto-detect,
+    # rather than assuming "custom" and replacing stack guidance with shared copies.
+    if [ -z "$current_preset_raw" ]; then
+        current_preset_raw="custom"
+        local _detector="" _candidate="" _detected=""
+        for _candidate in "$source_path/pforge-mcp/detect-preset.mjs" "$REPO_ROOT/pforge-mcp/detect-preset.mjs"; do
+            if [ -f "$_candidate" ]; then _detector="$_candidate"; break; fi
+        done
+        if [ -n "$_detector" ]; then
+            _detected="$(node "$_detector" --project "$REPO_ROOT" --fields 2>/dev/null | tail -n 1)"
+            if [ -n "${_detected%%|*}" ]; then
+                current_preset_raw="${_detected%%|*}"
+                if [ -n "${_detected#*|}" ]; then
+                    preset_note=" (detected from ${_detected#*|}; add \"preset\": \"$current_preset_raw\" to .forge.json to pin it)"
+                else
+                    preset_note=" (no .forge.json preset and no stack markers found)"
+                fi
+            fi
+        fi
     fi
 
     echo ""
@@ -1475,7 +1672,7 @@ print(v if isinstance(v, str) else ','.join(v))
     echo "  Source:   $source_path"
     echo "  Current:  v$current_version"
     echo "  Latest:   v$source_version"
-    echo "  Preset:   $current_preset_raw"
+    echo "  Preset:   $current_preset_raw$preset_note"
     echo ""
 
     # v2.53.1 — refuse to install a '-dev' source over a clean install.
@@ -1494,11 +1691,14 @@ print(v if isinstance(v, str) else ','.join(v))
         echo "    pulls the latest tagged release from GitHub."
         echo ""
         echo "  Override (not recommended): re-run with --allow-dev"
+        _pf_gh_cleanup
         return 1
     fi
 
     if [ "$current_version" = "$source_version" ] && ! $force; then
         echo "Already up to date (v$current_version). Use --force to re-apply."
+        $dry_run || _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
+        _pf_gh_cleanup
         return 0
     fi
 
@@ -1515,258 +1715,190 @@ print(v if isinstance(v, str) else ','.join(v))
 
     # ─── Change tracking arrays: "src|dst|name" tuples ────────────
     local _updates=() _new_files=()
+    # Package files the release no longer ships; moved to .forge/update-backups/ on apply.
+    local _removals=()
 
-    # Inner helper — compare src vs dst, populate _updates / _new_files
-    _pf_check() {
-        local src="$1" dst="$2" rel="$3"
-        local nu
-        for nu in "${_never_update[@]}"; do
-            [ "$nu" = "$rel" ] && return 0
-        done
-        [ -f "$src" ] || return 0
-        if [ -f "$dst" ]; then
-            if [ "$(_pf_sha256 "$src")" != "$(_pf_sha256 "$dst")" ]; then
-                _updates+=("$src|$dst|$rel")
-            fi
-        else
-            _new_files+=("$src|$dst|$rel")
-        fi
-    }
-
-    # ─── Step prompts (step*.prompt.md) ───────────────────────────
-    local src_prompts="$source_path/.github/prompts"
-    if [ -d "$src_prompts" ]; then
-        while IFS= read -r -d '' f; do
-            local fname_p
-            fname_p="$(basename "$f")"
-            # project-principles.prompt.md is user-customized (sourced from templates/) — never auto-update
-            if [ "$fname_p" = "project-principles.prompt.md" ]; then continue; fi
-            _pf_check "$f" "$REPO_ROOT/.github/prompts/$fname_p" ".github/prompts/$fname_p"
-        done < <(find "$src_prompts" -maxdepth 1 -name "*.prompt.md" -type f -print0 2>/dev/null)
-    fi
-
-    # ─── Pipeline agents ──────────────────────────────────────────
-    local src_agents="$source_path/templates/.github/agents"
-    if [ -d "$src_agents" ]; then
-        local agent_name
-        for agent_name in "specifier.agent.md" "plan-hardener.agent.md" "executor.agent.md" "reviewer-gate.agent.md" "shipper.agent.md"; do
-            _pf_check "$src_agents/$agent_name" "$REPO_ROOT/.github/agents/$agent_name" ".github/agents/$agent_name"
-        done
-    fi
-
-    # ─── Shared instructions ──────────────────────────────────────
-    # Source convention mirrors setup.sh Step 2:
-    #   $source_path/.github/instructions/                — Plan-Forge-internal files that ship as-is (no leakage)
-    #   $source_path/presets/shared/.github/instructions/ — consumer-facing genericized versions
-    # aci-design.instructions.md intentionally NOT in either list — MCP-tool-author guidance, not consumer-relevant.
-    local src_instr="$source_path/.github/instructions"
-    local src_shared_instr="$source_path/presets/shared/.github/instructions"
-    if [ -d "$src_instr" ]; then
-        local instr_name
-        for instr_name in "ai-plan-hardening-runbook.instructions.md" "context-fuel.instructions.md" "git-workflow.instructions.md" "security.instructions.md"; do
-            _pf_check "$src_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
-        done
-    fi
-    if [ -d "$src_shared_instr" ]; then
-        local instr_name
-        for instr_name in "architecture-principles.instructions.md" "clean-code.instructions.md" "self-repair-reporting.instructions.md" "status-reporting.instructions.md" "testing.instructions.md"; do
-            _pf_check "$src_shared_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
-        done
-    fi
-
-    # ─── Runbook docs ─────────────────────────────────────────────
-    local src_docs="$source_path/docs/plans"
-    if [ -d "$src_docs" ]; then
-        local doc_name
-        for doc_name in "AI-Plan-Hardening-Runbook.md" "AI-Plan-Hardening-Runbook-Instructions.md" "DEPLOYMENT-ROADMAP-TEMPLATE.md" "PROJECT-PRINCIPLES-TEMPLATE.md"; do
-            _pf_check "$src_docs/$doc_name" "$REPO_ROOT/docs/plans/$doc_name" "docs/plans/$doc_name"
-        done
-    fi
-
-    # ─── Hooks ────────────────────────────────────────────────────
-    local src_hooks="$source_path/templates/.github/hooks"
-    if [ -d "$src_hooks" ]; then
-        while IFS= read -r -d '' f; do
-            local fname_h
-            fname_h="$(basename "$f")"
-            _pf_check "$f" "$REPO_ROOT/.github/hooks/$fname_h" ".github/hooks/$fname_h"
-        done < <(find "$src_hooks" -maxdepth 1 -type f -print0 2>/dev/null)
-    fi
-
-    # ─── Preset-specific files (instructions, agents, prompts, skills) ─
+    # ─── Presets + update guard (needed below) ─────────────────────
     local _presets=()
-    IFS=',' read -ra _presets <<< "$current_preset_raw"
+    IFS=',' read -ra _presets <<< "${current_preset_raw// /}"
+    # #280: resolve the update guard before scanning, so guidance files are
+    # offered only when the guard can keep the project's edits.
+    local update_guard
+    update_guard="$(_pf_resolve_update_guard "$source_path" "$REPO_ROOT")"
 
-    local p
-    for p in "${_presets[@]}"; do
-        p="${p// /}"          # trim whitespace
-        [ "$p" = "custom" ] && continue
+    # ─── Delegate scan to update-plan.mjs (#299, Phase-UPDATE-CORE) ──────
+    # The category-by-category scan now lives in one place — update-plan.mjs
+    # — so both shells see identical UPDATE/NEW classification for every
+    # category (prompts, agents, instructions, runbook, preset, skills,
+    # hooks, mcp, sdk, master, cli, validation, core).
+    local update_plan_script="$source_path/pforge-mcp/update-plan.mjs"
+    if [ ! -f "$update_plan_script" ]; then
+        echo "ERROR: The update source doesn't have pforge-mcp/update-plan.mjs." >&2
+        echo "  This source predates the version of pforge.sh you're running." >&2
+        echo "  Run 'pforge self-update', or point --from-github at a newer release." >&2
+        _pf_gh_cleanup
+        return 1
+    fi
 
-        local src_preset="$source_path/presets/$p/.github"
-        [ -d "$src_preset" ] || continue
+    local plan_rc=0 plan_json=""
+    plan_json="$(node "$update_plan_script" plan --source "$source_path" --project "$REPO_ROOT" --presets "${current_preset_raw// /}" --json --removals)" || plan_rc=$?
+    if [ "$plan_rc" -ne 0 ]; then
+        echo "ERROR: update-plan.mjs failed (exit code $plan_rc):" >&2
+        echo "$plan_json" | sed 's/^/  /' >&2
+        _pf_gh_cleanup
+        return 1
+    fi
 
-        echo "  Checking preset: $p"
+    # Map operations back into _updates / _new_files, matching the shape the
+    # confirm/apply/guard/pending machinery below already expects. Node parses
+    # the JSON (#297 — never Python or PCRE grep); paths are already posix/rel.
+    declare -A _offered=() _is_guided=()
+    local _op_action _op_src _op_dst _op_guided
+    while IFS=$'\t' read -r _op_action _op_src _op_dst _op_guided; do
+        [ -z "$_op_action" ] && continue
+        if [ "$_op_action" = "remove" ]; then _removals+=("$_op_dst"); continue; fi
+        local _full_src="$source_path/$_op_src" _full_dst="$REPO_ROOT/$_op_dst"
+        _offered["$_op_dst"]=1
+        # Guided only when a guard can apply it; without one, guidance files
+        # are replaced when they differ, as releases before the guard did.
+        if [ "$_op_guided" = "1" ] && [ -n "$update_guard" ]; then _is_guided["$_full_dst"]=1; fi
+        if [ "$_op_action" = "new" ]; then
+            _new_files+=("$_full_src|$_full_dst|$_op_dst")
+        else
+            _updates+=("$_full_src|$_full_dst|$_op_dst")
+        fi
+    done < <(printf '%s' "$plan_json" | node -e '
+const plan = JSON.parse(require("fs").readFileSync(0, "utf8"));
+for (const op of plan.operations) {
+  // "-" for a missing src: read collapses adjacent tabs (tab is IFS whitespace), shifting every later field.
+  process.stdout.write([op.action, op.src ?? "-", op.dst, op.guided ? "1" : "0"].join("\t") + "\n");
+}
+')
 
-        local sub_dir
-        for sub_dir in instructions agents prompts; do
-            local src_sub="$src_preset/$sub_dir"
-            [ -d "$src_sub" ] || continue
-            while IFS= read -r -d '' f; do
-                local fname_s rel dst _skip
-                fname_s="$(basename "$f")"
-                rel=".github/$sub_dir/$fname_s"
-                dst="$REPO_ROOT/.github/$sub_dir/$fname_s"
-                # Skip existing files — they may have been customized
-                [ -f "$dst" ] && continue
-                # Skip never-update list entries
-                _skip=false
+    # ─── Recover KEEP candidates update-plan.mjs's scan already excludes ──
+    # `guidedEntry()` classifies during the scan itself and drops "customized"
+    # (hand-edited) files from `operations` entirely — there's no byte for the
+    # operator to see "you changed it" unless we re-probe guidance files the
+    # project already has that the plan didn't offer.
+    local _kept_candidates=()
+    if [ -n "$update_guard" ]; then
+        local _guidance_dir _dst_dir _f _dst_rel _nu_skip nu _cand _src_file _p
+        for _guidance_dir in ".github/prompts" ".github/instructions" ".github/agents" ".github/skills" ".github/hooks" "docs/plans"; do
+            _dst_dir="$REPO_ROOT/$_guidance_dir"
+            [ -d "$_dst_dir" ] || continue
+            while IFS= read -r -d '' _f; do
+                _dst_rel="${_f#"$REPO_ROOT"/}"
+                [ -n "${_offered[$_dst_rel]+x}" ] && continue
+                _nu_skip=false
                 for nu in "${_never_update[@]}"; do
-                    [ "$nu" = "$rel" ] && _skip=true && break
+                    [ "$nu" = "$_dst_rel" ] && _nu_skip=true && break
                 done
-                $_skip || _new_files+=("$f|$dst|$rel")
-            done < <(find "$src_sub" -maxdepth 1 -type f -print0 2>/dev/null)
-        done
-
-        # Skills — add new subdirectories only; existing SKILL.md files may be customized
-        local src_skills="$src_preset/skills"
-        if [ -d "$src_skills" ]; then
-            local skill_dir skill_name skill_src skill_dst
-            for skill_dir in "$src_skills"/*/; do
-                [ -d "$skill_dir" ] || continue
-                skill_name="$(basename "$skill_dir")"
-                skill_src="$skill_dir/SKILL.md"
-                skill_dst="$REPO_ROOT/.github/skills/$skill_name/SKILL.md"
-                [ -f "$skill_src" ] || continue
-                # Only add if skill doesn't exist yet
-                [ -f "$skill_dst" ] && continue
-                _new_files+=("$skill_src|$skill_dst|.github/skills/$skill_name/SKILL.md")
-            done
-        fi
-    done
-
-    # ─── Shared skills (add new, update existing shared-only) ────
-    # Mirrors pforge.ps1 — parity gap fixed: previously only PowerShell
-    # users picked up shared skills like clean-code-review on self-update.
-    local src_shared_skills="$source_path/presets/shared/skills"
-    if [ -d "$src_shared_skills" ]; then
-        local shared_dir shared_name shared_src shared_dst
-        for shared_dir in "$src_shared_skills"/*/; do
-            [ -d "$shared_dir" ] || continue
-            shared_name="$(basename "$shared_dir")"
-            shared_src="$shared_dir/SKILL.md"
-            shared_dst="$REPO_ROOT/.github/skills/$shared_name/SKILL.md"
-            [ -f "$shared_src" ] || continue
-
-            # If any per-stack preset has its own version of this skill,
-            # let the preset loop above handle it — don't overwrite.
-            local has_preset_version=false
-            local p
-            for p in "${_presets[@]}"; do
-                [ "$p" = "custom" ] && continue
-                if [ -f "$source_path/presets/$p/.github/skills/$shared_name/SKILL.md" ]; then
-                    has_preset_version=true
-                    break
+                $_nu_skip && continue
+                _src_file=""
+                for _cand in "$source_path/$_dst_rel" "$source_path/presets/shared/$_dst_rel" "$source_path/templates/$_dst_rel"; do
+                    if [ -f "$_cand" ]; then _src_file="$_cand"; break; fi
+                done
+                if [ -z "$_src_file" ]; then
+                    for _p in "${_presets[@]}"; do
+                        _p="${_p// /}"
+                        [ "$_p" = "custom" ] && continue
+                        _cand="$source_path/presets/$_p/$_dst_rel"
+                        if [ -f "$_cand" ]; then _src_file="$_cand"; break; fi
+                    done
                 fi
-            done
-            $has_preset_version && continue
-
-            if [ -f "$shared_dst" ]; then
-                if [ "$(_pf_sha256 "$shared_src")" != "$(_pf_sha256 "$shared_dst")" ]; then
-                    _updates+=("$shared_src|$shared_dst|.github/skills/$shared_name/SKILL.md (shared)")
-                fi
-            else
-                _new_files+=("$shared_src|$shared_dst|.github/skills/$shared_name/SKILL.md (shared)")
-            fi
+                [ -z "$_src_file" ] && continue
+                _kept_candidates+=("$_src_file|$_f|$_dst_rel")
+            done < <(find "$_dst_dir" -type f -print0 2>/dev/null)
         done
     fi
 
-    unset -f _pf_check
-
-    # ─── Core root files (CLI + shim + VERSION + validators) ────
-    # Includes root `pforge` bash shim and validate-setup.{ps1,sh} so older
-    # installs that pre-date the installer-validators-and-shim fix can
-    # self-heal on `pforge self-update` (parity with pforge.ps1).
-    local core_file
-    for core_file in "pforge.ps1" "pforge.sh" "pforge" "VERSION" "validate-setup.ps1" "validate-setup.sh"; do
-        local src_core="$source_path/$core_file"
-        local dst_core="$REPO_ROOT/$core_file"
-        if [ -f "$src_core" ]; then
-            if [ -f "$dst_core" ]; then
-                if [ "$(_pf_sha256 "$src_core")" != "$(_pf_sha256 "$dst_core")" ]; then
-                    _updates+=("$src_core|$dst_core|$core_file")
-                fi
-            else
-                _new_files+=("$src_core|$dst_core|$core_file")
-            fi
-        fi
+    # ─── #280: guidance files go through the update guard ────────
+    # The guard classifies every guidance entry: unchanged copies are updated,
+    # files the project edited are kept (the new version goes to
+    # .forge/update-pending/), and files already matching are dropped.
+    local entry _e_dst _e_rel _act
+    local _kept=() _guided=()
+    for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
+        _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+        [ -n "${_is_guided[$_e_dst]+x}" ] && _guided+=("$entry")
     done
-
-    # ─── MCP server files (auto-discover all files) ──────────────
-    local src_mcp="$source_path/pforge-mcp"
-    local dst_mcp="$REPO_ROOT/pforge-mcp"
-    if [ -d "$src_mcp" ]; then
-        while IFS= read -r -d '' f; do
-            local rel_path rel_name dst_f
-            rel_path="${f#"$src_mcp/"}"
-            rel_name="pforge-mcp/$rel_path"
-            dst_f="$dst_mcp/$rel_path"
-            local _skip=false
-            for nu in "${_never_update[@]}"; do
-                [ "$nu" = "$rel_name" ] && _skip=true && break
-            done
-            $_skip && continue
-            if [ -f "$dst_f" ]; then
-                if [ "$(_pf_sha256 "$f")" != "$(_pf_sha256 "$dst_f")" ]; then
-                    _updates+=("$f|$dst_f|$rel_name")
-                fi
-            else
-                _new_files+=("$f|$dst_f|$rel_name")
-            fi
-        done < <(find "$src_mcp" -type f -not -path '*/node_modules/*' -print0 2>/dev/null)
+    local _guard_candidates=(${_guided[@]+"${_guided[@]}"} ${_kept_candidates[@]+"${_kept_candidates[@]}"})
+    if [ "${#_guard_candidates[@]}" -gt 0 ] && [ -z "$update_guard" ]; then
+        echo "  Update guard not available (needs Node and pforge-mcp/update-guard.mjs); guidance files are replaced when they differ."
     fi
-
-    # ─── pforge-sdk + pforge-master (same scan, parameterized) ──
-    # Consumer installs that skipped these crashed at runtime for opt-in
-    # features (lattice, notifications, hallmark, forge-master-chat).
-    local pkg src_pkg dst_pkg
-    for pkg in pforge-sdk pforge-master; do
-        src_pkg="$source_path/$pkg"
-        dst_pkg="$REPO_ROOT/$pkg"
-        [ -d "$src_pkg" ] || continue
-        while IFS= read -r -d '' f; do
-            local rel_path rel_name dst_f
-            rel_path="${f#"$src_pkg/"}"
-            rel_name="$pkg/$rel_path"
-            dst_f="$dst_pkg/$rel_path"
-            local _skip=false
-            for nu in "${_never_update[@]}"; do
-                [ "$nu" = "$rel_name" ] && _skip=true && break
+    if [ "${#_guard_candidates[@]}" -gt 0 ] && [ -n "$update_guard" ]; then
+        local _plan_out
+        if ! _plan_out="$(_pf_update_guard "$update_guard" plan "$source_path" "$REPO_ROOT" -- "${_guard_candidates[@]}")"; then
+            echo "ERROR: the update guard could not classify guidance files; nothing was changed." >&2
+            _pf_gh_cleanup
+            return 1
+        fi
+        declare -A _guard_action=()
+        while IFS=$'\t' read -r _act _e_rel; do
+            [ -n "$_e_rel" ] && _guard_action["$_e_rel"]="$_act"
+        done <<< "$_plan_out"
+        # Mirrors PS1's Invoke-Update exactly: a guided _updates/_new_files
+        # entry survives only if the guard still calls it update/new; any
+        # other verdict (same, or a recovery candidate guessed from the wrong
+        # preset) just drops the entry — it is not reclassified into the other
+        # bucket. Only "customized" entries become KEEP, from the combined
+        # guided + recovered-candidate set.
+        local _upd2=() _new2=()
+        for entry in ${_updates[@]+"${_updates[@]}"}; do
+            _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+            if [ -z "${_is_guided[$_e_dst]+x}" ]; then _upd2+=("$entry"); continue; fi
+            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "update" ] && _upd2+=("$entry")
+        done
+        for entry in ${_new_files[@]+"${_new_files[@]}"}; do
+            _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+            if [ -z "${_is_guided[$_e_dst]+x}" ]; then _new2+=("$entry"); continue; fi
+            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "new" ] && _new2+=("$entry")
+        done
+        _updates=(${_upd2[@]+"${_upd2[@]}"})
+        _new_files=(${_new2[@]+"${_new2[@]}"})
+        for entry in ${_guard_candidates[@]+"${_guard_candidates[@]}"}; do
+            _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+            _is_guided["$_e_dst"]=1
+            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "customized" ] && _kept+=("$entry")
+        done
+        if $overwrite_customized && [ "${#_kept[@]}" -gt 0 ]; then
+            for entry in "${_kept[@]}"; do
+                _updates+=("$entry (customized; your version is backed up first)")
             done
-            $_skip && continue
-            if [ -f "$dst_f" ]; then
-                if [ "$(_pf_sha256 "$f")" != "$(_pf_sha256 "$dst_f")" ]; then
-                    _updates+=("$f|$dst_f|$rel_name")
-                fi
-            else
-                _new_files+=("$f|$dst_f|$rel_name")
-            fi
-        done < <(find "$src_pkg" -type f -not -path '*/node_modules/*' -not -path '*/.forge/*' -not -path '*/coverage/*' -print0 2>/dev/null)
-    done
+            _kept=()
+        fi
+    fi
 
     # ─── Report ───────────────────────────────────────────────────
-    if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ]; then
+    if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ] && [ "${#_removals[@]}" -eq 0 ] && [ "${#_kept[@]}" -eq 0 ] && [ "$current_version" = "$source_version" ]; then
         echo "All framework files are up to date."
+        # Nothing to copy means the release is installed; self-update reads this.
+        $dry_run || _PF_UPDATE_APPLIED=1
+        $dry_run || _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
+        _pf_gh_cleanup
         return 0
     fi
 
     echo "Changes found:"
-    local entry
-    for entry in "${_updates[@]}"; do
+    for entry in ${_updates[@]+"${_updates[@]}"}; do
         echo "  UPDATE  ${entry##*|}"
     done
-    for entry in "${_new_files[@]}"; do
+    for entry in ${_new_files[@]+"${_new_files[@]}"}; do
         echo "  NEW     ${entry##*|}"
     done
+    for entry in ${_removals[@]+"${_removals[@]}"}; do
+        echo "  REMOVE  $entry"
+    done
+    if [ "${#_removals[@]}" -gt 0 ]; then
+        echo "  Removed files are no longer part of Plan Forge; each is kept under .forge/update-backups/."
+    fi
+    for entry in ${_kept[@]+"${_kept[@]}"}; do
+        _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+        echo "  KEEP    ${entry##*|} (you changed it; the new version goes to .forge/update-pending/${_e_dst#"$REPO_ROOT"/})"
+    done
+    if [ "${#_kept[@]}" -gt 0 ]; then
+        echo "  After updating, compare and merge with 'pforge pending', or use --overwrite-customized to replace kept files (each is backed up under .forge/update-backups/)."
+    fi
     echo ""
     echo "Protected (never updated):"
     echo "  .github/copilot-instructions.md, project-profile, project-principles,"
@@ -1775,52 +1907,82 @@ print(v if isinstance(v, str) else ','.join(v))
 
     if $dry_run; then
         echo "DRY RUN — no files were changed."
+        _pf_gh_cleanup
         return 0
     fi
 
     # ─── Confirm ──────────────────────────────────────────────────
-    if ! $force; then
-        read -rp "Apply ${#_updates[@]} updates and ${#_new_files[@]} new files? [y/N] (use --force to skip this prompt) " confirm
+    if ! $force && ! $auto_yes; then
+        # No input (end of file) must cancel, not end the script through set -e.
+        local _removal_note=""
+        [ "${#_removals[@]}" -gt 0 ] && _removal_note=" and remove ${#_removals[@]} old files"
+        read -rp "Apply ${#_updates[@]} updates and ${#_new_files[@]} new files$_removal_note? [y/N] (use --yes to skip this prompt) " confirm || confirm=""
         case "$confirm" in
             y|Y|yes|Yes) ;;
-            *) echo "Cancelled."; return 0 ;;
+            *) echo "Cancelled."; _pf_gh_cleanup; return 0 ;;
         esac
     fi
 
     # ─── Apply updates ────────────────────────────────────────────
-    for entry in "${_updates[@]}"; do
+    for entry in ${_updates[@]+"${_updates[@]}"}; do
         local src="${entry%%|*}" rest="${entry#*|}"
         local dst="${rest%%|*}" name="${rest##*|}"
+        [ -n "${_is_guided[$dst]+x}" ] && continue
         cp "$src" "$dst"
         echo "  ✅ Updated $name"
     done
 
     # ─── Apply new files ──────────────────────────────────────────
-    for entry in "${_new_files[@]}"; do
+    for entry in ${_new_files[@]+"${_new_files[@]}"}; do
         local src="${entry%%|*}" rest="${entry#*|}"
         local dst="${rest%%|*}" name="${rest##*|}"
+        [ -n "${_is_guided[$dst]+x}" ] && continue
         mkdir -p "$(dirname "$dst")"
         cp "$src" "$dst"
         echo "  ✅ Added $name"
     done
+    if [ "${#_removals[@]}" -gt 0 ]; then
+        printf '%s\n' "${_removals[@]}" | node "$update_plan_script" remove --project "$REPO_ROOT"
+    fi
+
+    # ─── Apply guidance files through the update guard (#280) ────
+    local _guided_apply=() _guard_flags=() _apply_out _res _detail
+    for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"} ${_kept[@]+"${_kept[@]}"}; do
+        _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+        [ -n "${_is_guided[$_e_dst]+x}" ] && _guided_apply+=("$entry")
+    done
+    if [ "${#_guided_apply[@]}" -gt 0 ]; then
+        $overwrite_customized && _guard_flags+=("--overwrite-customized")
+        if ! _apply_out="$(_pf_update_guard "$update_guard" apply "$source_path" "$REPO_ROOT" ${_guard_flags[@]+"${_guard_flags[@]}"} -- "${_guided_apply[@]}")"; then
+            echo "ERROR: the update guard failed while writing guidance files." >&2
+            _pf_gh_cleanup
+            return 1
+        fi
+        while IFS=$'\t' read -r _res _e_rel _detail; do
+            case "$_res" in
+                added)     echo "  ✅ Added $_e_rel" ;;
+                updated)   echo "  ✅ Updated $_e_rel" ;;
+                overwrote) echo "  ✅ Updated $_e_rel (your version backed up to $_detail)" ;;
+                kept)      echo "  📝 Kept $_e_rel (customized); new version saved to $_detail" ;;
+            esac
+        done <<< "$_apply_out"
+    fi
 
     # ─── Update .forge.json templateVersion ───────────────────────
     if [ -f "$config_path" ]; then
-        if command -v python3 >/dev/null 2>&1; then
-            python3 -c "
-import json
-with open('$config_path') as f:
-    c = json.load(f)
-c['templateVersion'] = '$source_version'
-with open('$config_path', 'w') as f:
-    json.dump(c, f, indent=2)
-    f.write('\n')
-"
-        else
-            sed -i.bak "s/\"templateVersion\": \"[^\"]*\"/\"templateVersion\": \"$source_version\"/" "$config_path"
-            rm -f "$config_path.bak"
+        local config_tmp
+        config_tmp="$(mktemp "${config_path}.update.XXXXXX")"
+        if ! node -e "const fs=require('node:fs'); const config=JSON.parse(fs.readFileSync(0,'utf8')); config.templateVersion=process.argv[1]; process.stdout.write(JSON.stringify(config,null,2)+'\n')" "$source_version" < "$config_path" > "$config_tmp"; then
+            rm -f "$config_tmp"
+            echo "ERROR: Could not update $config_path; the original config was preserved." >&2
+            _pf_gh_cleanup
+            return 1
         fi
+        mv "$config_tmp" "$config_path"
         echo "  ✅ Updated .forge.json templateVersion to $source_version"
+
+        # Add missing modelRouting / hooks defaults. Shared with pforge.ps1 (#299).
+        _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
     fi
 
     # ─── Refresh consumer .gitignore managed block (Issue #211) ───────
@@ -1828,6 +1990,8 @@ with open('$config_path', 'w') as f:
 
     echo ""
     echo "Update complete: v$current_version → v$source_version"
+    _PF_UPDATE_APPLIED=1
+    _PF_UPDATE_SOURCE_DIR="$source_path"
     echo "Run 'pforge check' to validate the updated setup."
 
     # v2.53.1 — invalidate version caches so smith/dashboard pick up fresh state.
@@ -1904,6 +2068,7 @@ writeFreshCache(process.argv[1], process.argv[2]);
             break
         fi
     done
+    _PF_UPDATE_WRAPPER_CHANGED=$cli_updated
     if [ "$cli_updated" = true ]; then
         echo ""
         echo "ℹ️  CLI scripts (pforge.ps1/pforge.sh) were updated."
@@ -1935,27 +2100,111 @@ writeFreshCache(process.argv[1], process.argv[2]);
         local audit_json="{\"tag\":\"$resolved_tag\",\"sha256\":\"$gh_sha256\",\"sizeBytes\":$gh_size_bytes,\"source\":\"manual\",\"filesChanged\":$files_changed,\"outcome\":\"success\"}"
         echo "$audit_json" | node "$REPO_ROOT/pforge-mcp/update-from-github.mjs" audit --project-dir "$REPO_ROOT" >/dev/null 2>&1 || true
     fi
-    if $from_github && ! $keep_cache; then
-        [ -n "$gh_tarball" ] && [ -f "$gh_tarball" ] && rm -f "$gh_tarball"
-        [ -n "$gh_extract_dir" ] && [ -d "$gh_extract_dir" ] && rm -rf "$gh_extract_dir"
-        echo "  Cleaned up cache files."
-    elif $from_github && $keep_cache; then
-        echo "  Cache preserved (--keep-cache): $gh_tarball"
+    _pf_gh_cleanup
+}
+
+# Parses `analyze` / `diagnose` arguments into ANALYSIS_* globals. Flags may come
+# before or after the target; the first non-flag token is the target. --models
+# implies a quorum run. Twin of Get-AnalysisArgs in pforge.ps1.
+parse_analysis_args() {
+    ANALYSIS_TARGET="" ANALYSIS_MODE="" ANALYSIS_MODELS="" ANALYSIS_QUORUM="" ANALYSIS_PRESET=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --quorum)   ANALYSIS_QUORUM=1 ;;
+            --quorum=*) ANALYSIS_QUORUM=1; ANALYSIS_PRESET="${1#--quorum=}" ;;
+            --mode|--models)
+                if [ $# -lt 2 ]; then
+                    echo "ERROR: $1 requires a value." >&2
+                    exit 1
+                fi
+                if [ "$1" = "--mode" ]; then ANALYSIS_MODE="$2"; else ANALYSIS_MODELS="$2"; ANALYSIS_QUORUM=1; fi
+                shift ;;
+            --*)
+                echo "ERROR: Unknown option '$1'." >&2
+                exit 1 ;;
+            *)  if [ -z "$ANALYSIS_TARGET" ]; then ANALYSIS_TARGET="$1"; fi ;;
+        esac
+        shift
+    done
+}
+
+# Prints the target relative to the current directory, then the repo root; exits 1 when missing.
+resolve_analysis_target() {
+    local target="$1" label="$2"
+    if [ -f "$target" ]; then echo "$target"; return; fi
+    if [ -f "$REPO_ROOT/$target" ]; then echo "$REPO_ROOT/$target"; return; fi
+    echo "ERROR: $label not found: $target" >&2
+    exit 1
+}
+
+# Multi-model runs live in the orchestrator (pforge-mcp/orchestrator/analysis-cli.mjs),
+# which validates --mode and the preset and writes .forge/analysis/<name>-<ts>.json.
+run_analysis_orchestrator() {
+    local command="$1" target="$2"
+    local node_args=("$REPO_ROOT/pforge-mcp/orchestrator.mjs" "--$command" "$target")
+    if [ -n "$ANALYSIS_MODE" ];   then node_args+=("--mode" "$ANALYSIS_MODE"); fi
+    if [ -n "$ANALYSIS_MODELS" ]; then node_args+=("--models" "$ANALYSIS_MODELS"); fi
+    if [ -n "$ANALYSIS_PRESET" ]; then node_args+=("--preset" "$ANALYSIS_PRESET"); fi
+    node "${node_args[@]}"
+    exit $?
+}
+
+# ─── Command: diagnose ─────────────────────────────────────────────────
+cmd_diagnose() {
+    parse_analysis_args "$@"
+    if [ -z "$ANALYSIS_TARGET" ]; then
+        echo "ERROR: Source file required." >&2
+        echo "  Usage: pforge diagnose <file> [--models m1,m2] [--quorum=<preset>]" >&2
+        echo "  Example: pforge diagnose src/services/billing.ts" >&2
+        exit 1
     fi
+    if [ -n "$ANALYSIS_MODE" ]; then
+        echo "ERROR: --mode applies to pforge analyze only." >&2
+        exit 1
+    fi
+    local file
+    file="$(resolve_analysis_target "$ANALYSIS_TARGET" "Source file")" || exit 1
+    print_manual_steps "diagnose" \
+        "Send the file to each quorum model for an independent bug investigation" \
+        "Synthesize root causes and fixes with the reviewer model" \
+        "Save the report to .forge/analysis/diagnose-*"
+    run_analysis_orchestrator "diagnose" "$file"
 }
 
 # ─── Command: analyze ──────────────────────────────────────────────────
 cmd_analyze() {
-    if [ $# -eq 0 ]; then
+    parse_analysis_args "$@"
+    if [ -z "$ANALYSIS_TARGET" ]; then
         echo "ERROR: Plan file required." >&2
-        echo "  Usage: pforge analyze <plan-file>" >&2
+        echo "  Usage: pforge analyze <plan-file> [--quorum[=<preset>]] [--models m1,m2] [--mode plan|file]" >&2
         exit 1
     fi
+    local plan_file
+    plan_file="$(resolve_analysis_target "$ANALYSIS_TARGET" "Plan file")" || exit 1
 
-    local plan_file="$1"
-    [ ! -f "$plan_file" ] && plan_file="$REPO_ROOT/$plan_file"
-    if [ ! -f "$plan_file" ]; then
-        echo "ERROR: Plan file not found: $1" >&2
+    if [ -n "$ANALYSIS_QUORUM" ]; then
+        print_manual_steps "analyze --quorum" \
+            "Send the plan or source file to each quorum model for an independent review" \
+            "Synthesize the reviews with the reviewer model" \
+            "Save the report to .forge/analysis/"
+        run_analysis_orchestrator "analyze" "$plan_file"
+    fi
+
+    # The scorer reads its target as a plan; a source file used to be scored as an empty
+    # plan after a slow repo-wide scan (meta-bug #319). Twin of the pforge.ps1 check:
+    # .md/.markdown are plans unless --mode says otherwise.
+    local analyze_mode="$ANALYSIS_MODE"
+    if [ -z "$analyze_mode" ]; then
+        case "$(echo "$plan_file" | tr '[:upper:]' '[:lower:]')" in
+            *.md|*.markdown) analyze_mode="plan" ;;
+            *)               analyze_mode="file" ;;
+        esac
+    fi
+    if [ "$analyze_mode" != "plan" ]; then
+        echo "ERROR: pforge analyze scores plan files only; '$ANALYSIS_TARGET' was read as a source file (mode '$analyze_mode')." >&2
+        echo "  For a code review, run: pforge analyze $ANALYSIS_TARGET --quorum   (multi-model; spends tokens)" >&2
+        echo "  For a bug investigation, run: pforge diagnose $ANALYSIS_TARGET" >&2
+        echo "  To score a Markdown file as a plan, pass --mode plan." >&2
         exit 1
     fi
 
@@ -1985,10 +2234,14 @@ cmd_analyze() {
     # ═══════════════════════════════════════════════════════════════
     echo "Traceability:"
 
+    # grep -c prints its own 0 on no match (exit 1); "|| echo 0" appended a
+    # second line and broke the arithmetic below for any plan without SHOULDs.
     local must_count should_count slice_count
-    must_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*MUST\*\*' || echo 0)
-    should_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*SHOULD\*\*' || echo 0)
-    slice_count=$(echo "$plan_content" | grep -c '^### Slice [0-9]' || echo 0)
+    must_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*MUST\*\*' || true)
+    should_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*SHOULD\*\*' || true)
+    # Accept h2/h3/h4 headers to match the canonical parser at
+    # pforge-mcp/orchestrator/plan-parser.mjs (/^#{2,4}\s+Slice\s+\d+\b/).
+    slice_count=$(echo "$plan_content" | grep -cE '^#{2,4}[[:space:]]+Slice[[:space:]]+[0-9]' || true)
     local total_criteria=$((must_count + should_count))
 
     if [ "$total_criteria" -gt 0 ]; then
@@ -2019,30 +2272,24 @@ cmd_analyze() {
 
     local changed_files
     changed_files="$(git diff --name-only 2>/dev/null; git diff --cached --name-only 2>/dev/null)"
-    changed_files="$(echo "$changed_files" | sort -u | grep -v '^$')"
+    changed_files="$(echo "$changed_files" | sort -u | grep -v '^$' || true)"
     local total_changed
-    total_changed="$(echo "$changed_files" | grep -c '.' || echo 0)"
+    total_changed="$(echo "$changed_files" | grep -c '.' || true)"
 
     local violations=0 out_of_scope=0 in_scope=0
 
     if [ "$total_changed" -gt 0 ]; then
-        # Extract forbidden paths
-        local forbidden
-        forbidden="$(echo "$plan_content" | sed -n '/### Forbidden Actions/,/^###/p' | grep -oP '`\K[^`]+' || true)"
+        load_plan_scope_hints "$plan_content"
 
-        for file in $changed_files; do
-            local is_forbidden=false
-            for fp in $forbidden; do
-                if echo "$file" | grep -q "$fp"; then
-                    violations=$((violations + 1))
-                    is_forbidden=true
-                    break
-                fi
-            done
-            [ "$is_forbidden" = true ] && continue
-            in_scope=$((in_scope + 1))
-        done
-        out_of_scope=$((total_changed - in_scope - violations))
+        while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            plan_scope_verdict "$file"
+            case "$PLAN_VERDICT" in
+                forbidden) violations=$((violations + 1)) ;;
+                in-scope)  in_scope=$((in_scope + 1)) ;;
+                *)         out_of_scope=$((out_of_scope + 1)) ;;
+            esac
+        done <<< "$changed_files"
 
         echo "  ✅ $total_changed changed files analyzed"
         [ "$violations" -gt 0 ] && echo "  ❌ $violations forbidden file(s) touched"
@@ -2063,8 +2310,11 @@ cmd_analyze() {
     # ═══════════════════════════════════════════════════════════════
     echo "Test Coverage:"
 
+    # -prune keeps find out of dependency/build trees; "! -path" still walked every
+    # file under them, which is what timed analyze out on a .NET solution (meta-bug #319).
+    # The directory list mirrors $script:AnalyzeSkipDirs in pforge.ps1.
     local test_file_count=0
-    test_file_count=$(find "$REPO_ROOT" -type f \( -name "*.test.*" -o -name "*.spec.*" -o -name "*Tests.cs" -o -name "*Test.java" -o -name "*_test.go" -o -name "test_*.py" -o -name "*_test.py" \) ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/bin/*' ! -path '*/obj/*' 2>/dev/null | wc -l | tr -d ' ')
+    test_file_count=$(find "$REPO_ROOT" \( -type d \( -name node_modules -o -name .git -o -name bin -o -name obj -o -name dist -o -name vendor \) -prune \) -o -type f \( -name "*.test.*" -o -name "*.spec.*" -o -name "*Tests.cs" -o -name "*Test.java" -o -name "*_test.go" -o -name "test_*.py" -o -name "*_test.py" \) -print 2>/dev/null | wc -l | tr -d ' ')
 
     if [ "$test_file_count" -gt 0 ]; then
         echo "  ✅ $test_file_count test file(s) found in project"
@@ -2087,7 +2337,7 @@ cmd_analyze() {
     echo "Validation Gates:"
 
     local gates_found=0
-    gates_found=$(echo "$plan_content" | grep -ciE 'validation gate|build.*pass|test.*pass|\- \[ \].*build|\- \[ \].*test' || echo 0)
+    gates_found=$(echo "$plan_content" | grep -ciE 'validation gate|build.*pass|test.*pass|\- \[ \].*build|\- \[ \].*test' || true)
 
     if [ "$gates_found" -gt 0 ]; then
         echo "  ✅ $gates_found validation gate reference(s) found"
@@ -2100,17 +2350,47 @@ cmd_analyze() {
         score_gates=0
     fi
 
+    # Gate command lint — the parser contract run-plan's pre-flight enforces.
+    # Twin of the pforge.ps1 analyze block; the plan and module paths travel
+    # through env vars and a file:// URL so no path needs shell quoting.
+    local lint_js='const { pathToFileURL } = await import("node:url"); const m = await import(pathToFileURL(process.env.PFORGE_LINT_MODULE).href); const r = m.lintGateCommands(process.env.PFORGE_LINT_PLAN, process.env.PFORGE_LINT_CWD); for (const e of r.errors) console.log("E " + e.message); for (const w of r.warnings) console.log("W " + w.message); console.log("LINT_OK");'
+    local lint_out=""
+    if [ -f "$REPO_ROOT/pforge-mcp/orchestrator/gate-helpers.mjs" ]; then
+        lint_out="$(PFORGE_LINT_MODULE="$REPO_ROOT/pforge-mcp/orchestrator/gate-helpers.mjs" \
+            PFORGE_LINT_PLAN="$plan_file" PFORGE_LINT_CWD="$REPO_ROOT" \
+            node --input-type=module -e "$lint_js" 2>/dev/null || true)"
+    fi
+    if [[ $'\n'"$lint_out"$'\n' == *$'\nLINT_OK\n'* ]]; then
+        local lint_errors lint_warnings
+        lint_errors="$(printf '%s\n' "$lint_out" | grep -c '^E ' || true)"
+        lint_warnings="$(printf '%s\n' "$lint_out" | grep -c '^W ' || true)"
+        if [ "${lint_errors:-0}" -gt 0 ]; then
+            echo "  ❌ Gate lint: $lint_errors error(s) — plan will fail at runtime"
+            printf '%s\n' "$lint_out" | sed -n 's/^E /     /p'
+            score_gates=$((score_gates > 5 * lint_errors ? score_gates - 5 * lint_errors : 0))
+        fi
+        if [ "${lint_warnings:-0}" -gt 0 ]; then
+            echo "  ⚠️  Gate lint: $lint_warnings warning(s)"
+            printf '%s\n' "$lint_out" | sed -n 's/^W /     /p'
+            score_gates=$((score_gates > 2 * lint_warnings ? score_gates - 2 * lint_warnings : 0))
+        fi
+        if [ "${lint_errors:-0}" -eq 0 ] && [ "${lint_warnings:-0}" -eq 0 ]; then
+            echo "  ✅ Gate lint: all commands pass pre-flight checks"
+        fi
+    fi
+
     # Deferred work markers in changed files
     local marker_count=0
     if [ "$total_changed" -gt 0 ]; then
-        for file in $changed_files; do
+        while IFS= read -r file; do
+            [ -z "$file" ] && continue
             local full_path="$REPO_ROOT/$file"
             if [ -f "$full_path" ]; then
                 local mc
-                mc=$(grep -ciE 'TODO|FIXME|HACK|stub|placeholder|mock data' "$full_path" 2>/dev/null || echo 0)
-                marker_count=$((marker_count + mc))
+                mc=$(grep -ciE 'TODO|FIXME|HACK|stub|placeholder|mock data' "$full_path" 2>/dev/null || true)
+                marker_count=$((marker_count + ${mc:-0}))
             fi
-        done
+        done <<< "$changed_files"
     fi
 
     if [ "$marker_count" -eq 0 ]; then
@@ -2154,6 +2434,30 @@ cmd_analyze() {
 }
 
 # ─── Command: self-update (Phase AUTO-UPDATE-01 Slice 2) ──────────────
+# When the update replaced pforge.sh itself, this shell ran the OLD update
+# logic, which does not know about anything a newer release added (for example
+# .github/automations in 3.31). Re-run update from the same downloaded release
+# with the NEW wrapper so those reach the project too. Files the first pass
+# already wrote are identical, so they are left alone.
+_pf_self_update_second_pass() {
+    [ "${_PF_UPDATE_WRAPPER_CHANGED:-false}" = true ] || return 0
+    [ -n "${_PF_UPDATE_SOURCE_DIR:-}" ] && [ -d "$_PF_UPDATE_SOURCE_DIR" ] || return 0
+    [ -f "$REPO_ROOT/pforge.sh" ] || return 0
+    echo ""
+    echo "Applying the new release's update steps (pforge.sh itself was updated)..."
+    if ! bash "$REPO_ROOT/pforge.sh" update "$_PF_UPDATE_SOURCE_DIR" --force --yes; then
+        echo "  ⚠ The second update pass failed. Run 'pforge update' once more to finish." >&2
+    fi
+}
+
+_pf_self_update_clear_cache() {
+    local path
+    for path in ${_PF_UPDATE_CACHE_PATHS[@]+"${_PF_UPDATE_CACHE_PATHS[@]}"}; do
+        [ -n "$path" ] && [ -e "$path" ] && rm -rf "$path"
+    done
+    return 0
+}
+
 cmd_self_update() {
     print_manual_steps "self-update" \
         "Force-refresh the update check (bypass 24h cache)" \
@@ -2161,13 +2465,14 @@ cmd_self_update() {
         "Delegate to 'pforge update --from-github --tag <latest>'" \
         "With --verify: run 'pforge check' + 'pforge smith' in subprocesses after a successful update"
 
-    local auto_yes=false dry_run=false force_heal=false verify=false
+    local auto_yes=false dry_run=false force_heal=false verify=false overwrite_customized=false
     for arg in "$@"; do
         case "$arg" in
             --yes|-y) auto_yes=true ;;
             --dry-run) dry_run=true ;;
             --force) force_heal=true ;;
             --verify) verify=true ;;
+            --overwrite-customized) overwrite_customized=true ;;
         esac
     done
 
@@ -2175,8 +2480,7 @@ cmd_self_update() {
     local au_enabled=false
     if [ -f "$REPO_ROOT/.forge.json" ]; then
         local au_val
-        au_val="$(python3 -c "import json; print(json.load(open('$REPO_ROOT/.forge.json')).get('autoUpdate',{}).get('enabled',False))" 2>/dev/null \
-                  || echo "false")"
+        au_val="$(json_get "$REPO_ROOT/.forge.json" autoUpdate.enabled false)"
         [ "$au_val" = "True" ] || [ "$au_val" = "true" ] && au_enabled=true
     fi
     if [ "$au_enabled" = false ]; then
@@ -2192,24 +2496,36 @@ cmd_self_update() {
     fi
 
     echo "Checking for updates (force refresh)..."
-    local current_version
-    current_version="$(cat "$REPO_ROOT/VERSION" | tr -d '[:space:]')"
+    # The INSTALLED Plan Forge version comes from .forge.json's templateVersion —
+    # NOT the project-root VERSION file, which in most consumer projects holds
+    # the consumer's OWN application version (reading it misreports e.g. an app
+    # at 3.32.0 as "Plan Forge 3.32.0" and blocks self-update as a downgrade).
+    local current_version=""
+    if [ -f "$REPO_ROOT/.forge.json" ]; then
+        current_version="$(json_get "$REPO_ROOT/.forge.json" templateVersion)"
+    fi
+    if [ -z "$current_version" ] && [ -f "$REPO_ROOT/VERSION" ]; then
+        # Fallback: Plan Forge's own dev repo (no .forge.json) or a legacy
+        # install missing templateVersion — there the root VERSION is Plan Forge's.
+        current_version="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
+    fi
+    [ -z "$current_version" ] && current_version="unknown"
 
     # Emit a distinct marker when checkForUpdate returns null so we can
     # tell "GitHub API failed" apart from "checked and up to date" (meta-bug:
     # client stuck on v2.66.0 saw 'Already current' after an API failure).
     local check_script="import { checkForUpdate } from './pforge-mcp/update-check.mjs'; const r = await checkForUpdate({ currentVersion: process.argv[1], projectDir: process.argv[2], force: true }); console.log(JSON.stringify(r === null ? { checkFailed: true } : r));"
     local check_result
-    check_result="$(node --input-type=module -e "$check_script" "$current_version" "$REPO_ROOT" 2>&1 | tail -1)"
+    check_result="$(node --input-type=module -e "$check_script" "$current_version" "$REPO_ROOT" 2>&1 | _pf_last_json)"
 
     local check_failed
-    check_failed="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('checkFailed',False))" 2>/dev/null || echo "false")"
+    check_failed="$(printf '%s' "$check_result" | json_pick checkFailed false)"
 
     local is_newer
-    is_newer="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('isNewer',False))" 2>/dev/null || echo "false")"
+    is_newer="$(printf '%s' "$check_result" | json_pick isNewer false)"
 
     local latest_ver
-    latest_ver="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('latest',''))" 2>/dev/null || echo "")"
+    latest_ver="$(printf '%s' "$check_result" | json_pick latest)"
 
     # Check-failed path: tell the user the check didn't complete instead of
     # claiming they're current. --force still proceeds (heal path).
@@ -2296,11 +2612,22 @@ cmd_self_update() {
     fi
 
     echo ""
-    if $force_heal; then
-        cmd_update --from-github --tag "$latest_tag" --force
-    else
-        cmd_update --from-github --tag "$latest_tag"
+    # The user confirmed above (or passed --yes), so update must not ask again:
+    # unattended, its unanswered prompt cancelled the install while self-update
+    # reported success.
+    local update_args=(--from-github --tag "$latest_tag" --yes --keep-cache)
+    $force_heal && update_args+=(--force)
+    $overwrite_customized && update_args+=(--overwrite-customized)
+    cmd_update "${update_args[@]}"
+
+    if [ "${_PF_UPDATE_APPLIED:-0}" != 1 ]; then
+        _pf_self_update_clear_cache
+        echo "" >&2
+        echo "  ✗ self-update: $latest_tag was not installed — the update did not apply any files (see above)." >&2
+        exit 1
     fi
+    _pf_self_update_second_pass
+    _pf_self_update_clear_cache
 
     # --verify: run 'pforge check' + 'pforge smith' in subprocesses so the
     # just-updated wrapper code is exercised. Exits non-zero if either fails.
@@ -2449,9 +2776,17 @@ cmd_doctor() {
 
     local settings_path="$REPO_ROOT/.vscode/settings.json"
     if [ -f "$settings_path" ]; then
+        # .vscode/settings.json is JSONC (#252). Drop whole-line // comments
+        # before grepping so a commented-out setting is not reported as
+        # configured. Only leading-// lines go, so "https://…" values survive.
+        # Settings buried in a /* */ block still read as present — accepted,
+        # since the shipped template uses line comments only.
+        local settings_body
+        settings_body="$(sed 's_^[[:space:]]*//.*$__' "$settings_path" 2>/dev/null)"
+
         # Check for key settings (basic grep — no jq dependency required)
-        if grep -q '"chat.agent.enabled"' "$settings_path" 2>/dev/null; then
-            if grep -q '"chat.agent.enabled":\s*true' "$settings_path" 2>/dev/null || grep -q '"chat.agent.enabled": true' "$settings_path" 2>/dev/null; then
+        if grep -q '"chat.agent.enabled"' <<< "$settings_body"; then
+            if grep -q '"chat.agent.enabled":\s*true' <<< "$settings_body" || grep -q '"chat.agent.enabled": true' <<< "$settings_body"; then
                 doctor_pass "chat.agent.enabled = true"
             else
                 doctor_fail "chat.agent.enabled = false" "Set to true in .vscode/settings.json"
@@ -2460,8 +2795,8 @@ cmd_doctor() {
             doctor_pass "chat.agent.enabled (default — OK)"
         fi
 
-        if grep -q '"chat.useCustomizationsInParentRepositories"' "$settings_path" 2>/dev/null; then
-            if grep -q '"chat.useCustomizationsInParentRepositories": true' "$settings_path" 2>/dev/null; then
+        if grep -q '"chat.useCustomizationsInParentRepositories"' <<< "$settings_body"; then
+            if grep -q '"chat.useCustomizationsInParentRepositories": true' <<< "$settings_body"; then
                 doctor_pass "chat.useCustomizationsInParentRepositories = true"
             else
                 doctor_warn "chat.useCustomizationsInParentRepositories is not true" "Set to true for monorepo support"
@@ -2470,8 +2805,8 @@ cmd_doctor() {
             doctor_warn "chat.useCustomizationsInParentRepositories not set" 'Add "chat.useCustomizationsInParentRepositories": true to .vscode/settings.json'
         fi
 
-        if grep -q '"chat.promptFiles"' "$settings_path" 2>/dev/null; then
-            if grep -q '"chat.promptFiles": true' "$settings_path" 2>/dev/null; then
+        if grep -q '"chat.promptFiles"' <<< "$settings_body"; then
+            if grep -q '"chat.promptFiles": true' <<< "$settings_body"; then
                 doctor_pass "chat.promptFiles = true"
             else
                 doctor_warn "chat.promptFiles is not true" "Set to true to enable prompt template discovery"
@@ -2638,10 +2973,8 @@ cmd_doctor() {
     # Try cache first (skip network call if < 24h old)
     if [ -f "$version_check_cache" ]; then
         local cached_ver cached_at cache_age_s
-        cached_ver="$(python3 -c "import json; print(json.load(open('$version_check_cache')).get('latestVersion',''))" 2>/dev/null \
-                      || grep -oP '"latestVersion"\s*:\s*"\K[^"]+' "$version_check_cache" 2>/dev/null | head -1)"
-        cached_at="$(python3 -c "import json; print(json.load(open('$version_check_cache')).get('checkedAt',''))" 2>/dev/null \
-                     || grep -oP '"checkedAt"\s*:\s*"\K[^"]+' "$version_check_cache" 2>/dev/null | head -1)"
+        cached_ver="$(json_get "$version_check_cache" latestVersion)"
+        cached_at="$(json_get "$version_check_cache" checkedAt)"
         if [ -n "$cached_ver" ] && [ -n "$cached_at" ]; then
             cache_age_s=$(( $(date +%s) - $(date -d "$cached_at" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${cached_at%%.*}" +%s 2>/dev/null || echo 0) ))
             if [ "$cache_age_s" -lt 86400 ] 2>/dev/null; then
@@ -2657,8 +2990,7 @@ cmd_doctor() {
         local gh_response
         gh_response="$(curl -sf --max-time 5 -H 'User-Agent: plan-forge-smith' "$api_url" 2>/dev/null)"
         if [ -n "$gh_response" ]; then
-            source_version="$(echo "$gh_response" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tag_name','').lstrip('v'))" 2>/dev/null \
-                              || echo "$gh_response" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' | head -1 | sed 's/^v//')"
+            source_version="$(printf '%s' "$gh_response" | json_pick tag_name | sed 's/^v//')"
             if [ -n "$source_version" ]; then
                 mkdir -p "$REPO_ROOT/.forge"
                 printf '{"checkedAt":"%s","latestVersion":"%s"}\n' \
@@ -2704,6 +3036,15 @@ cmd_doctor() {
         doctor_pass "Installed v$template_version (GitHub unreachable and no local source — skipping currency check)"
     fi
 
+    # #302 — guidance updates pforge update saved instead of overwriting the project's edits.
+    local pending_count=0
+    if [ -d "$REPO_ROOT/.forge/update-pending" ]; then
+        pending_count=$(find "$REPO_ROOT/.forge/update-pending" -type f 2>/dev/null | wc -l | tr -d ' ')
+    fi
+    if [ "$pending_count" -gt 0 ]; then
+        doctor_warn "$pending_count pending guidance update(s) in .forge/update-pending/ (your edited copies were kept)" "Review with 'pforge pending'"
+    fi
+
     echo ""
 
     # ═══════════════════════════════════════════════════════════════
@@ -2714,16 +3055,17 @@ cmd_doctor() {
     local au_enabled=false
     if [ -f "$REPO_ROOT/.forge.json" ]; then
         local au_val
-        au_val="$(python3 -c "import json; print(json.load(open('$REPO_ROOT/.forge.json')).get('autoUpdate',{}).get('enabled',False))" 2>/dev/null \
-                  || echo "false")"
+        au_val="$(json_get "$REPO_ROOT/.forge.json" autoUpdate.enabled false)"
         [ "$au_val" = "True" ] || [ "$au_val" = "true" ] && au_enabled=true
     fi
 
     local au_cache_age="no cache" au_last_tag="unknown" au_checked_at="never"
     local update_cache_file="$REPO_ROOT/.forge/update-check.json"
     if [ -f "$update_cache_file" ]; then
-        au_last_tag="$(python3 -c "import json; print(json.load(open('$update_cache_file')).get('latestVersion',''))" 2>/dev/null || echo "")"
-        au_checked_at="$(python3 -c "import json; print(json.load(open('$update_cache_file')).get('checkedAt',''))" 2>/dev/null || echo "")"
+        # update-check.mjs writes `latest`; older files used `latestVersion`.
+        au_last_tag="$(json_get "$update_cache_file" latest)"
+        [ -z "$au_last_tag" ] && au_last_tag="$(json_get "$update_cache_file" latestVersion)"
+        au_checked_at="$(json_get "$update_cache_file" checkedAt)"
         if [ -n "$au_checked_at" ]; then
             local au_age_s=$(( $(date +%s) - $(date -d "$au_checked_at" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${au_checked_at%%.*}" +%s 2>/dev/null || echo 0) ))
             au_cache_age="$(( au_age_s / 60 ))m"
@@ -2830,11 +3172,29 @@ cmd_doctor() {
             local node_ver
             node_ver="$(node --version 2>/dev/null | sed 's/^v//')"
             local node_major="${node_ver%%.*}"
-            if [ "$node_major" -ge 18 ] 2>/dev/null; then
-                doctor_pass "Node.js v$node_ver (sharp requires >= 18.17)"
-            else
-                doctor_fail "Node.js v$node_ver — sharp requires >= 18.17" "Upgrade Node.js from https://nodejs.org/"
+            local node_rest="${node_ver#*.}"
+            local node_minor="${node_rest%%.*}"
+            # Floor = plan-forge-mcp engines.node; end-of-life dates from node-support.mjs.
+            local ns_fields="" ns_status="" ns_floor="22.12.0" ns_eol="" ns_days=""
+            if [ -f "$REPO_ROOT/pforge-mcp/node-support.mjs" ]; then
+                ns_fields="$(node "$REPO_ROOT/pforge-mcp/node-support.mjs" --fields 2>/dev/null | tail -n 1)"
             fi
+            if [ -n "$ns_fields" ]; then
+                IFS='|' read -r ns_status ns_floor ns_eol ns_days <<< "$ns_fields"
+            elif { [ "$node_major" -gt 22 ] || { [ "$node_major" -eq 22 ] && [ "$node_minor" -ge 12 ]; }; } 2>/dev/null; then
+                ns_status="ok"
+            else
+                ns_status="below-floor"
+            fi
+            case "$ns_status" in
+                below-floor) doctor_fail "Node.js v$node_ver — plan-forge-mcp requires >= $ns_floor" "Upgrade to an LTS release (Node 24 or newer) from https://nodejs.org/" ;;
+                eol)         doctor_warn "Node.js v$node_ver reached end of life on $ns_eol and no longer gets security fixes" "Upgrade to Node 24 or newer from https://nodejs.org/" ;;
+                eol-soon)
+                    doctor_pass "Node.js v$node_ver (plan-forge-mcp requires >= $ns_floor)"
+                    doctor_warn "Node.js $node_major reaches end of life on $ns_eol ($ns_days days)" "Plan an upgrade to Node 24 or newer"
+                    ;;
+                *)           doctor_pass "Node.js v$node_ver (plan-forge-mcp requires >= $ns_floor)" ;;
+            esac
         else
             doctor_fail "Node.js not found — required for image generation" "Install from https://nodejs.org/"
         fi
@@ -2896,10 +3256,17 @@ cmd_doctor() {
             fi
         fi
 
-        # MCP version sync
+        # MCP version sync — only meaningful inside the Plan Forge repo itself.
+        # In a consuming project the root VERSION file holds the HOST app's
+        # version, so the two numbers are different namespaces and following the
+        # suggested fix would overwrite Plan Forge's version identity (meta-bug #253).
         local mcp_pkg_path="$REPO_ROOT/pforge-mcp/package.json"
         local version_path="$REPO_ROOT/VERSION"
-        if [ -f "$mcp_pkg_path" ] && [ -f "$version_path" ]; then
+        local root_pkg_name=""
+        if [ -f "$REPO_ROOT/package.json" ]; then
+            root_pkg_name=$(_json_field "$REPO_ROOT/package.json" name)
+        fi
+        if [ "$root_pkg_name" = "plan-forge" ] && [ -f "$mcp_pkg_path" ] && [ -f "$version_path" ]; then
             local mcp_ver repo_ver
             mcp_ver=$(_json_field "$mcp_pkg_path" version)
             repo_ver=$(cat "$version_path" | tr -d '[:space:]')
@@ -3071,50 +3438,27 @@ cmd_doctor() {
     fi
     if [ -d "$hooks_dir" ] || [ $hook_config_present -eq 1 ] || [ $hooks_json_present -eq 1 ]; then
         echo "Lifecycle Hooks:"
-        local enums_cli="$REPO_ROOT/pforge-mcp/bin/enums-cli.mjs"
-        local expected_hooks=()
-        if command -v node >/dev/null 2>&1 && [ -f "$enums_cli" ]; then
-            mapfile -t expected_hooks < <(node "$enums_cli" --enum HOOK_PASCAL 2>/dev/null)
+        # One check for both shells, no jq needed: hook-status.mjs prints "Hook|sources" per hook.
+        local expected_hooks=() hook_count=0 hook_missing="" _hs_row _hs_name _hs_src _hs_cli=""
+        for _hs_cli in "$REPO_ROOT/pforge-mcp/hook-status.mjs" "$SCRIPT_DIR/pforge-mcp/hook-status.mjs" ""; do
+            [ -z "$_hs_cli" ] || [ -f "$_hs_cli" ] && break
+        done
+        if [ -n "$_hs_cli" ]; then
+            while IFS= read -r _hs_row; do
+                [ -z "$_hs_row" ] && continue
+                _hs_name="${_hs_row%%|*}"; _hs_src="${_hs_row#*|}"
+                expected_hooks+=("$_hs_name")
+                if [ -n "$_hs_src" ]; then
+                    hook_count=$((hook_count + 1))
+                else
+                    [ -n "$hook_missing" ] && hook_missing="$hook_missing, "
+                    hook_missing="$hook_missing$_hs_name"
+                fi
+            done < <(node "$_hs_cli" --project "$REPO_ROOT" 2>/dev/null | tr -d '\r')
         fi
         if [ ${#expected_hooks[@]} -eq 0 ]; then
-            expected_hooks=("SessionStart" "PreToolUse" "PostToolUse" "Stop" "PreDeploy" "PostSlice" "PreAgentHandoff" "PostRun")
-        fi
-        # Build PascalCase->camelCase map for .forge.json config key lookup
-        declare -A hook_cfg_keys
-        local forge_json="$REPO_ROOT/.forge.json"
-        if command -v node >/dev/null 2>&1 && [ -f "$enums_cli" ] && command -v jq >/dev/null 2>&1; then
-            while IFS='=' read -r key val; do
-                hook_cfg_keys["$key"]="$val"
-            done < <(node "$enums_cli" --enum HOOK_NAMES --format json 2>/dev/null | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null)
-        fi
-        local hook_count=0 hook_missing=""
-        for hook in "${expected_hooks[@]}"; do
-            local found=0 cfg_key cfg_val hook_json_val
-            cfg_key="${hook,}${hook:1}"
-            if [ -d "$hooks_dir" ] && find "$hooks_dir" -type f -name "*$hook*" -print -quit 2>/dev/null | grep -q .; then
-                found=1
-            fi
-            # Source 2: .github/hooks/plan-forge.json declares this hook (PascalCase key)
-            if [ $found -eq 0 ] && [ -f "$hooks_json" ] && command -v jq >/dev/null 2>&1; then
-                if jq -e ".hooks.\"$hook\"" "$hooks_json" >/dev/null 2>&1; then
-                    found=1
-                fi
-            fi
-            # Source 3: .forge.json -> hooks.<camelCase> (config-based hooks)
-            cfg_key="${hook_cfg_keys[$hook]:-$cfg_key}"
-            if [ $found -eq 0 ] && [ -n "$cfg_key" ] && [ -f "$forge_json" ] && command -v jq >/dev/null 2>&1; then
-                if jq -e ".hooks.\"$cfg_key\"" "$forge_json" >/dev/null 2>&1; then
-                    found=1
-                fi
-            fi
-            if [ $found -eq 1 ]; then
-                hook_count=$((hook_count + 1))
-            else
-                [ -n "$hook_missing" ] && hook_missing="$hook_missing, "
-                hook_missing="$hook_missing$hook"
-            fi
-        done
-        if [ $hook_count -eq ${#expected_hooks[@]} ]; then
+            doctor_warn "Could not check lifecycle hooks (pforge-mcp/hook-status.mjs missing)" "Run 'pforge self-update'"
+        elif [ $hook_count -eq ${#expected_hooks[@]} ]; then
             doctor_pass "$hook_count/${#expected_hooks[@]} lifecycle hooks present"
         elif [ $hook_count -gt 0 ]; then
             if [ $is_planforge_dev -eq 1 ]; then
@@ -3162,27 +3506,49 @@ cmd_doctor() {
     local changelog_path="$REPO_ROOT/CHANGELOG.md"
     local current_ver=""
 
-    if [ -f "$version_path" ]; then
-        current_ver=$(cat "$version_path" | tr -d '[:space:]')
-        doctor_pass "VERSION: $current_ver"
-    else
-        doctor_warn "VERSION file not found"
-    fi
-
-    if [ -f "$changelog_path" ]; then
-        if grep -qiE "\[v?${current_ver}\]|## v?${current_ver}" "$changelog_path" 2>/dev/null; then
-            doctor_pass "CHANGELOG.md has entry for v$current_ver"
-        elif echo "$current_ver" | grep -qE -- '-dev\b'; then
-            doctor_pass "CHANGELOG.md present (v$current_ver is between-release; entry added at release cut)"
-        elif [ $is_planforge_dev -eq 1 ]; then
-            # Framework repo: VERSION == release cadence, so every bump needs a CHANGELOG line.
-            doctor_warn "CHANGELOG.md missing entry for v$current_ver" "Add a '## [$current_ver] — <date>' section with release notes"
-        else
-            # Downstream consumer: VERSION tracks the pforge framework, not the app's own version.
-            doctor_pass "CHANGELOG.md present (framework v$current_ver — downstream CHANGELOG tracks your app, not pforge)"
+    if [ $is_planforge_dev -ne 1 ]; then
+        # A project's own VERSION / CHANGELOG are its business — older installs copied
+        # Plan Forge's there and updates never refreshed them, so they are not the
+        # installed version. That comes from the packages, which must also agree.
+        local consistency_helper="$REPO_ROOT/pforge-mcp/install-consistency.mjs"
+        if [ -f "$consistency_helper" ] && command -v node >/dev/null 2>&1; then
+            local consistency_lines
+            consistency_lines=$(node "$consistency_helper" --project "$REPO_ROOT" 2>/dev/null | node -e '
+const r = JSON.parse(require("fs").readFileSync(0, "utf8"));
+if (!r.frameworkVersion) process.exit(0);
+if (r.issues.length === 0) console.log(["pass", "Plan Forge v" + r.frameworkVersion + " installed (packages agree)", "-"].join("\t"));
+for (const i of r.issues) console.log(["warn", i.message, i.fix].join("\t"));
+' 2>/dev/null || true)
+            local c_kind c_msg c_fix
+            while IFS=$'\t' read -r c_kind c_msg c_fix; do
+                [ -z "$c_kind" ] && continue
+                if [ "$c_kind" = "pass" ]; then doctor_pass "$c_msg"; else doctor_warn "$c_msg" "$c_fix"; fi
+            done <<< "$consistency_lines"
         fi
+        if [ -f "$version_path" ]; then
+            doctor_pass "Project VERSION: $(tr -d '[:space:]' < "$version_path") (your project's file; Plan Forge does not change it)"
+        fi
+        if [ -f "$changelog_path" ]; then doctor_pass "CHANGELOG.md present (tracks your project, not Plan Forge)"; fi
     else
-        doctor_warn "CHANGELOG.md not found"
+        if [ -f "$version_path" ]; then
+            current_ver=$(cat "$version_path" | tr -d '[:space:]')
+            doctor_pass "VERSION: $current_ver"
+        else
+            doctor_warn "VERSION file not found"
+        fi
+
+        if [ -f "$changelog_path" ]; then
+            if grep -qiE "\[v?${current_ver}\]|## v?${current_ver}" "$changelog_path" 2>/dev/null; then
+                doctor_pass "CHANGELOG.md has entry for v$current_ver"
+            elif echo "$current_ver" | grep -qE -- '-dev\b'; then
+                doctor_pass "CHANGELOG.md present (v$current_ver is between-release; entry added at release cut)"
+            else
+                # Framework repo: VERSION == release cadence, so every bump needs a CHANGELOG line.
+                doctor_warn "CHANGELOG.md missing entry for v$current_ver" "Add a '## [$current_ver] — <date>' section with release notes"
+            fi
+        else
+            doctor_warn "CHANGELOG.md not found"
+        fi
     fi
 
     echo ""
@@ -3200,7 +3566,7 @@ cmd_doctor() {
             quorum_auto=$(jq -r '.quorum.auto // true' "$config_path" 2>/dev/null || echo true)
             quorum_threshold=$(jq -r '.quorum.threshold // 5' "$config_path" 2>/dev/null || echo 5)
             quorum_models=$(jq -r '.quorum.models // [] | join(", ")' "$config_path" 2>/dev/null || echo "")
-            quorum_reviewer=$(jq -r '.quorum.reviewerModel // "claude-opus-4.6"' "$config_path" 2>/dev/null || echo "claude-opus-4.6")
+            quorum_reviewer=$(jq -r '.quorum.reviewerModel // "default (claude-opus-5.5)"' "$config_path" 2>/dev/null || echo "default (claude-opus-5.5)")
 
             if [ "$quorum_enabled" = "true" ]; then
                 if [ "$quorum_auto" = "true" ]; then
@@ -3584,7 +3950,7 @@ cmd_doctor() {
 cmd_run_plan() {
     if [ $# -lt 1 ]; then
         echo "ERROR: Missing plan path" >&2
-        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--worker <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" >&2
+        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--worker <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--with-grok] [--with-grok-cli] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" >&2
         exit 1
     fi
 
@@ -3611,6 +3977,7 @@ cmd_run_plan() {
     local manual_import_source=""
     local manual_import_reason=""
     local strict_gates=false
+    local with_grok=""
     local only_slices=""
     local no_tempering=false
 
@@ -3625,6 +3992,8 @@ cmd_run_plan() {
             --quorum)       quorum_arg="--quorum" ;;
             --manual-import) manual_import=true ;;
             --strict-gates)  strict_gates=true ;;
+            --with-grok)     [ -z "$with_grok" ] && with_grok="--with-grok" ;;
+            --with-grok-cli) with_grok="--with-grok-cli" ;;
             --no-tempering)  no_tempering=true ;;
             --only-slices)
                 shift
@@ -3705,6 +4074,7 @@ cmd_run_plan() {
     if [ -n "$quorum_threshold" ]; then node_args+=("--quorum-threshold" "$quorum_threshold"); fi
     if [ "$manual_import" = true ]; then node_args+=("--manual-import"); fi
     if [ "$strict_gates" = true ]; then node_args+=("--strict-gates"); fi
+    if [ -n "$with_grok" ]; then node_args+=("$with_grok"); fi
     if [ -n "$manual_import_source" ]; then node_args+=("--manual-import-source" "$manual_import_source"); fi
     if [ -n "$manual_import_reason" ]; then node_args+=("--manual-import-reason" "$manual_import_reason"); fi
     if [ -n "$only_slices" ]; then node_args+=("--only-slices" "$only_slices"); fi
@@ -4606,6 +4976,16 @@ cmd_tour() {
     echo "  • Read the walkthrough: docs/QUICKSTART-WALKTHROUGH.md"
     echo "═══════════════════════════════════════════════════════════════"
     echo ""
+}
+
+# ─── Command: pending (#302) ───────────────────────────────────────────
+cmd_pending() {
+    local helper="$REPO_ROOT/pforge-mcp/update-pending.mjs"
+    if [ ! -f "$helper" ]; then
+        echo "ERROR: pforge-mcp/update-pending.mjs not found. Run 'pforge self-update' to install it." >&2
+        exit 1
+    fi
+    node "$helper" "$@" --project "$REPO_ROOT"
 }
 
 # ─── Command: version-bump ─────────────────────────────────────────────
@@ -5539,7 +5919,7 @@ cmd_config() {
         list)
             local cur_val=""
             if [ -f "$config_path" ]; then
-                cur_val="$(python3 -c "import json; print(json.load(open('$config_path')).get('updateSource',''))" 2>/dev/null || echo "")"
+                cur_val="$(json_get "$config_path" updateSource)"
             fi
             if [ -z "$cur_val" ]; then cur_val="(unset → auto)"; fi
             printf "  %-18s  %s\n" "update-source" "$cur_val"
@@ -5550,7 +5930,7 @@ cmd_config() {
             fi
             local val=""
             if [ -f "$config_path" ]; then
-                val="$(python3 -c "import json; print(json.load(open('$config_path')).get('$json_key',''))" 2>/dev/null || echo "")"
+                val="$(json_get "$config_path" "$json_key")"
             fi
             if [ -z "$val" ]; then val="$default_value"; fi
             echo "$val"
@@ -5573,18 +5953,15 @@ cmd_config() {
             fi
             # Merge into existing JSON atomically
             local tmp="$config_path.tmp"
-            python3 -c "
-import json, os, sys
-path = '$config_path'
-data = {}
-if os.path.exists(path):
-    try: data = json.load(open(path))
-    except Exception as e:
-        print(f'ERROR: .forge.json is malformed: {e}', file=sys.stderr); sys.exit(1)
-data['$json_key'] = '$value'
-with open('$tmp','w') as f:
-    json.dump(data, f, indent=2)
-" || exit 1
+            node -e 'const fs = require("fs");
+const [file, tmp, key, value] = process.argv.slice(1);
+let data = {};
+if (fs.existsSync(file)) {
+  try { data = JSON.parse(fs.readFileSync(file, "utf8")); }
+  catch (e) { console.error(`ERROR: .forge.json is malformed: ${e.message}`); process.exit(1); }
+}
+data[key] = value;
+fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n");' "$config_path" "$tmp" "$json_key" "$value" || exit 1
             mv "$tmp" "$config_path"
             echo "  ✅ $json_key = $value"
             ;;
@@ -7057,6 +7434,11 @@ cmd_crucible() {
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
 
+# The dispatch is one brace group that ends in `exit`, so bash parses all of it
+# before running a command and never reads this file again. `pforge update`
+# overwrites pforge.sh in place; bash would otherwise resume reading the new
+# file at a stale offset and fail with a syntax error after a successful update.
+{
 case "$COMMAND" in
     init)         cmd_init "$@" ;;
     check)        cmd_check "$@" ;;
@@ -7070,6 +7452,7 @@ case "$COMMAND" in
     ext)          cmd_ext "$@" ;;
     update)       cmd_update "$@" ;;
     analyze)      cmd_analyze "$@" ;;
+    diagnose)     cmd_diagnose "$@" ;;
     run-plan)     cmd_run_plan "$@" ;;
     org-rules)    cmd_org_rules "$@" ;;
     drift)        cmd_drift "$@" ;;
@@ -7089,6 +7472,7 @@ case "$COMMAND" in
     testbed-happypath) cmd_testbed_happypath "$@" ;;
     self-update)  cmd_self_update "$@" ;;
     version-bump) cmd_version_bump "$@" ;;
+    pending)      cmd_pending "$@" ;;
     migrate-memory) cmd_migrate_memory "$@" ;;
     drain-memory) cmd_drain_memory "$@" ;;
     forge-home-cleanup) cmd_forge_home_cleanup "$@" ;;
@@ -7183,3 +7567,5 @@ case "$COMMAND" in
         exit 1
         ;;
 esac
+exit $?
+}

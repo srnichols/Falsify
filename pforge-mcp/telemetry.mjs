@@ -12,6 +12,7 @@ import { resolve, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { hostname, type as osType } from "node:os";
 import { execSync } from "node:child_process";
+import { pruneForgeRuns } from "./run-retention.mjs";
 
 // Severity levels per OTLP convention
 export const Severity = {
@@ -251,34 +252,13 @@ export function readRunIndex(cwd) {
 // ─── Log Rotation ─────────────────────────────────────────────────────
 
 /**
- * Prune old run directories beyond maxRunHistory.
+ * @deprecated Use pruneForgeRuns for age-aware retention; retained for existing imports.
+ * @param {string} cwd
+ * @param {number} [maxRunHistory=50]
+ * @returns {void}
  */
 export function pruneRunHistory(cwd, maxRunHistory = 50) {
-  const runsDir = resolve(cwd, ".forge", "runs");
-  if (!existsSync(runsDir)) return;
-
-  const dirs = readdirSync(runsDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => d.name)
-    .sort()
-    .reverse();
-
-  if (dirs.length <= maxRunHistory) return;
-
-  const toRemove = dirs.slice(maxRunHistory);
-  for (const dir of toRemove) {
-    try {
-      rmSync(resolve(runsDir, dir), { recursive: true, force: true });
-    } catch { /* best effort */ }
-  }
-
-  // Compact index — remove entries for deleted directories
-  const indexPath = resolve(runsDir, "index.jsonl");
-  if (existsSync(indexPath)) {
-    const remaining = new Set(dirs.slice(0, maxRunHistory));
-    const entries = readRunIndex(cwd).filter((e) => remaining.has(e.dir));
-    writeFileSync(indexPath, entries.map((e) => JSON.stringify(e)).join("\n") + "\n");
-  }
+  pruneForgeRuns(cwd, { maxRuns: maxRunHistory, maxAgeDays: Infinity, keepNewest: false });
 }
 
 // ─── OTel Chat Span Emitter ────────────────────────────────────────────

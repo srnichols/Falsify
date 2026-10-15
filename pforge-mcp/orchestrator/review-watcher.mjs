@@ -26,9 +26,9 @@ import {
   readTemperingState,
   TEMPERING_SCAN_STALE_DAYS,
 } from "../tempering.mjs";
+import { DEFAULT_WATCHER_MODEL } from "./constants.mjs";
 
 const [WATCHER_MODE_SNAPSHOT, WATCHER_MODE_ANALYZE, WATCHER_MODE_CROSS_RUN] = WATCHER_MODES;
-const DEFAULT_WATCHER_MODEL = "claude-opus-4.7";
 
 // ─── Private helpers ──────────────────────────────────────────────────
 // These mirror the public implementations in orchestrator.mjs and will be
@@ -1259,8 +1259,12 @@ function getHistoricalFailureRate(slice, cwd) {
 export function scoreSliceComplexity(slice, cwd) {
   const signals = {};
 
+  // Breadth signal: editable scope plus read-only context files. Context
+  // files are not part of the editable allowlist (#231) but still indicate how
+  // much surface area a slice spans, so they count toward complexity.
   const scopeCount = (slice.scope && slice.scope.length) || 0;
-  signals.scopeWeight = Math.min(scopeCount / 3, 1);
+  const contextCount = (slice.contextFiles && slice.contextFiles.length) || 0;
+  signals.scopeWeight = Math.min((scopeCount + contextCount) / 3, 1);
 
   const depCount = (slice.depends && slice.depends.length) || 0;
   signals.dependencyWeight = Math.min(depCount / 3, 1);
@@ -1707,7 +1711,7 @@ export function appendWatchHistory(report, watcherCwd = process.cwd()) {
  * @param {string} options.targetPath  - Absolute path to project being watched
  * @param {string} [options.runId]     - Specific run dir; default = latest
  * @param {"snapshot"|"analyze"} [options.mode="snapshot"]
- * @param {string} [options.model]     - Override watcher model (default: claude-opus-4.7)
+ * @param {string} [options.model]     - Override watcher model (default: claude-opus-4.8)
  * @param {number} [options.timeout=300000] - Worker timeout for analyze mode
  * @param {number} [options.tailEvents=25] - Trailing events (1-200)
  * @param {string} [options.sinceTimestamp] - (v2.35) Only flag events newer than this ISO timestamp

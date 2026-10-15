@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { isOpenBrainConfigured } from "../memory.mjs";
 import { TOOL_NAMES } from "../enums.mjs";
+import { DEFAULT_FORGE_MASTER_ROUTER_MODEL } from "../orchestrator/constants.mjs";
 
 import { TOOL_METADATA, WORKFLOWS } from "./tool-metadata.mjs";
 import { CLI_SCHEMA, CONFIG_SCHEMA } from "./schemas.mjs";
@@ -247,7 +248,7 @@ function buildTelemetrySurface() {
       manifest: ".forge/runs/<timestamp>/manifest.json — per-run artifact registry",
       index: ".forge/runs/index.jsonl — append-only global run index (corruption-tolerant)",
     },
-    retention: "maxRunHistory config in .forge.json (default: 50), auto-prunes oldest runs",
+    retention: "maxRunHistory (default: 50) and maxRunAgeDays (default: 30) in .forge.json — a run is pruned when it fails EITHER; the newest run is always kept",
   };
 }
 
@@ -257,7 +258,7 @@ function buildOrchestratorApiSurface() {
     exports: {
       parsePlan: { description: "Parse plan Markdown → DAG with slices, deps, scope, gates", args: "planPath" },
       runPlan: { description: "Execute a plan end-to-end (main orchestration entry)", args: "planPath, options" },
-      detectWorkers: { description: "Detect available CLI workers (gh-copilot, claude, codex)", returns: "array" },
+      detectWorkers: { description: "Detect available CLI workers (gh-copilot, claude, codex, grok)", returns: "array" },
       spawnWorker: { description: "Spawn a CLI worker with prompt, model, timeout", args: "prompt, options" },
       runGate: { description: "Execute a validation gate command (allowlisted)", args: "command, cwd" },
       getCostReport: { description: "Generate cost report from .forge/cost-history.json", args: "cwd" },
@@ -315,7 +316,7 @@ function buildForgeMasterCapabilities(cwd) {
       const block = forgeJson?.forgeMaster ?? {};
       config = {
         reasoningModel: block.reasoningModel ?? forgeJson?.model?.default ?? null,
-        routerModel: block.routerModel ?? "grok-3-mini",
+        routerModel: block.routerModel ?? DEFAULT_FORGE_MASTER_ROUTER_MODEL,
         discoverExtensionTools: block.discoverExtensionTools ?? true,
           observerEnabled: block.observer?.enabled ?? false,
         };
@@ -327,12 +328,12 @@ function buildForgeMasterCapabilities(cwd) {
     addedIn: "2.61.0",
     tools: TOOL_NAMES.filter((n) => n.startsWith("forge_master_")),
     reasoningModel: config.reasoningModel ?? null,
-    routerModel: config.routerModel ?? "grok-3-mini",
+    routerModel: config.routerModel ?? DEFAULT_FORGE_MASTER_ROUTER_MODEL,
     configKey: "forgeMaster",
     studio: {
       dashboardTabEnabled: true,
       reasoningModel: config.reasoningModel ?? null,
-      routerModel: config.routerModel ?? "grok-3-mini",
+      routerModel: config.routerModel ?? DEFAULT_FORGE_MASTER_ROUTER_MODEL,
       promptCatalogVersion: "1.0.0",
       observerEnabled: config.observerEnabled ?? false,
     },
@@ -369,6 +370,21 @@ export function buildCapabilities(options = {}) {
 }
 
 /**
+ * The generated artifacts and the exact content each should hold.
+ * Single source for both the write path and the read-only check path.
+ *
+ * @param {Array|null} mcpTools
+ * @returns {Array<{ file: string, content: string }>}
+ */
+function buildGeneratedArtifacts(mcpTools) {
+  const surface = buildCapabilitySurface(mcpTools);
+  return [
+    { file: "tools.json", content: JSON.stringify(surface.tools, null, 2) },
+    { file: "cli-schema.json", content: JSON.stringify(CLI_SCHEMA, null, 2) },
+  ];
+}
+
+/**
  * Write tools.json to pforge-mcp/ directory.
  */
 export function writeToolsJson(mcpTools, outputDir) {
@@ -385,5 +401,34 @@ export function writeCliSchema(outputDir) {
   const schemaPath = resolve(outputDir, "cli-schema.json");
   writeFileSync(schemaPath, JSON.stringify(CLI_SCHEMA, null, 2));
   return schemaPath;
+}
+
+/**
+ * Compare the generated artifacts against what is on disk. Never writes.
+ *
+ * Gates need a way to assert the surface is current without mutating tracked
+ * source — `--validate` regenerates, which is why issue #240 rode into
+ * unrelated slice commits unnoticed.
+ *
+ * @param {Array|null} mcpTools
+ * @param {string} outputDir
+ * @returns {{ ok: boolean, drift: Array<{ file: string, reason: "missing"|"stale" }> }}
+ */
+export function checkGeneratedArtifacts(mcpTools, outputDir) {
+  const normalize = (s) => s.replace(/\r\n/g, "\n").trimEnd();
+  const drift = [];
+
+  for (const { file, content } of buildGeneratedArtifacts(mcpTools)) {
+    const target = resolve(outputDir, file);
+    if (!existsSync(target)) {
+      drift.push({ file, reason: "missing" });
+      continue;
+    }
+    if (normalize(readFileSync(target, "utf-8")) !== normalize(content)) {
+      drift.push({ file, reason: "stale" });
+    }
+  }
+
+  return { ok: drift.length === 0, drift };
 }
 

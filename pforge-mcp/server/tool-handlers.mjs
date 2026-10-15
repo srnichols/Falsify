@@ -5,6 +5,11 @@ import { withAuth } from "../auth/middleware.mjs";
 import { PROJECT_DIR } from "./state.mjs";
 import { executeTool } from "./tool-handlers/core.mjs";
 import { _CALL_TOOL_NO_MATCH } from "./tool-handlers/shared.mjs";
+import { _callToolHandler_100_forge_tool_profile } from "./tool-handlers/profiles.mjs";
+import { _callToolHandler_101_forge_master_observe } from "./tool-handlers/forge-master-observe.mjs";
+
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_FORBIDDEN = 403;
 import {
   _callToolHandler_001_forge_run_plan,
   _callToolHandler_002_forge_abort,
@@ -196,7 +201,7 @@ async function _mcpAuthGate(toolName, request) {
   const fakeRes = {
     headersSent: false,
     writeHead(status) { denied = status; },
-    end() { if (denied == null) denied = 403; },
+    end() { if (denied == null) denied = HTTP_FORBIDDEN; },
   };
 
   const opts = isReadOnly
@@ -206,7 +211,7 @@ async function _mcpAuthGate(toolName, request) {
   await withAuth(() => {}, opts)(fakeReq, fakeRes);
 
   if (denied) {
-    const error = denied === 401 ? "unauthenticated" : "forbidden";
+    const error = denied === HTTP_UNAUTHORIZED ? "unauthenticated" : "forbidden";
     return {
       content: [{ type: "text", text: JSON.stringify({ ok: false, error }) }],
       isError: true,
@@ -314,6 +319,8 @@ const _CALL_TOOL_HANDLERS = [
   _callToolHandler_097_forge_local_recall_status,
   _callToolHandler_098_forge_audit_export,
   _callToolHandler_099_forge_master_audit,
+  _callToolHandler_100_forge_tool_profile,
+  _callToolHandler_101_forge_master_observe,
 ];
 
 export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
@@ -352,12 +359,17 @@ export const MCP_ONLY_TOOLS = new Set([
   "forge_incident_capture", "forge_deploy_journal", "forge_dep_watch",
   "forge_diff_classify", "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
   "forge_hotspot", "forge_runbook", "forge_run_plan", "forge_cost_report",
+  // Multi-model analysis runs in-process: the dashboard's "Analyze (quorum)" and
+  // "Diagnose" buttons call these. Proxied through runPforge they would hit its
+  // 60 s timeout and orphan the orchestrator child that spends the tokens.
+  "forge_analyze", "forge_diagnose",
   // Phase-27.1 Slice 2b — forge_estimate_quorum was registered in
   // capabilities.mjs/tools.json/switch case/handler in Phase-27 Slice 6 but
   // missed this Set, so /api/tool/forge_estimate_quorum fell through to
   // runPforge() (no CLI counterpart). Added here so the HTTP bridge reaches
   // the MCP handler.
   "forge_estimate_quorum",
+  "forge_tool_profile",
   // Phase-27.2 Slice 3 — forge_estimate_slice is MCP-native (no CLI
   // counterpart). Adding here so /api/tool/forge_estimate_slice reaches
   // the MCP handler instead of falling through to runPforge().

@@ -4,7 +4,7 @@ import { resolve, join, dirname, basename, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 
 
-import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime, PROPOSED_FIX_DIR, detectCostAnomaly, computeMedian, spawnWorker } from "../orchestrator.mjs";
+import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime, PROPOSED_FIX_DIR, detectCostAnomaly, computeMedian, spawnWorker, QUORUM_PRESETS } from "../orchestrator.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
 import { recall as brainRecall, getReviewerCalibration, federationReadTrajectories, loadFederationConfig, validateFederationConfig, TRAJECTORY_FEDERATION_LIMIT, readHallmark, listHallmarks, validateHallmarkId, HallmarkError } from "../brain.mjs";
 // Phase ANVIL Slice 5 — Δ-only memoization wrapper for read-only tools
@@ -145,6 +145,7 @@ import {
 
 
 import { writeAuditArtifact } from "./audit-writer.mjs";
+import { readGitDiff, GitDiffCapacityError } from "./git-diff-reader.mjs";
 import { startEventFileWatcher, runPforge, findProjectRoot } from "./helpers.mjs";
 import { callOrgRules } from "./org-rules.mjs";
 import { _sweepAnvilCompute, _analyzeAnvilCompute, _temperingScanAnvilCompute, _hotspotAnvilCompute } from "./anvil-compute.mjs";
@@ -628,7 +629,7 @@ function _formatQuorumResponse({ context, oldestTimestamp, customQuestion, analy
   const contextStr = JSON.stringify(context, null, 2);
   const quorumPrompt = `## Context\n${contextStr}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
   const qConfig = loadQuorumConfig(PROJECT_DIR);
-  const suggestedModels = (qConfig.models || ["claude-opus-4.7", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
+  const suggestedModels = (qConfig.models || QUORUM_PRESETS.power.models).slice(0, quorumSize);
   const promptTokenEstimate = Math.ceil(quorumPrompt.length / 4);
   let dataSnapshotAge = "unknown";
   if (oldestTimestamp) {
@@ -1592,8 +1593,11 @@ function _registerDepsTemperingToolRoutes(app) {
       const threshold = Math.max(3.5, Math.min(5.0, parseFloat(req.body?.threshold) || 4.0));
       let diffOutput;
       try {
-        diffOutput = execSync(`git diff ${since}`, { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30_000 });
-      } catch {
+        diffOutput = readGitDiff({ cwd: PROJECT_DIR, gitArgs: ["diff", since] });
+      } catch (err) {
+        // An oversized diff was not scanned; answering "git unavailable" hid the
+        // ENOBUFS failure behind a normal-looking response (meta-bugs #288–#290).
+        if (err instanceof GitDiffCapacityError) throw err;
         return res.json({ clean: null, scannedFiles: 0, findings: [], error: "git unavailable" });
       }
       const { findings, scannedFiles } = _scanDiffForSecrets(diffOutput, threshold);

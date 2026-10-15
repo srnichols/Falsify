@@ -4,7 +4,11 @@ import {
   assessQuorumViability,
   resolveRequiredCli,
   filterQuorumModels,
+  QUORUM_PRESETS,
 } from "../orchestrator.mjs";
+
+const POWER = QUORUM_PRESETS.power.models;
+const SPEED = QUORUM_PRESETS.speed.models;
 
 // ─── detectExecutionRuntime ─────────────────────────────────────────────
 
@@ -121,6 +125,85 @@ describe("assessQuorumViability", () => {
     expect(result.error).toMatch(/Unknown preset/);
   });
 
+  // ─── Issue #243: assess the user's own configured models ───────
+  // forge_doctor_quorum could only report on the two built-in presets, so a
+  // user with custom quorum.models got a diagnostic about models they do not
+  // use. A typo passes the probe (gh-copilot is a catch-all), gets silent
+  // fallback pricing, and fails at runtime after spend.
+
+  describe("explicit config (issue #243)", () => {
+    it("assesses a preset-shaped object and labels it 'config'", () => {
+      const result = assessQuorumViability(
+        { models: ["claude-opus-5", "gpt-5.6-sol"] },
+        { runtimeOverride: "cli-gh", probe: allAvailableProbe }
+      );
+      expect(result.preset).toBe("config");
+      expect(result.declared).toBe(2);
+      expect(result.effective).toBe(2);
+      expect(result.synthesisViable).toBe(true);
+    });
+
+    it("errors when a config carries no models", () => {
+      expect(assessQuorumViability({ models: [] }).error).toMatch(/no models/i);
+      expect(assessQuorumViability({}).error).toMatch(/Unknown preset|no models/i);
+    });
+
+    it("still resolves named presets unchanged", () => {
+      const result = assessQuorumViability("power", {
+        runtimeOverride: "cli-gh",
+        probe: allAvailableProbe,
+      });
+      expect(result.preset).toBe("power");
+      expect(result.declared).toBe(3);
+    });
+  });
+
+  // ─── Issue #243: unpriced models are the strongest typo signal ──
+
+  describe("pricing annotation (issue #243)", () => {
+    const isPriced = (m) => ["claude-opus-5", "gpt-5.6-sol"].includes(m);
+
+    it("annotates each model and warns about unpriced ones", () => {
+      const result = assessQuorumViability(
+        { models: ["claude-opus-5", "gtp-5.6-sol"] },
+        { runtimeOverride: "cli-gh", probe: allAvailableProbe, isPriced }
+      );
+      expect(result.models.find((m) => m.model === "claude-opus-5").priced).toBe(true);
+      expect(result.models.find((m) => m.model === "gtp-5.6-sol").priced).toBe(false);
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toMatch(/gtp-5\.6-sol/);
+      expect(result.warnings[0]).toMatch(/typo|fallback/i);
+    });
+
+    it("emits no warnings when every model is priced", () => {
+      const result = assessQuorumViability(
+        { models: ["claude-opus-5", "gpt-5.6-sol"] },
+        { runtimeOverride: "cli-gh", probe: allAvailableProbe, isPriced }
+      );
+      expect(result.warnings).toEqual([]);
+      expect(result.models.every((m) => m.priced === true)).toBe(true);
+    });
+
+    it("leaves priced null and warnings empty when no predicate is injected", () => {
+      const result = assessQuorumViability("power", {
+        runtimeOverride: "cli-gh",
+        probe: allAvailableProbe,
+      });
+      expect(result.models.every((m) => m.priced === null)).toBe(true);
+      expect(result.warnings).toEqual([]);
+    });
+
+    it("does not mark an unpriced model unavailable — permissiveness is deliberate", () => {
+      const result = assessQuorumViability(
+        { models: ["brand-new-model-not-yet-in-registry"] },
+        { runtimeOverride: "cli-gh", probe: allAvailableProbe, isPriced }
+      );
+      expect(result.models[0].status).toBe("available");
+      expect(result.effective).toBe(1);
+      expect(result.warnings).toHaveLength(1);
+    });
+  });
+
   // ─── Power preset ──────────────────────────────────────────────
 
   describe("power preset", () => {
@@ -141,8 +224,7 @@ describe("assessQuorumViability", () => {
     it("2 of 3 models available — synthesis still viable", () => {
       const result = assessQuorumViability("power", {
         runtimeOverride: "cli-gh",
-        // v2.81 (#107): power preset upgraded to opus-4.7 — was opus-4.6.
-        probe: selectiveProbe(["claude-opus-4.7", "gpt-5.3-codex"]),
+        probe: selectiveProbe(POWER.slice(0, 2)),
       });
       expect(result.effective).toBe(2);
       expect(result.synthesisViable).toBe(true);
@@ -153,8 +235,7 @@ describe("assessQuorumViability", () => {
     it("1 of 3 models available — synthesis NOT viable, recommends fallback", () => {
       const result = assessQuorumViability("power", {
         runtimeOverride: "cli-gh",
-        // v2.81 (#107): power preset upgraded to opus-4.7 — was opus-4.6.
-        probe: selectiveProbe(["claude-opus-4.7"]),
+        probe: selectiveProbe([POWER[0]]),
       });
       expect(result.effective).toBe(1);
       expect(result.synthesisViable).toBe(false);
@@ -178,11 +259,11 @@ describe("assessQuorumViability", () => {
         runtimeOverride: "cli-gh",
         probe: allAvailableProbe,
       });
-      // v2.81 (#107): power preset upgraded to opus-4.7 — was opus-4.6.
-      const claudeModel = result.models.find((m) => m.model === "claude-opus-4.7");
+      const claudeModel = result.models.find((m) => m.model.startsWith("claude-"));
       expect(claudeModel.declaredForRuntime).toBe(true);
-      const grokModel = result.models.find((m) => m.model === "grok-4.20-0309-reasoning");
-      expect(grokModel.declaredForRuntime).toBe(false);
+      // grok-4.7 is Copilot-served, so gh-copilot declares it for power.
+      const grokModel = result.models.find((m) => m.model.startsWith("grok-"));
+      expect(grokModel.declaredForRuntime).toBe(true);
     });
   });
 
@@ -204,7 +285,7 @@ describe("assessQuorumViability", () => {
     it("partial availability — synthesis viable with 2", () => {
       const result = assessQuorumViability("speed", {
         runtimeOverride: "cli-gh",
-        probe: selectiveProbe(["claude-sonnet-4.6", "gpt-5.4-mini"]),
+        probe: selectiveProbe(SPEED.slice(0, 2)),
       });
       expect(result.effective).toBe(2);
       expect(result.synthesisViable).toBe(true);
@@ -224,7 +305,7 @@ describe("assessQuorumViability", () => {
     it("single model — synthesis NOT viable, hint about single-model", () => {
       const result = assessQuorumViability("speed", {
         runtimeOverride: "cli-claude",
-        probe: selectiveProbe(["claude-sonnet-4.6"]),
+        probe: selectiveProbe([SPEED[0]]),
       });
       expect(result.effective).toBe(1);
       expect(result.synthesisViable).toBe(false);

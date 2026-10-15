@@ -46,6 +46,24 @@ describe("worker-capabilities matrix", () => {
     expect(gh.invocation.baseArgs.some((a) => String(a).includes("{PROMPT_FILE}"))).toBe(true);
   });
 
+  it("defines grok (Grok Build CLI) with headless streaming-json invocation", () => {
+    const matrix = loadWorkerCapabilities();
+    const grok = matrix.workers["grok"];
+    expect(grok).toBeDefined();
+    expect(grok.minVersion).toBeTruthy();
+    expect(grok.probe.command).toBe("grok");
+    expect(grok.probe.capabilityMarkers).toEqual(
+      expect.arrayContaining(["-p", "--output-format"])
+    );
+    expect(grok.defaultModel).toBe("grok-4.7");
+    expect(grok.invocation.cmd).toBe("grok");
+    expect(grok.invocation.baseArgs).toEqual(
+      expect.arrayContaining(["--output-format", "streaming-json"])
+    );
+    expect(grok.install.windows).toContain("x.ai/cli/install.ps1");
+    expect(grok.install.docs).toContain("docs.x.ai/build");
+  });
+
   it("defines runtime minimums for git/gh/node/pwsh", () => {
     const matrix = loadWorkerCapabilities();
     for (const name of ["git", "gh", "node", "pwsh"]) {
@@ -188,6 +206,13 @@ describe("detectKilledBySignal (meta-bug #99)", () => {
 
   it("flags Windows STATUS_BREAK (3221225787)", () => {
     expect(detectKilledBySignal(3221225787)).toMatch(/STATUS_BREAK/);
+  });
+
+  // Phase-PRESET-BUILD-CHECKS slice 3: a worker ended from outside exited
+  // 1073807364 and was reported as a validation-gate failure instead.
+  it("flags Windows DBG_TERMINATE_PROCESS (1073807364 / 0x40010004)", () => {
+    expect(detectKilledBySignal(1073807364)).toMatch(/DBG_TERMINATE_PROCESS/);
+    expect(detectKilledBySignal(1073807364)).toMatch(/0x40010004/);
   });
 
   it("flags Unix SIGINT (exit 130)", () => {

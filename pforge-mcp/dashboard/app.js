@@ -1752,20 +1752,46 @@ async function runAction(tool, args) {
 window.runAction = runAction;
 
 // ─── Quorum / Diagnose Actions ────────────────────────────────────────
+// Multi-model runs go through the in-process MCP handlers (forge_analyze with
+// quorum, forge_diagnose). The CLI route behind runAction has a 60 s timeout,
+// which a multi-model run outlasts.
+async function runQuorumTool(tool, body, label) {
+  const resultDiv = document.getElementById("action-result");
+  const titleEl = document.getElementById("action-result-title");
+  const outputEl = document.getElementById("action-result-output");
+
+  titleEl.textContent = `Running: ${label}`;
+  outputEl.textContent = "Loading... multi-model runs take several minutes.";
+  resultDiv.classList.remove("hidden");
+
+  try {
+    const res = await fetch(`${API_BASE}/api/tool/${tool}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    const failed = !res.ok || Boolean(data.error) || data.isError === true;
+    outputEl.textContent = data.synthesis || data.error || data.content?.[0]?.text || JSON.stringify(data, null, 2);
+    titleEl.textContent = `${label}: ${failed ? "❌" : "✅"}`;
+  } catch (err) {
+    outputEl.textContent = `Error: ${err.message}`;
+    titleEl.textContent = `${label}: ❌`;
+  }
+}
+
 async function runAnalyzeQuorum() {
   const target = prompt("Plan or file path:");
   if (!target) return;
   const models = prompt("Models (comma-separated, or leave blank for defaults):", "");
-  const args = models ? `${target} --quorum --models ${models}` : `${target} --quorum`;
-  runAction("analyze", args);
+  runQuorumTool("forge_analyze", { plan: target, quorum: true, ...(models ? { models } : {}) }, `pforge analyze ${target} --quorum`);
 }
 
 async function runDiagnose() {
   const filePath = prompt("File to diagnose:");
   if (!filePath) return;
   const models = prompt("Models (comma-separated, or leave blank for defaults):", "");
-  const args = models ? `${filePath} --models ${models}` : filePath;
-  runAction("diagnose", args);
+  runQuorumTool("forge_diagnose", { file: filePath, ...(models ? { models } : {}) }, `pforge diagnose ${filePath}`);
 }
 
 window.runAnalyzeQuorum = runAnalyzeQuorum;
@@ -2654,7 +2680,7 @@ async function loadConfig() {
     currentConfig = await res.json();
     document.getElementById("cfg-preset").value = currentConfig.preset || "";
     document.getElementById("cfg-version").value = currentConfig.templateVersion || "";
-    document.getElementById("cfg-model-default").value = currentConfig.modelRouting?.default || "auto";
+    setSelectPreservingValue(document.getElementById("cfg-model-default"), currentConfig.modelRouting?.default || "auto");
 
     // Image generation model
     const imgModel = document.getElementById("cfg-model-image");
@@ -2687,6 +2713,11 @@ async function loadConfig() {
     if (qThresh) qThresh.value = currentConfig.quorum?.threshold ?? 7;
     if (qModels) qModels.value = (currentConfig.quorum?.models || []).join(", ");
     if (qPreset) qPreset.value = currentConfig.quorum?.preset || "";
+    const qGrok = document.getElementById("cfg-quorum-include-grok");
+    if (qGrok) {
+      const ig = currentConfig.quorum?.includeGrok;
+      qGrok.value = ig === true ? "api" : (ig === "api" || ig === "cli" ? ig : "");
+    }
 
     // Update source preference (v2.56.0)
     const updSrcSel = document.getElementById("cfg-update-source");
@@ -2739,13 +2770,27 @@ async function loadConfig() {
   }
 }
 
-// Provider status registry — must mirror KNOWN_PROVIDER_KEYS below.
-// Order matches recommendation order; GitHub Copilot first (Phase-33 / v2.67.0 default).
+// Keeps a configured value selectable when the static option list no longer
+// carries it (a retired or custom model), so saving never silently rewrites it.
+function setSelectPreservingValue(select, value) {
+  if (!select) return;
+  if (value && ![...select.options].some((o) => o.value === value)) {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = `${value} (current)`;
+    select.appendChild(opt);
+  }
+  select.value = value;
+}
+
+// Provider status registry — model-serving keys from KNOWN_PROVIDER_KEYS below.
+// Order matches Forge-Master's auto-select order. GITHUB_TOKEN is not listed:
+// GitHub Models (models.github.ai) was retired on 2026-07-30, so the token no
+// longer serves models (Copilot models run through the gh-copilot worker).
 const PROVIDER_STATUS_REGISTRY = [
-  { key: "GITHUB_TOKEN",      label: "GitHub Copilot",   models: "gpt-4o-mini, gpt-4o, claude-sonnet-4 (via models.github.ai)" },
-  { key: "XAI_API_KEY",       label: "xAI Grok",          models: "grok-4.20, grok-4, grok-3-mini" },
-  { key: "ANTHROPIC_API_KEY", label: "Anthropic Claude", models: "claude-sonnet-4.5, claude-opus" },
-  { key: "OPENAI_API_KEY",    label: "OpenAI",            models: "gpt-5, dall-e-3" },
+  { key: "ANTHROPIC_API_KEY", label: "Anthropic Claude", models: "claude-opus-5.5, claude-sonnet-5.5" },
+  { key: "OPENAI_API_KEY",    label: "OpenAI",            models: "gpt-6-astra, gpt-6-sol, gpt-6-luna, dall-e-3" },
+  { key: "XAI_API_KEY",       label: "xAI Grok",          models: "grok-4.7, grok-4.6, grok-4.20-0309-non-reasoning" },
 ];
 
 async function loadApiProviderStatus() {
@@ -2760,8 +2805,8 @@ async function loadApiProviderStatus() {
     if (configured.length === 0) {
       el.innerHTML =
         '<span class="text-gray-500">No API providers detected. ' +
-        'Set <code class="text-forge-400">GITHUB_TOKEN</code> for Copilot (recommended), ' +
-        'or any of <code>XAI_API_KEY</code> / <code>ANTHROPIC_API_KEY</code> / <code>OPENAI_API_KEY</code>.</span>';
+        'Set any of <code class="text-forge-400">ANTHROPIC_API_KEY</code> / <code>OPENAI_API_KEY</code> / <code>XAI_API_KEY</code>. ' +
+        'GITHUB_TOKEN no longer serves models: GitHub Models was retired on 2026-07-30.</span>';
       return;
     }
 
@@ -2786,7 +2831,7 @@ async function loadApiProviderStatus() {
 
 // ─── Provider API Keys ────────────────────────────────────────
 const KNOWN_PROVIDER_KEYS = [
-  { key: "GITHUB_TOKEN", label: "GitHub (Copilot, recommended)", placeholder: "ghp_..." },
+  { key: "GITHUB_TOKEN", label: "GitHub (gh API)", placeholder: "ghp_..." },
   { key: "XAI_API_KEY", label: "xAI (Grok)", placeholder: "xai-..." },
   { key: "OPENAI_API_KEY", label: "OpenAI (GPT / DALL-E)", placeholder: "sk-..." },
   { key: "ANTHROPIC_API_KEY", label: "Anthropic (Claude API)", placeholder: "sk-ant-..." },
@@ -2931,6 +2976,7 @@ async function saveConfig() {
     const qModelsStr = document.getElementById("cfg-quorum-models")?.value || "";
     const qModels = qModelsStr ? qModelsStr.split(",").map((m) => m.trim()).filter(Boolean) : [];
     const qPreset = document.getElementById("cfg-quorum-preset")?.value || "";
+    const qIncludeGrok = document.getElementById("cfg-quorum-include-grok")?.value || "";
     const observerEnabled = document.getElementById("cfg-observer-enabled")?.checked || false;
     const observerModelTier = document.getElementById("cfg-observer-modeltier")?.value || "";
     const observerBudgetUsd = parseFloat(document.getElementById("cfg-observer-budget-usd")?.value ?? "1");
@@ -2972,6 +3018,7 @@ async function saveConfig() {
         threshold: isNaN(qThresh) ? 7 : qThresh,
         models: qModels.length > 0 ? qModels : (currentConfig.quorum?.models || []),
         ...(qPreset ? { preset: qPreset } : {}),
+        ...(qIncludeGrok ? { includeGrok: qIncludeGrok } : {}),
       },
       forgeMaster: {
         ...(currentConfig.forgeMaster || {}),

@@ -3,6 +3,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
 
 /**
  * Parse a workerTimeoutMs value from a plan body line.
@@ -189,17 +190,45 @@ export function parsePlan(planPath, cwd = process.cwd()) {
 
   parsePlanFrontmatter(meta, content);
 
-  return { meta, scopeContract, slices, dag };
+  // #308: gate lint checks parallel slices over one artifact against this section.
+  const hasSharedContract = /^#{2,4}\s+Shared Contract\b/im.test(content);
+
+  return { meta, scopeContract, slices, dag, hasSharedContract };
 }
+
+/**
+ * The one shape a slice heading may take.
+ *
+ * Exported and shared so `computeLockHash` and `parseSlices` cannot drift.
+ * They previously used different patterns — the parser accepted a letter
+ * suffix and was case-insensitive, the hash scanner accepted neither — so
+ * `### Slice 7b — Packaging` parsed as a normal slice while its Scope and
+ * Validation Gate stayed outside the lock hash. Either could then be rewritten
+ * to anything at all without invalidating the hash (meta-bug #260).
+ *
+ * Capture groups: 1 = slice id, 2 = title.
+ */
+export const SLICE_HEADING_RE =
+  /^#{2,4}\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui;
 
 /**
  * Compute the lockHash for a plan per decision #6 (Phase-WORKER-GUARDRAILS A6).
  *
- * Hash scope: sha256 over the concatenation of (per slice, in document order):
- *   - `### Slice N:` header line
- *   - `**Scope** (files in scope):` bullet list
- *   - `**Validation Gate**:` code block content
- * Plus the plan's top-level `### Forbidden Actions` (or `### Forbidden`) list.
+ * Hash scope: sha256 over the concatenation of
+ *   - the plan's top-level `### Forbidden Actions` (or `### Forbidden`) list, then
+ *   - per slice, in document order: the slice heading, every scope declaration
+ *     and scope bullet, and every validation-gate marker and gate fence —
+ *     exactly the lines parseSlices() turns into `scope` and `validationGate`.
+ *
+ * The slice lines come from parseSlices itself (`opts.lockLines`) rather than a
+ * second scanner. A separate scanner recognised only the canonical
+ * `**Scope** (files in scope):` / `**Validation Gate**:` spellings, so gates and
+ * scopes under labels the parser also accepts — `**Validation Gate:**`,
+ * `**Scope (files in scope):**`, `**Files**:` — could be rewritten without
+ * changing the hash (meta-bug #285). Blank lines are never hashed, so a
+ * formatter inserting one between a scope label and its list (#282) leaves the
+ * hash unchanged. Implicit gates (`planParser.implicitGates`) are opt-in
+ * config the hash cannot see, and stay outside it.
  *
  * Frontmatter is stripped before hashing so editing only the frontmatter
  * (e.g. updating the lockHash field itself) does not invalidate the hash.
@@ -211,9 +240,13 @@ export function computeLockHash(planContent) {
   // Strip frontmatter so it does not participate in the hash
   const body = planContent.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
   const lines = body.split(/\r?\n/);
-  const parts = [];
+  const parts = collectForbiddenActionLines(lines);
+  parseSlices(lines, { lockLines: parts });
+  return createHash("sha256").update(parts.join("\n")).digest("hex");
+}
 
-  // ── Pass 1: Forbidden Actions bullet list ─────────────────────────────────
+function collectForbiddenActionLines(lines) {
+  const collected = [];
   let inForbidden = false;
   for (const line of lines) {
     if (/^###\s+Forbidden(\s+Actions)?\b/i.test(line)) {
@@ -222,83 +255,10 @@ export function computeLockHash(planContent) {
     }
     if (inForbidden) {
       if (/^##/.test(line)) { inForbidden = false; continue; }
-      parts.push(line);
+      collected.push(line);
     }
   }
-
-  // ── Pass 2: Per-slice Scope list + Validation Gate block ──────────────────
-  let inSlice = false;
-  let inScope = false;
-  let inGate = false;
-  let inFence = false;
-
-  for (const line of lines) {
-    // New slice header
-    if (/^#{2,4}\s+Slice\s+\d+\b/.test(line)) {
-      inSlice = true;
-      inScope = false;
-      inGate = false;
-      inFence = false;
-      parts.push(line);
-      continue;
-    }
-
-    if (!inSlice) continue;
-
-    // Code fence boundary
-    if (line.startsWith("```")) {
-      if (inFence) {
-        // Closing fence
-        if (inGate) { parts.push(line); inGate = false; }
-        inFence = false;
-      } else {
-        inFence = true;
-        if (inGate) parts.push(line);
-        inScope = false;
-      }
-      continue;
-    }
-
-    // Inside a code fence — capture if inside gate
-    if (inFence) {
-      if (inGate) parts.push(line);
-      continue;
-    }
-
-    // Scope marker (accepts either column-0 `**Scope**…` or list-item `- **Scope**…` form)
-    if (/^\s*(?:[-*]\s+)?\*\*Scope\*\*\s*\(files in scope\)\s*:/i.test(line)) {
-      inScope = true;
-      inGate = false;
-      parts.push(line);
-      continue;
-    }
-
-    // Validation Gate marker (accepts either column-0 or list-item form)
-    if (/^\s*(?:[-*]\s+)?\*\*Validation Gate\*\*\s*:/i.test(line)) {
-      inScope = false;
-      inGate = true;
-      parts.push(line);
-      continue;
-    }
-
-    // Any other bold section heading (not scope/gate) resets state — both forms
-    if (/^\s*(?:[-*]\s+)?\*\*[A-Z][^*]*\*\*\s*:/.test(line)) {
-      inScope = false;
-      inGate = false;
-      continue;
-    }
-
-    // Capture scope bullet lines
-    if (inScope) {
-      if (/^\s*[-*]/.test(line)) {
-        parts.push(line);
-      } else if (line.trim() === "") {
-        inScope = false;
-      }
-    }
-  }
-
-  return createHash("sha256").update(parts.join("\n")).digest("hex");
+  return collected;
 }
 
 function parseMeta(lines) {
@@ -318,17 +278,54 @@ function parseMeta(lines) {
   return meta;
 }
 
+function isScopeContractTableRow(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("|")) return false;
+  // Skip separator rows like | --- | :---: |
+  return !/^\|[\s:|-]+\|?\s*$/.test(trimmed);
+}
+
+function applyScopeContractTableRow(contract, line) {
+  const cells = line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+  const rowText = cells.join(" ").toLowerCase();
+  // Check the compound phrases before the "in scope" substring to avoid
+  // "out of scope" being misread as "in scope".
+  let category = null;
+  if (/out[\s-]*of[\s-]*scope/.test(rowText)) category = "outOfScope";
+  else if (/forbidden/.test(rowText)) category = "forbidden";
+  else if (/in[\s-]*scope/.test(rowText)) category = "inScope";
+  if (!category) return;
+  appendUniqueValues(contract[category], extractBacktickValues(cells.join(" ")));
+}
+
 export function parseScopeContract(lines) {
   const contract = { inScope: [], outOfScope: [], forbidden: [] };
   let section = null;
+  let inContractSection = false;
 
   for (const line of lines) {
+    const h2 = line.match(/^##\s+(.*)$/);
+    if (h2) {
+      inContractSection = /scope\s+contract/i.test(h2[1]);
+      section = null;
+      continue;
+    }
     if (line.match(/^###\s+In Scope/i)) { section = "inScope"; continue; }
     if (line.match(/^###\s+Out of Scope/i)) { section = "outOfScope"; continue; }
     if (line.match(/^###\s+Forbidden/i)) { section = "forbidden"; continue; }
-    if (line.match(/^##\s/) && section) { section = null; continue; }
     if (section && line.startsWith("- ")) {
       contract[section].push(line.replace(/^-\s*/, "").trim());
+      continue;
+    }
+    // Markdown-table Scope Contract (meta-bug #231): only inside the
+    // `## Scope Contract` section so slice-level tables never leak in.
+    if (inContractSection && isScopeContractTableRow(line)) {
+      applyScopeContractTableRow(contract, line);
     }
   }
   return contract;
@@ -364,6 +361,7 @@ function createSliceRecord(sliceMatch, rawTags) {
     competitive: false,
     competitiveVariants: null,
     scope: [],
+    contextFiles: [],
     buildCommand: null,
     testCommand: null,
     validationGate: null,
@@ -395,13 +393,31 @@ function createSliceRecord(sliceMatch, rawTags) {
   return current;
 }
 
+/**
+ * Fence languages whose contents may be read as gate commands. An untagged
+ * fence counts, because that is how gates were written before tagging was
+ * common. Anything else — ts, json, prisma, sql — is illustration: a ```ts
+ * block following a gate marker used to be absorbed as the gate itself
+ * (meta-bug #260). Measured across docs/plans: 312 bash, 1 untagged, 0 other.
+ */
+const SHELL_FENCE_LANGS = new Set([
+  "", "bash", "sh", "shell", "zsh", "console", "powershell", "pwsh", "ps1", "cmd", "bat", "batch",
+]);
+
+// Lines computeLockHash covers: every line that becomes a slice heading,
+// scope entry or gate command (opts.lockLines in parseSlices, meta-bug #285).
+function recordLockLines(state, lines) {
+  if (state.lockLines) state.lockLines.push(...lines);
+}
+
 function handleCodeFenceLine(state, line) {
   if (!line.startsWith("```")) return false;
   state.inFilesInScopeBlock = false;
 
   if (state.inCodeBlock) {
-    if (state.inValidationGate && state.current) {
+    if (state.inValidationGate && state.current && state.gateFenceIsShell) {
       appendValidationGateText(state.current, state.codeBlockContent.join("\n").trim());
+      recordLockLines(state, [state.fenceOpenLine, ...state.codeBlockContent, line]);
       if (state.implicitGateActive) {
         state.current.implicitGate = true;
         state.implicitGateActive = false;
@@ -410,13 +426,18 @@ function handleCodeFenceLine(state, line) {
     }
     state.codeBlockContent = [];
     state.inCodeBlock = false;
+    state.gateFenceIsShell = false;
     return true;
   }
 
   state.inCodeBlock = true;
   state.codeBlockContent = [];
+  state.fenceOpenLine = line;
   const lang = line.slice(3).trim().toLowerCase();
-  const isShellLang = lang === "bash" || lang === "sh" || lang === "";
+  const isShellLang = SHELL_FENCE_LANGS.has(lang);
+  // A non-shell fence is skipped without disarming the gate, so a later shell
+  // fence in the same slice still lands.
+  state.gateFenceIsShell = isShellLang;
   if (state.current && isShellLang) {
     state.current._bashBlockCount = (state.current._bashBlockCount || 0) + 1;
     if (state.implicitGates && !state.current.validationGate && !state.inValidationGate) {
@@ -433,28 +454,65 @@ function handleCodeBlockContentLine(state, line) {
   return true;
 }
 
+// A gate marker arms fence capture only for its own slice. Left armed, an
+// inline or prose-only gate in one slice made the NEXT slice's first shell
+// fence — often an illustrative example in its tasks — part of that slice's
+// executed gate.
+function disarmGateCapture(state) {
+  state.inValidationGate = false;
+  state.implicitGateActive = false;
+}
+
 function handleSliceHeaderLine(state, line) {
-  const sliceMatch = line.match(
-    /^#{2,4}\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
-  );
+  const sliceMatch = line.match(SLICE_HEADING_RE);
   if (!sliceMatch) return false;
   if (state.current) state.slices.push(state.current);
   state.inFilesInScopeBlock = false;
+  disarmGateCapture(state);
   state.current = createSliceRecord(sliceMatch, line);
+  recordLockLines(state, [line]);
   return true;
 }
 
+// A slice body ends at the next plan-level (h1/h2) heading. Without this the last
+// slice ran to EOF and absorbed "## Stop Conditions" / "## Definition of Done"
+// (meta-bug #251). Slice headers are matched first, so "## Slice N" is unaffected,
+// and deeper "#### ..." sub-headings stay inside the body.
+function handlePlanLevelHeading(state, line) {
+  if (!/^#{1,2}\s/.test(line)) return false;
+  if (state.current) {
+    state.slices.push(state.current);
+    state.current = null;
+  }
+  state.inFilesInScopeBlock = false;
+  disarmGateCapture(state);
+  return true;
+}
+
+/**
+ * A line that declares a slice's validation gate. Shared with
+ * lintGateCommands so a declared gate that parsed to nothing is caught by the
+ * same recognition the parser uses (meta-bug #281).
+ */
+export const VALIDATION_GATE_MARKER_RE = /\*\*(?:Validation Gate|Exit [Gg]ate)\*?\*?\s*:?\s*(.*)$/i;
+
 function handleValidationGateLine(state, line) {
-  const gateMatch = line.match(/\*\*(?:Validation Gate|Exit [Gg]ate)\*?\*?\s*:?\s*(.*)$/i);
+  const gateMatch = line.match(VALIDATION_GATE_MARKER_RE);
   if (!gateMatch) return false;
   state.inFilesInScopeBlock = false;
+  recordLockLines(state, [line]);
   const inlineText = (gateMatch[1] || "").trim();
   if (inlineText && state.current) {
     const backtickCmds = [];
     const backtickRe = /`([^`]+)`/g;
     let bm;
     while ((bm = backtickRe.exec(inlineText)) !== null) backtickCmds.push(bm[1]);
-    if (backtickCmds.length > 0) appendValidationGateText(state.current, backtickCmds.join("\n"));
+    // A backticked span is a command only if it resolves to one. Prose on the
+    // gate line — a URL path, an import specifier, a schema keyword — was being
+    // harvested as a command and then failing the allowlist, producing errors
+    // that named nothing runnable (meta-bug #260).
+    const runnable = backtickCmds.filter((c) => isGatePrefixAllowed(resolveGateCommandToken(c)));
+    if (runnable.length > 0) appendValidationGateText(state.current, runnable.join("\n"));
     else state.current.validationGateDescription = inlineText;
   }
   state.inValidationGate = true;
@@ -486,12 +544,32 @@ function applyWorkerTimeout(current, line) {
 function applyBodyDependencies(current, line) {
   const dependsBodyMatch = line.match(/\*\*Depends\s+On:?\*\*:?\s*(.+)/i);
   if (!dependsBodyMatch) return;
-  const rawDeps = dependsBodyMatch[1].replace(/\s*\([^)]*\)\s*$/, "").trim();
-  const bodyDeps = rawDeps
+  // Bug #225: split on commas, then pull the LEADING slice-id token out of each
+  // phrase. The hardener authors prose deps like
+  //   "**Depends On**: S1 (consumes presets.ts), and Group B merge checkpoint."
+  // Running normalizeSliceId() on the whole phrase left unmatched prose in
+  // node.depends, which the scheduler could never satisfy → 0-slice phantom run.
+  const bodyDeps = dependsBodyMatch[1]
     .split(/\s*,\s*/)
-    .map((d) => normalizeSliceId(d))
-    .filter((d) => d.length > 0);
+    .map((d) => extractLeadingSliceId(d))
+    .filter((d) => d && d.length > 0);
   appendUniqueValues(current.depends, bodyDeps);
+}
+
+/**
+ * Extract the leading slice-id token from a free-text dependency phrase.
+ * Tolerates the prose forms the hardener emits: "Slice 1", "S1", "1", "2.3A".
+ * Returns the normalized id, or null when the phrase has no leading slice id
+ * (e.g. "none (foundation)", "and Group B merge checkpoint.").
+ *
+ * @param {string} phrase
+ * @returns {string|null}
+ */
+function extractLeadingSliceId(phrase) {
+  const m = String(phrase).trim().match(/^(?:slice\s+)?s?(\d+(?:\.\d+)?)([A-Za-z]?)\b/i);
+  if (!m) return null;
+  const normalized = normalizeSliceId(m[1] + m[2]);
+  return normalized.length > 0 ? normalized : null;
 }
 
 function extractBacktickValues(text) {
@@ -502,7 +580,11 @@ function extractBacktickValues(text) {
 function applyContextFiles(current, line) {
   const contextBodyMatch = line.match(/\*\*Context Files:?\*\*:?\s*(.+)/i);
   if (!contextBodyMatch) return;
-  appendUniqueValues(current.scope, extractBacktickValues(contextBodyMatch[1]));
+  // Context Files are read-only references, not the editable scope allowlist
+  // (meta-bug #231): keep them out of `scope` so they cannot be modified and
+  // so scope enforcement is not silently widened to instruction docs.
+  if (!current.contextFiles) current.contextFiles = [];
+  appendUniqueValues(current.contextFiles, extractBacktickValues(contextBodyMatch[1]));
 }
 
 function extractInlineScopeCandidates(rest) {
@@ -522,12 +604,30 @@ function extractBulletScopeCandidates(body) {
   return firstToken && /[\/.*]/.test(firstToken) ? [firstToken] : [];
 }
 
+// Words permitted inside a scope-declaration bold span. Measured against the plan
+// corpus: **Files**, **Scope**, **Files in scope** are declarations; **Scope
+// violation**, **Scope drift**, **Scope clarification by cost path:** are prose.
+// A colon does not separate them — that last prose form carries one inside the
+// bold span — so the vocabulary is the discriminator (meta-bug #251).
+const SCOPE_HEADING_WORDS = /^(?:files?|scope|in)$/i;
+
+function isScopeDeclaration(boldText) {
+  const words = boldText.replace(/[():,]/g, " ").trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0 || !/^(?:files?|scope)$/i.test(words[0])) return false;
+  return words.every((w) => SCOPE_HEADING_WORDS.test(w));
+}
+
 function handleFilesHeading(state, line) {
-  const filesBodyMatch = line.match(/^\s*[-*]?\s*\*\*Files(?:\s+in\s+scope)?:?\*\*:?\s*(.*)$/i);
-  if (!filesBodyMatch) return false;
-  const candidates = extractInlineScopeCandidates((filesBodyMatch[1] || "").trim());
+  // Accept any bold heading whose text is a scope/files declaration so markers
+  // like `**Scope (files):**` and `**Scope** (files in scope):` are honored
+  // (meta-bug #231), with the colon inside or outside the bold span.
+  const filesBodyMatch = line.match(/^\s*[-*]?\s*\*\*\s*([^*]+?)\s*\*\*\s*(?:\([^)]*\))?\s*:?\s*(.*)$/);
+  if (!filesBodyMatch || !isScopeDeclaration(filesBodyMatch[1])) return false;
+  const candidates = extractInlineScopeCandidates((filesBodyMatch[2] || "").trim());
   appendUniqueValues(state.current.scope, candidates);
   state.inFilesInScopeBlock = candidates.length === 0;
+  state.scopeBlockHasBullets = false;
+  recordLockLines(state, [line]);
   return true;
 }
 
@@ -535,7 +635,10 @@ function handleFilesInScopeContinuation(state, line) {
   if (!state.inFilesInScopeBlock) return false;
   const trimmed = line.trim();
   if (!trimmed) {
-    state.inFilesInScopeBlock = false;
+    // Prettier separates the label paragraph from its list with a blank line,
+    // which used to end the block before the first bullet and leave the slice
+    // with an empty scope (meta-bug #282). Only a blank after the list ends it.
+    if (state.scopeBlockHasBullets) state.inFilesInScopeBlock = false;
     return false;
   }
   if (/^\*\*/.test(trimmed) || /^#/.test(trimmed)) {
@@ -548,6 +651,8 @@ function handleFilesInScopeContinuation(state, line) {
     return false;
   }
   appendUniqueValues(state.current.scope, extractBulletScopeCandidates(bulletMatch[1]));
+  state.scopeBlockHasBullets = true;
+  recordLockLines(state, [line]);
   return true;
 }
 
@@ -556,15 +661,24 @@ function applyTaskLine(current, line) {
   if (taskMatch) current.tasks.push(taskMatch[1].trim());
 }
 
+/**
+ * @param {string[]} lines
+ * @param {{ implicitGates?: boolean, lockLines?: string[] }} [opts]
+ *   `lockLines`, when given, receives every line that becomes a slice heading,
+ *   scope entry or gate command — the input computeLockHash hashes.
+ */
 export function parseSlices(lines, opts = {}) {
   const state = {
     implicitGates: opts.implicitGates === true,
+    lockLines: Array.isArray(opts.lockLines) ? opts.lockLines : null,
     slices: [],
     current: null,
     inCodeBlock: false,
     inValidationGate: false,
     codeBlockContent: [],
+    fenceOpenLine: null,
     inFilesInScopeBlock: false,
+    scopeBlockHasBullets: false,
     implicitGateActive: false,
   };
 
@@ -572,6 +686,7 @@ export function parseSlices(lines, opts = {}) {
     if (handleCodeFenceLine(state, line)) continue;
     if (handleCodeBlockContentLine(state, line)) continue;
     if (handleSliceHeaderLine(state, line)) continue;
+    if (handlePlanLevelHeading(state, line)) continue;
     if (!state.current) continue;
 
     state.current.rawLines.push(line);
@@ -621,6 +736,25 @@ export function compareSliceIds(a, b) {
 }
 
 /**
+ * Does `fromId` already depend, transitively, on `targetId`?
+ * Used to keep the sequential fallback from closing a loop against a
+ * backward-declared dependency.
+ */
+function dependsOnTransitively(nodes, fromId, targetId) {
+  const seen = new Set();
+  const stack = [fromId];
+  while (stack.length > 0) {
+    const id = stack.pop();
+    if (id === targetId) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const node = nodes.get(id);
+    if (node) stack.push(...node.depends);
+  }
+  return false;
+}
+
+/**
  * Build a DAG from parsed slices.
  * If no explicit dependencies, assume sequential (each depends on prior).
  *
@@ -633,39 +767,81 @@ export function buildDAG(slices) {
   for (const slice of slices) {
     nodes.set(slice.number, {
       ...slice,
+      // Copy: the spread aliases the caller's array, and the fallback below writes to it.
+      depends: [...(slice.depends || [])],
       children: [],
       inDegree: 0,
     });
   }
 
-  // Build edges
-  const hasAnyDeps = slices.some((s) => s.depends.length > 0);
+  // Declared edges.
+  for (const slice of slices) {
+    for (const dep of slice.depends || []) {
+      const parent = nodes.get(dep);
+      if (!parent) continue;
+      parent.children.push(slice.number);
+      nodes.get(slice.number).inDegree++;
+    }
+  }
 
-  if (hasAnyDeps) {
-    // Explicit dependency mode — use declared dependencies
-    for (const slice of slices) {
-      for (const dep of slice.depends) {
-        const parent = nodes.get(dep);
-        if (parent) {
-          parent.children.push(slice.number);
-          nodes.get(slice.number).inDegree++;
-        }
-      }
-    }
-  } else {
-    // Sequential mode — each slice depends on the previous one
-    for (let i = 1; i < slices.length; i++) {
-      const prev = slices[i - 1].number;
-      const curr = slices[i].number;
-      nodes.get(prev).children.push(curr);
-      nodes.get(curr).inDegree++;
-    }
+  // Sequential fallback, decided PER SLICE. A slice that declared nothing
+  // inherits its predecessor's edge.
+  //
+  // This was previously all-or-nothing per plan (`slices.some(s => s.depends.length)`),
+  // so one slice declaring `[depends: Slice 1]` disabled the fallback for every
+  // other slice — the undeclared ones stayed at inDegree 0 and ran as concurrent
+  // roots, ahead of the slices that had declared their order (meta #262).
+  //
+  // The edges must land on `depends`, not only `inDegree`: ParallelScheduler
+  // reads only `depends`.
+  //
+  // `[P]` deliberately does NOT exempt a slice here. It marks a slice safe to run
+  // beside its ready siblings, not free of prerequisites; declared fan-out
+  // (`[depends: Slice 1] [P]` on each branch) is how real parallelism is expressed.
+  for (let i = 1; i < slices.length; i++) {
+    if ((slices[i].depends || []).length > 0) continue;
+    const prev = slices[i - 1].number;
+    const curr = slices[i].number;
+    // A backward-declared dep (slice 3 -> slice 4) would turn this edge into a
+    // cycle and take the whole plan from "runs" to "Cycle detected".
+    if (dependsOnTransitively(nodes, prev, curr)) continue;
+    nodes.get(prev).children.push(curr);
+    const node = nodes.get(curr);
+    node.depends.push(prev);
+    node.inDegree++;
   }
 
   // Topological sort (Kahn's algorithm)
   const order = topologicalSort(nodes);
 
   return { nodes, order };
+}
+
+/**
+ * Restrict a DAG to a subset of slices, for `--only-slices`.
+ *
+ * A dependency is dropped only when it exists in the plan but was excluded by
+ * the selection — the operator asking to run exactly these slices is asserting
+ * their prerequisites are already satisfied. An id absent from the plan
+ * entirely is unresolvable rather than excluded, so it survives and the #225
+ * deadlock check still fires. Without this the scheduler waited forever on a
+ * node that never enters the run (meta-bug #265).
+ *
+ * @param {Map<string, object>} nodes
+ * @param {string[]} keepIds
+ * @returns {Map<string, object>}
+ */
+export function restrictDagToSlices(nodes, keepIds) {
+  const keep = new Set(keepIds.map(String));
+  const restricted = new Map();
+  for (const [id, node] of nodes) {
+    if (!keep.has(id)) continue;
+    restricted.set(id, {
+      ...node,
+      depends: (node.depends || []).filter((d) => keep.has(d) || !nodes.has(d)),
+    });
+  }
+  return restricted;
 }
 
 function topologicalSort(nodes) {

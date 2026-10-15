@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync, createWriteStream } from "node:fs";
 import { resolve, join, dirname, basename, isAbsolute, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -137,6 +137,27 @@ import {
   searchOpenBrainL3,
 } from "./core.mjs";
 
+const FORGE_MASTER_NEW_FIELDS = Object.freeze([
+  "caller",
+  "responseFormat",
+  "untrustedContext",
+  "contextBlocks",
+  "proposeActions",
+]);
+
+export function _buildForgeMasterTurnInput(args, prefs, cwd) {
+  return {
+    message: args.message,
+    sessionId: args.sessionId || undefined,
+    maxToolCalls: args.maxToolCalls || undefined,
+    tier: prefs.tier || undefined,
+    cwd,
+    ...Object.fromEntries(FORGE_MASTER_NEW_FIELDS
+      .filter((field) => args[field] !== undefined)
+      .map((field) => [field, args[field]])),
+  };
+}
+
 async function _callToolHandler_074_forge_master_ask(request, args) {
   const { name } = request.params;
   if (!(name === "forge_master_ask")) return _CALL_TOOL_NO_MATCH;
@@ -167,13 +188,7 @@ async function _callToolHandler_074_forge_master_ask(request, args) {
       const { TOOL_METADATA } = await import("../../capabilities.mjs");
       const prefs = loadPrefs(cwd);
       const result = await runTurn(
-        {
-          message: args.message,
-          sessionId: args.sessionId || undefined,
-          maxToolCalls: args.maxToolCalls || undefined,
-          tier: prefs.tier || undefined,
-          cwd,
-        },
+        _buildForgeMasterTurnInput(args, prefs, cwd),
         {
           dispatcher: async (toolName, toolArgs, toolCwd) => {
             return invokeForgeTool(toolName, { ...toolArgs, path: toolCwd || cwd });
@@ -189,7 +204,10 @@ async function _callToolHandler_074_forge_master_ask(request, args) {
         toolCallCount: result.toolCalls?.length ?? 0,
         truncated: result.truncated,
       }, durationMs: Date.now() - t0, status: result.error ? "ERROR" : "OK", cwd });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        ...(result.error === "INVALID_INPUT" ? { isError: true } : {}),
+      };
     } catch (err) {
       emitToolTelemetry({ toolName: "forge_master_ask", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Forge-Master error: ${err.message}` }], isError: true };
@@ -258,7 +276,7 @@ async function _callToolHandler_075_forge_meta_bug_file(request, args) {
           trajectoryExcerpt,
         },
         config,
-        { execSync, cwd },
+        { execSync, execFile: execFileSync, cwd },
       );
 
       emitToolTelemetry({ toolName: "forge_meta_bug_file", inputs: args, result: filerResult, durationMs: Date.now() - t0, status: filerResult.ok ? "OK" : "ERROR", cwd: cwd });
@@ -418,7 +436,7 @@ function _resolveForgeGithubMetricsRepoSlug(args, cwd) {
 
 function _forgeGithubMetricsApi(cwd, apiPath) {
   try {
-    return JSON.parse(execSync(`gh api ${apiPath}`, {
+    return JSON.parse(execFileSync("gh", ["api", apiPath], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -431,7 +449,7 @@ function _forgeGithubMetricsApi(cwd, apiPath) {
 
 function _countForgeGithubOpenPullRequests(cwd, repoSlug) {
   try {
-    const prList = JSON.parse(execSync(`gh pr list --repo ${repoSlug} --state open --json number --limit 500`, {
+    const prList = JSON.parse(execFileSync("gh", ["pr", "list", "--repo", repoSlug, "--state", "open", "--json", "number", "--limit", "500"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -445,7 +463,7 @@ function _countForgeGithubOpenPullRequests(cwd, repoSlug) {
 
 function _countForgeGithubOpenIssues(cwd, repoSlug) {
   try {
-    const issueList = JSON.parse(execSync(`gh issue list --repo ${repoSlug} --state open --json number --limit 500`, {
+    const issueList = JSON.parse(execFileSync("gh", ["issue", "list", "--repo", repoSlug, "--state", "open", "--json", "number", "--limit", "500"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -470,7 +488,7 @@ function _summarizeForgeGithubCommitActivity(commitActivity, periodDays) {
 function _countForgeGithubContributors(cwd, repoSlug, contributors) {
   if (contributors === null) return null;
   try {
-    const allContrib = JSON.parse(execSync(`gh api repos/${repoSlug}/contributors?per_page=100 --paginate`, {
+    const allContrib = JSON.parse(execFileSync("gh", ["api", `repos/${repoSlug}/contributors?per_page=100`, "--paginate"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -591,7 +609,7 @@ function _th_081_resolveRepoSlug(args, cwd) {
 
 function _th_081_ghApi(cwd, apiPath) {
   try {
-    return JSON.parse(execSync(`gh api ${apiPath}`, {
+    return JSON.parse(execFileSync("gh", ["api", apiPath], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -604,7 +622,7 @@ function _th_081_ghApi(cwd, apiPath) {
 
 function _th_081_getOpenPullRequests(cwd, repoSlug) {
   try {
-    const prList = JSON.parse(execSync(`gh pr list --repo ${repoSlug} --state open --json number --limit 500`, {
+    const prList = JSON.parse(execFileSync("gh", ["pr", "list", "--repo", repoSlug, "--state", "open", "--json", "number", "--limit", "500"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -618,7 +636,7 @@ function _th_081_getOpenPullRequests(cwd, repoSlug) {
 
 function _th_081_getOpenIssues(cwd, repoSlug) {
   try {
-    const issueList = JSON.parse(execSync(`gh issue list --repo ${repoSlug} --state open --json number --limit 500`, {
+    const issueList = JSON.parse(execFileSync("gh", ["issue", "list", "--repo", repoSlug, "--state", "open", "--json", "number", "--limit", "500"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -645,7 +663,7 @@ function _th_081_getContributorCount(cwd, repoSlug) {
   const contributors = _th_081_ghApi(cwd, `repos/${repoSlug}/contributors?per_page=1&anon=false`);
   if (contributors === null) return null;
   try {
-    const allContrib = JSON.parse(execSync(`gh api repos/${repoSlug}/contributors?per_page=100 --paginate`, {
+    const allContrib = JSON.parse(execFileSync("gh", ["api", `repos/${repoSlug}/contributors?per_page=100`, "--paginate"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -1332,6 +1350,78 @@ function _parseAuditMarkdown(markdown) {
   return out;
 }
 
+/** Distinct tool names exercised during an audit turn. */
+function _auditSources(toolCalls) {
+  if (!Array.isArray(toolCalls)) return [];
+  return [...new Set(toolCalls.map((tc) => tc.name).filter(Boolean))];
+}
+
+/** Shared response shape for both the Studio-proxy and in-process audit paths. */
+function _buildAuditResult({ text, toolCalls, drill, error = null }) {
+  const parsed = _parseAuditMarkdown(text);
+  const sources = _auditSources(toolCalls);
+
+  let message = "Audit ran but produced no summary — see raw output.";
+  if (parsed.summary) message = "Audit complete.";
+  else if (error) message = `Audit failed: ${error}`;
+
+  return {
+    result: { ok: !error, ...parsed, sources, message, raw: drill ? text : undefined },
+    parsed,
+    sources,
+  };
+}
+
+/** Studio-proxy audit path. Returns null when the proxy fails, so the caller falls back in-process. */
+async function _runAuditViaStudio(studio, { args, cwd, t0 }) {
+  try {
+    const proxyResult = await studio.invoke("forge_master_ask", {
+      message: _AUDIT_PROMPT,
+      tier: args?.tier || "high",
+      maxToolCalls: args?.maxToolCalls || 12,
+      path: cwd,
+    });
+    const text = typeof proxyResult === "string" ? proxyResult : (proxyResult?.text || JSON.stringify(proxyResult));
+    const { result, parsed, sources } = _buildAuditResult({ text, toolCalls: proxyResult?.toolCalls, drill: args?.drill });
+    emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { sources, hasSummary: !!parsed.summary, proxied: true }, durationMs: Date.now() - t0, status: "OK", cwd });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  } catch (proxyErr) {
+    console.error(`forge-master: audit proxy error, falling back in-process: ${proxyErr.message}`);
+    setStudioClient(null);
+    return null;
+  }
+}
+
+/** runTurn request payload for an audit turn. */
+function _auditTurnRequest(args, prefs, cwd) {
+  return {
+    message: _AUDIT_PROMPT,
+    sessionId: args?.sessionId || undefined,
+    maxToolCalls: args?.maxToolCalls || 12,
+    tier: args?.tier || prefs.tier || "high",
+    cwd,
+  };
+}
+
+/** In-process reasoning audit path. */
+async function _runAuditInProcess({ args, cwd, t0 }) {
+  const { runTurn, loadPrefs } = await import("../../forge-master/index.mjs");
+  const { TOOL_METADATA } = await import("../../capabilities.mjs");
+  const prefs = loadPrefs(cwd);
+  const turn = await runTurn(
+    _auditTurnRequest(args, prefs, cwd),
+    {
+      dispatcher: async (toolName, toolArgs, toolCwd) => invokeForgeTool(toolName, { ...toolArgs, path: toolCwd || cwd }),
+      hub: activeHub || null,
+      toolMetadata: TOOL_METADATA,
+    },
+  );
+  const text = turn?.message || turn?.text || "";
+  const { result, parsed, sources } = _buildAuditResult({ text, toolCalls: turn?.toolCalls, drill: args?.drill, error: turn?.error || null });
+  emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { sources, hasSummary: !!parsed.summary, tokensIn: turn?.tokensIn, tokensOut: turn?.tokensOut }, durationMs: Date.now() - t0, status: turn?.error ? "ERROR" : "OK", cwd });
+  return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+}
+
 async function _callToolHandler_099_forge_master_audit(request, args) {
   const { name } = request.params;
   if (!(name === "forge_master_audit")) return _CALL_TOOL_NO_MATCH;
@@ -1340,72 +1430,13 @@ async function _callToolHandler_099_forge_master_audit(request, args) {
   const cwd = args?.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
 
   try {
-    // ── Proxy path: route through pforge-master/server.mjs if available ──
+    // Route through pforge-master/server.mjs when available; fall back in-process.
     const studio = await getOrSpawnStudioChild();
     if (studio) {
-      try {
-        const proxyResult = await studio.invoke("forge_master_ask", {
-          message: _AUDIT_PROMPT,
-          tier: args?.tier || "high",
-          maxToolCalls: args?.maxToolCalls || 12,
-          path: cwd,
-        });
-        const text = typeof proxyResult === "string" ? proxyResult : (proxyResult?.text || JSON.stringify(proxyResult));
-        const parsed = _parseAuditMarkdown(text);
-        const sources = Array.isArray(proxyResult?.toolCalls)
-          ? [...new Set(proxyResult.toolCalls.map((tc) => tc.name).filter(Boolean))]
-          : [];
-        const result = {
-          ok: true,
-          ...parsed,
-          sources,
-          message: parsed.summary ? "Audit complete." : "Audit ran but produced no summary — see raw output.",
-          raw: args?.drill ? text : undefined,
-        };
-        emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { sources, hasSummary: !!parsed.summary, proxied: true }, durationMs: Date.now() - t0, status: "OK", cwd });
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-      } catch (proxyErr) {
-        console.error(`forge-master: audit proxy error, falling back in-process: ${proxyErr.message}`);
-        setStudioClient(null);
-      }
+      const proxied = await _runAuditViaStudio(studio, { args, cwd, t0 });
+      if (proxied) return proxied;
     }
-
-    // ── Fallback: in-process reasoning ──
-    const { runTurn, loadPrefs } = await import("../../forge-master/index.mjs");
-    const { TOOL_METADATA } = await import("../../capabilities.mjs");
-    const prefs = loadPrefs(cwd);
-    const turn = await runTurn(
-      {
-        message: _AUDIT_PROMPT,
-        sessionId: args?.sessionId || undefined,
-        maxToolCalls: args?.maxToolCalls || 12,
-        tier: args?.tier || prefs.tier || "high",
-        cwd,
-      },
-      {
-        dispatcher: async (toolName, toolArgs, toolCwd) => {
-          return invokeForgeTool(toolName, { ...toolArgs, path: toolCwd || cwd });
-        },
-        hub: activeHub || null,
-        toolMetadata: TOOL_METADATA,
-      },
-    );
-    const text = turn?.message || turn?.text || "";
-    const parsed = _parseAuditMarkdown(text);
-    const sources = Array.isArray(turn?.toolCalls)
-      ? [...new Set(turn.toolCalls.map((tc) => tc.name).filter(Boolean))]
-      : [];
-    const result = {
-      ok: !turn?.error,
-      ...parsed,
-      sources,
-      message: parsed.summary
-        ? "Audit complete."
-        : (turn?.error ? `Audit failed: ${turn.error}` : "Audit ran but produced no summary — see raw output."),
-      raw: args?.drill ? text : undefined,
-    };
-    emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { sources, hasSummary: !!parsed.summary, tokensIn: turn?.tokensIn, tokensOut: turn?.tokensOut }, durationMs: Date.now() - t0, status: turn?.error ? "ERROR" : "OK", cwd });
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    return await _runAuditInProcess({ args, cwd, t0 });
   } catch (err) {
     emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd });
     return {

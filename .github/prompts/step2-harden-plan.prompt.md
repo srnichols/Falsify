@@ -29,10 +29,29 @@ Read these files first:
 3. docs/plans/DEPLOYMENT-ROADMAP.md
 4. .github/copilot-instructions.md
 
-Also check for prior phase lessons (if they exist — skip if not found):
-- `/memories/repo/conventions.md` — patterns and conventions from earlier phases
-- `/memories/repo/lessons-learned.md` — past mistakes to avoid
-- `/memories/repo/forbidden-patterns.md` — patterns that caused regressions
+**Prior lessons — enumerate, do not guess filenames.** List everything in
+`/memories/repo/` and read what looks relevant to this plan's subject. Then search
+memory as well: `forge_search` with `sources: ["memory"]`, or `brain_recall` if
+OpenBrain is configured.
+
+Do not look for a fixed set of filenames. Memory files are named by subject —
+`plan-gate-command-rules.md`, `release-procedure.md`, `orchestrator-cross-repo-launch.md` —
+because one unbounded append-only `lessons-learned.md` is unreadable. A hardener that
+checks three catch-all names reports "no prior lessons exist" while sitting on top of a
+directory full of them (meta-bug [#257](https://github.com/srnichols/plan-forge/issues/257)).
+
+Report what you searched and what you found, not what you failed to open:
+
+> Searched 12 files in `/memories/repo/` + memory for "gate portability", "windows shim".
+> Applied: `plan-gate-portability-old-consumers.md` (Slice 3 gate rewritten).
+> Nothing relevant for the migration slices.
+
+"Searched N files + memory, nothing relevant" is a finding. "No prior lessons exist"
+is a claim you cannot make from a missing filename.
+
+Every query you record must be one you actually ran — a query phrased in code
+identifiers scores 0 and is indistinguishable from an empty store, so an unrun query
+looks exactly like a genuine absence.
 
 **Prior plan postmortems (Phase-25 L5 closed loop)**:
 Before hardening, also scan `.forge/plans/<plan-basename>/postmortem-*.json` for
@@ -73,16 +92,34 @@ Harden <YOUR-PLAN>.md by adding all 6 Mandatory Template Blocks from the runbook
 ```
 Do NOT use `- [ ]` checkbox format — the analyzer cannot score checkboxes as effectively.
 
+### Design Context and Approved Boundary Revisions
+
+Use the specification's **Domain Language** and **Decision Ledger** in the existing plan. Reuse IDs and approved sources; do not create a second registry or rewrite completed plans.
+
+- For each decision, record Ref/revision, choice and alternatives, rationale/evidence, owner, status/approval evidence, dependencies, and affected contracts/slices. Agent suggestions remain `proposed`; consequential product or compatibility choices require owner approval before acceptance. Non-blocking out-of-scope deferrals need an owner and revisit trigger.
+- If an upstream choice or assumption changes, **reopen dependent decisions**, including transitive dependents, preserve the old revision, and reassess affected contracts and gates. Resolve dependency cycles or missing approvals before handoff.
+- Add **`## Shared Contract`** for new or changed public interfaces, persisted formats, or shared worker boundaries, whether execution is sequential or parallel. Each entry pins a Ref/revision such as `C-001@r1`, owner/approval evidence, Decision Refs, inputs/outputs and null semantics, errors/side effects, invariants/lifecycle, compatibility, and conformance tests. Reference unchanged approved boundaries rather than designing every private helper.
+- State what complexity each changed boundary hides and how callers become simpler. Preserve single responsibility, legitimate thin adapters, and existing module-size gates; extra wrappers or fewer LOC do not establish a deeper module.
+- Each affected slice declares **Contract Refs**, **Decision Refs**, and **Language Ref**, including exact revisions and source locations. Put the read/verify instructions in its numbered tasks as well as Context Files so delegated workers receive them. Use `not applicable` with a reason where no consequential boundary changes.
+- Include these same references and approval evidence in the executor handoff. Missing or stale consequential approval blocks the agent handoff pending clarification; a bare `crucibleId`, passing gate, or `lockHash` is not design approval.
+
+These are agent-side checks, **not runtime enforcement**. Existing execution and lock-hash coverage are unchanged; do not claim automatic decision invalidation or contract-revision verification.
+
 For each Execution Slice:
 - Tag as [parallel-safe] (with Parallel Group) or [sequential]
 - Include relevant .github/instructions/*.instructions.md files in Context Files
 - List only instruction files whose domain matches the slice (not all 17 — each consumes context budget)
 - Add a Parallel Merge Checkpoint after each parallel group
+- **When parallel slices build one artifact** (their `[scope:]` paths share a root, such as `presets/php/**` or `src/Orders/**`), add both of these. Gate lint warns when either is missing ([#308](https://github.com/srnichols/plan-forge/issues/308)):
+  - **The approved `## Shared Contract` section** pinning every type, name, signature, route and convention more than one of those slices uses. Each slice references its exact revision instead of inventing its own. Slices that each pass their own gate can still define the same helper twice, or write signatures that don't fit together.
+  - **A coherence slice** that depends on every slice in the group (`[depends: Slice 2, Slice 3]`), whose gate builds or tests the artifact as a whole, not file by file.
 - **Validation gates MUST be executable commands**, not prose descriptions:
   - **Good**: `**Validation Gate**:\n\`\`\`bash\ndotnet test\n\`\`\``
   - **Good**: `**Validation Gate**: \`dotnet build\``
   - **Bad**: `**Validation Gate**: Files compile, DTOs have correct properties`
+  - **Bad**: a ` ```text ` (or ` ```ts `, ` ```json `) fence under the gate marker — only shell-tagged or untagged fences are executed; gate lint rejects a declared gate that parses to no command (meta-bug [#281](https://github.com/srnichols/plan-forge/issues/281))
   - For manual checks that can't be automated, prefix with `[manual]`: `**Validation Gate**: [manual] UI layout matches mockup`
+- **Write each slice's tasks as a numbered list** (`1. …`, `2. …`). The worker prompt receives only numbered items — bullet or prose instructions, including a `**Goal**` paragraph, never reach the worker, and gate lint warns about slices with none
 
 Do NOT add features or expand scope. Only structure what already exists.
 
@@ -95,6 +132,7 @@ After hardening, run a TBD RESOLUTION SWEEP:
 Also validate parallelism tags:
 - Are [parallel-safe] slices truly independent (no shared files)?
 - Are Parallel Merge Checkpoints present after each parallel group?
+- Do parallel slices that build one artifact have a `## Shared Contract` section and a coherence slice that depends on all of them?
 
 After all sections are drafted, run a **PLAN QUALITY SELF-CHECK** before outputting:
 
@@ -106,6 +144,86 @@ After all sections are drafted, run a **PLAN QUALITY SELF-CHECK** before outputt
 6. Does every slice list only the instruction files relevant to its domain (not all 17)?
 7. Are MUST acceptance criteria from the spec traceable to at least one slice's validation gate?
 8. Do all validation gate commands pass the **Gate Portability Rules** below?
+9. For every slice touching `.ts`/`.tsx` files, does its gate include a typecheck step (not just a test run)? Are test gates scoped to the changed module rather than the whole workspace suite?
+10. Has every **factual claim about existing code** been verified against the codebase? (See Premise Verification below.)
+11. **Can every gate actually FAIL?** Prove it against the absent thing before trusting it. (See Gate Failability below.)
+12. Does everything the plan names actually **exist as a file** — gate scripts, cited helpers, fixtures? Check with `git ls-files`, not just the filesystem: a helper that is gitignored and untracked is absent from the very worktree the plan mandates.
+13. If the plan declares an isolated branch or worktree, does it carry **bootstrap steps** plus a confirm-before-Slice-1 check? With workspace package builds uncommitted, the first gate of the first slice fails on unresolvable imports and reads as a genuine stop condition rather than an unbuilt workspace. Treat any recorded baseline SHA as a hardening record, not a branch point.
+14. Do affected slices and the executor handoff carry current Contract Refs, Decision Refs, and Language Ref with approval evidence? Were dependent decisions reopened after upstream changes, without treating an agent proposal as approval?
+
+### Gate Failability
+
+A gate that cannot fail is worse than no gate: it reports success forever and nobody
+looks again. Item 1 asks whether a gate *exists*; this asks whether it can return
+non-zero when the thing it checks is missing.
+
+**Test it the only way that works — run it against the absent thing** and confirm a
+non-zero exit, then against the present thing and confirm zero. Two measured traps
+from meta-bug [#258](https://github.com/srnichols/plan-forge/issues/258):
+
+| Trap | Why it passes | Fix |
+|------|---------------|-----|
+| `vitest run <path>` on a path that matches nothing | On vitest 2.x/3.x prints "No test files found" and **exits 0**. A TDD gate naming the test file its own slice is meant to create therefore passes at the red step, and keeps passing if the test is never written. Version-dependent: vitest 4 exits 1. | Add `--passWithNoTests=false`, and verify the exit code on your installed version rather than assuming. |
+| `pnpm --filter <pkg> <script>` where the script does not exist | Prints "None of the selected packages has a ... script" and **exits 0**, so a typo or a script that only lives in a sibling package reads as a passing gate. | `pnpm run <script>` from inside the package directory — exits 1 with `ERR_PNPM_NO_SCRIPT`. |
+
+The gate linter flags the `pnpm --filter` form mechanically. It deliberately does not
+flag the vitest form, because the behaviour depends on the installed version — that
+one is yours to check.
+
+Same family: a gate counting brand-new files with `git diff --name-only HEAD~N` reads 0,
+because that never lists untracked files and the slice cannot commit on an unrun gate.
+Use `git status --porcelain` or `git ls-files --others --exclude-standard`.
+
+And check the other direction: a gate asserting a count is `>= 1` is already satisfied if
+something pre-existing matches its glob. Run the gate on a clean tree **before** the
+slice writes anything; if it passes there, it is measuring history, not your work.
+
+**A gate must also be able to PASS.** Meta-bug [#256](https://github.com/srnichols/plan-forge/issues/256)
+halted a slice on a gate that forbade `ALTER TABLE` in a migration — while the plan
+mandated five foreign keys, and Prisma emits every foreign key as
+`ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`, even for a table created in the same
+migration. The plan required a schema whose migration its own gate forbade. Before
+forbidding a string, confirm the tool that generates the file does not always emit it.
+
+**If the slice claims a red step, prove the red step exists.** A TDD contract asserting
+"this slice breaks the two suites that assert the old shape" is a factual claim about
+current behaviour, same as any other premise. Run those suites first. In #256 both were
+measured identical before and after, so the slice had no red step available inside its
+declared file list — and an executor following the contract waits for a failure that
+cannot happen.
+
+### Premise Verification
+
+A plan's Non-Goals, Assumptions, and slice descriptions routinely assert facts about
+code that already exists — "all 17 endpoints exist and are tested", "the list endpoint
+already supports filtering", "this component is already wired to the store". These
+assertions become the *scope boundary*: a slice that builds on a false premise is
+scoped against a surface that does not exist, and the executor discovers it mid-slice.
+
+Meta-bug [#237](https://github.com/srnichols/plan-forge/issues/237): a plan's Non-Goals
+said "No new API endpoints. All 17 exist and are tested." The target route file
+contained only `POST /:entryId/approve` and `POST /:entryId/deny` — the list endpoint
+Slice 1 depended on was never there. Nobody had opened the file.
+
+**Before finalizing, extract every such assertion and check it.** Verification is a
+`grep_search` or a `read_file` — not an inference from the spec, the roadmap, or a
+sibling module's shape.
+
+| Assertion shape | How to verify |
+|-----------------|---------------|
+| "N endpoints/components/tables exist" | Read the route/index/schema file and count. Put the real number in the plan. |
+| "X already supports Y" | Find the symbol and confirm Y is in its signature or body. |
+| "X is already tested" | Locate the test file and confirm it asserts the behaviour, not just that X imports. |
+| "No new <thing> needed" | Confirm every `<thing>` the slices consume resolves to existing code. |
+
+Rules:
+- If an assertion is **false**, correct the plan text and re-scope the affected slice.
+  A false Non-Goal is a scope defect, not a wording problem.
+- If an assertion **cannot be verified** (external service, unavailable repo), demote
+  it from Non-Goals to a **Required Decision** with an explicit owner. Never leave an
+  unverifiable claim standing as a scope boundary.
+- Cite the file you checked in the plan's Assumptions section so the reviewer can
+  re-run the check.
 
 ### Gate Portability Rules
 
@@ -134,12 +252,23 @@ Every gate command MUST be cross-platform. Apply these rules when writing gates:
 | **curl localhost:* in non-final slices** | `curl http://localhost:3100/api/...` | Move runtime API checks to vitest integration tests |
 | **No nested escaped quotes inside `bash -c "..."`** (meta-bug [#93](https://github.com/srnichols/plan-forge/issues/93)) | `bash -c "grep -q onclick=\"forgeMasterPickPrompt\" file.html"` — collapses on Windows `cmd → bash` with `/bin/bash: -c: line 1: unexpected EOF while looking for matching quote` | Use single quotes inside double: `bash -c "grep -q onclick='forgeMasterPickPrompt' file.html"`, OR move to `node -e` with `.includes()`, OR rely on an existing vitest test that already proves the absence/presence. Never stack three levels of escapes (`\\\"`) — they survive some quoting layers and break on others. |
 | **Don't wrap allowlisted tools in `bash -c`** (meta-bug [#171](https://github.com/srnichols/plan-forge/issues/171)) | `bash -c "pwsh -NoProfile -File pforge.ps1 ..."`, `bash -c "node script.mjs"`, `bash -c "npx vitest run"` — `where bash` resolves to WSL bash on Windows, which has no Windows PATH; `pwsh`/`node`/`npx` calls inside fail with `command not found`. Empirically bit Phase GITHUB-B and Phase CRUCIBLE-IMPORT-CLI. | Call the allowlisted tool directly: `pwsh -NoProfile -File pforge.ps1 ...`, `node script.mjs`, `npx vitest run`. The orchestrator auto-routes commands containing pipes or shell-chains through Git Bash. **Only use `bash -c` when you genuinely need bash semantics**: heredocs, `cd dir && cmd` (because `cd` chains through `&&`), or multi-tool pipelines where the wrapping is explicit. As of v2.93.1, `runGate` also routes literal `bash -c` gates through Git Bash, but authoring the bare command is still preferred. |
+| **TypeScript gates MUST include a typecheck** (meta-bug [#234](https://github.com/srnichols/plan-forge/issues/234)) | `pnpm --filter @app/api test` alone — vitest/jest run through esbuild/swc, which **strip types without type-checking**, so a slice can go green while shipping code that does not compile (`TS2322`, etc.). | Pair the test gate with a typecheck: `bash -c "cd api && pnpm typecheck && pnpm test <module>"` or `bash -c "cd api && npx tsc --noEmit && npx vitest run <module>"`. For any slice that touches `.ts`/`.tsx` files, a typecheck gate is **mandatory**, not optional. |
+| **Scope test gates to the changed module, not the whole workspace** (meta-bug [#234](https://github.com/srnichols/plan-forge/issues/234)) | `pnpm --filter @app/web test` (whole suite) — a slice can never pass while ANY pre-existing unrelated test in the workspace is red, coupling the slice to failures it did not cause. | Target the slice's own test file/module: `bash -c "cd web && npx vitest run src/features/campaigns"`. Keep the gate's pass/fail tied to the code the slice actually changed. |
 
 **Preferred gate pattern** (covers 90% of slices):
 ```bash
-node pforge-mcp/server.mjs --validate
-bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
+node pforge-mcp/server.mjs --check
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/server.test.mjs', {stdio:'inherit',shell:true});"
 ```
+
+> Do **not** write `bash -c "cd pforge-mcp && npx vitest run ..."`. It looks cleaner but earns two
+> linter warnings per slice — `'bash -c' prefix detected` and `'cd dir && command' chain` — because
+> `bash` is not guaranteed on Windows PATH and `cd &&` does not persist under cmd.exe. The `node -e`
+> form above dispatches through the allowlisted `node` binary, needs no shell, and lints clean
+> ([#247](https://github.com/srnichols/plan-forge/issues/247)). Reserve `bash -c` for genuine
+> heredoc cases.
+
+> Use `--check`, not `--validate`. `--validate` **regenerates** `tools.json` and `cli-schema.json`, so using it as a gate mutates tracked source and the orchestrator's auto-commit sweeps the change into an unrelated slice (meta-bug [#240](https://github.com/srnichols/plan-forge/issues/240)). `--check` verifies the same artifacts read-only and exits non-zero on drift. Regenerate deliberately with `--validate` when you actually change the tool surface.
 
 Add additional `node -e` checks only when the vitest suite doesn't cover a specific validation (e.g., checking a file exists, verifying an export).
 
@@ -149,7 +278,14 @@ If any check fails, revise the plan before outputting. Do not present a plan tha
 ```
 node --input-type=module -e "import{lintGateCommands}from'./pforge-mcp/orchestrator.mjs';const r=lintGateCommands('<plan-file>');console.log(r.summary);r.errors.forEach(e=>console.log('ERR:',e.message));r.warnings.forEach(w=>console.log('WARN:',w.message));"
 ```
-Fix all errors and warnings before declaring the plan hardened. The same lint runs as a pre-flight check in `runPlan()` — errors will block execution.
+Fix all errors **and** warnings before declaring the plan hardened. The same lint runs as a pre-flight
+check in `runPlan()` — errors will block execution, and in strict mode
+(`PFORGE_GATE_LINT_STRICT=1`) portability warnings are promoted to errors too.
+
+A clean plan really is achievable: `lintGateCommands` is quote-aware as of
+[#246](https://github.com/srnichols/plan-forge/issues/246), so shell metacharacters inside the JS you
+hand to `node -e` (a `|` in a regex, an `||`, a `.test.mjs` path) no longer trip the shell-shape rules.
+Phase-51, -54 and -60 all lint at 0/0/0. If you see a warning, treat it as real.
 
 Finally, run a **SESSION BUDGET CHECK**:
 

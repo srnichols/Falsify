@@ -1,6 +1,8 @@
 // ─── Tool Definitions ─────────────────────────────────────────────────
 // Pure data: MCP tool schemas (name, description, inputSchema)
-// No imports needed — this file is a static registry.
+// Only imports: model-default constants and enums, so descriptions and enums cannot drift from runtime values.
+import { DEFAULT_ESTIMATE_MODEL, DEFAULT_WATCHER_MODEL } from "../orchestrator/constants.mjs";
+import { ANALYZE_MODES, MEMORY_ORIGINS, MEMORY_TAG_RULES, MEMORY_VISIBILITY } from "../enums.mjs";
 
 export const TOOLS = [
   {
@@ -171,8 +173,8 @@ export const TOOLS = [
       properties: {
         plan: { type: "string", description: "Path to the plan or source file to analyze (e.g., docs/plans/Phase-1-AUTH-PLAN.md or src/services/billing.ts)" },
         quorum: { type: "boolean", description: "If true, dispatch analysis to multiple models and synthesize findings. Default: false" },
-        mode: { type: "string", enum: ["plan", "file"], description: "Analysis mode: 'plan' (plan consistency) or 'file' (code review). Default: auto-detected from filename" },
-        models: { type: "string", description: "Comma-separated model list override (e.g., 'grok-3-mini,claude-sonnet-4.6,gpt-5.3-codex'). Default: quorum config models" },
+        mode: { type: "string", enum: [...ANALYZE_MODES], description: "Analysis mode: 'plan' (plan consistency score) or 'file' (code review; requires quorum=true, otherwise the call is rejected without running). Default: 'plan' for .md/.markdown files, 'file' for anything else" },
+        models: { type: "string", description: "Comma-separated model list override (e.g., 'grok-4.7,claude-sonnet-5.5,gpt-6-sol'). Default: quorum config models" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["plan"],
@@ -185,7 +187,7 @@ export const TOOLS = [
       type: "object",
       properties: {
         file: { type: "string", description: "Path to the source file to investigate (e.g., src/services/billing.ts)" },
-        models: { type: "string", description: "Comma-separated model list override (e.g., 'grok-3-mini,grok-4,claude-sonnet-4.6'). Default: quorum config models" },
+        models: { type: "string", description: "Comma-separated model list override (e.g., 'grok-4.7,claude-sonnet-5.5,gpt-6-sol'). Default: quorum config models" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["file"],
@@ -199,11 +201,11 @@ export const TOOLS = [
       properties: {
         plan: { type: "string", description: "Path to the hardened plan file (e.g., docs/plans/Phase-1-AUTH-PLAN.md)" },
         mode: { type: "string", enum: ["auto", "assisted"], description: "Execution mode: 'auto' (CLI worker) or 'assisted' (human + gates). Default: auto" },
-        model: { type: "string", description: "Model override (e.g., claude-sonnet-4.6, gpt-5.2-codex). Default: auto" },
+        model: { type: "string", description: "Model override (e.g., claude-sonnet-5.5, gpt-6-sol). Default: auto" },
         estimate: { type: "boolean", description: "If true, return cost estimate without executing" },
         resumeFrom: { type: "number", description: "Slice number to resume from (skips completed slices)" },
         dryRun: { type: "boolean", description: "If true, parse and validate plan without executing" },
-        quorum: { type: "string", enum: ["false", "true", "auto", "power", "speed"], description: "Quorum mode: 'false' (off), 'true' (all slices), 'auto' (threshold-based), 'power' (flagship models: Opus + GPT-5.3 + Grok 4.20), 'speed' (fast models: Sonnet + GPT-5.4-mini + Grok 4.1-fast). Default: auto" },
+        quorum: { type: "string", enum: ["false", "true", "auto", "power", "speed"], description: "Quorum mode: 'false' (off), 'true' (all slices), 'auto' (threshold-based), 'power' (flagship models: Opus 5.5 + GPT-6 Astra + Grok 4.7), 'speed' (fast models: Sonnet 5.5 + GPT-6 Luna + Gemini 3.8 Flash). Default: auto" },
         quorumThreshold: { type: "number", description: "Override complexity threshold for auto quorum (1-10). Default: 6" },
         manualImport: { type: "boolean", description: "v2.37 Crucible — bypass the crucibleId frontmatter gate. Logged to .forge/crucible/manual-imports.jsonl." },
         manualImportSource: { type: "string", enum: ["human", "speckit", "grandfather"], description: "v2.37 Crucible — audit tag for --manual-import bypass. Default: human." },
@@ -236,7 +238,7 @@ export const TOOLS = [
   },
   {
     name: "forge_cost_report",
-    description: "Cost tracking report — shows total spend, per-model breakdown, and monthly aggregation from .forge/cost-history.json. Includes token counts, run history, and forge_model_stats (success rate per model from model-performance.json).",
+    description: "Cost tracking report — shows total spend, per-model breakdown, and monthly aggregation from .forge/cost-history.json. Includes token counts, run history, Copilot AI-credit token pricing for gh-copilot, and forge_model_stats (success rate per model from model-performance.json).",
     inputSchema: {
       type: "object",
       properties: {
@@ -246,7 +248,7 @@ export const TOOLS = [
   },
   {
     name: "forge_estimate_quorum",
-    description: "Returns projected cost of a plan under all four quorum modes (auto / power / speed / false) in a single call. Agents MUST call this tool before presenting any dollar amount for a plan — hand-computed quorum costs drift by an order of magnitude. Backed by cost-service.mjs, the same code path that powers `pforge run-plan --estimate`.",
+    description: "Returns projected cost of a plan under all four quorum modes (auto / power / speed / false) in a single call. Agents MUST call this tool before presenting any dollar amount for a plan — hand-computed quorum costs drift by an order of magnitude. Backed by cost-service.mjs, including Copilot AI-credit token pricing for gh-copilot.",
     inputSchema: {
       type: "object",
       properties: {
@@ -259,14 +261,14 @@ export const TOOLS = [
   },
   {
     name: "forge_estimate_slice",
-    description: "Returns projected cost for a single slice under a chosen quorum mode. Cheaper than forge_estimate_quorum (which estimates the whole plan). Backed by cost-service.mjs estimateSlice(). Un-calibrated — no run-level historical correction factor applied.",
+    description: "Returns projected cost for a single slice under a chosen quorum mode. Cheaper than forge_estimate_quorum (which estimates the whole plan). Backed by cost-service.mjs estimateSlice(), including Copilot AI-credit token pricing for gh-copilot. Un-calibrated — no run-level historical correction factor applied.",
     inputSchema: {
       type: "object",
       properties: {
         planPath: { type: "string", description: "Path to the plan Markdown file, relative to the project root." },
         sliceNumber: { type: ["string", "number"], description: "Slice identifier (numeric or alphanumeric, e.g. 4 or '2A')." },
         mode: { type: "string", enum: ["auto", "power", "speed", "false"], description: "Quorum mode to project under (default: 'auto')." },
-        model: { type: "string", description: "Base model for pricing (default: 'claude-sonnet-4.5')." },
+        model: { type: "string", description: `Base model for pricing (default: '${DEFAULT_ESTIMATE_MODEL}').` },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["planPath", "sliceNumber"],
@@ -284,14 +286,14 @@ export const TOOLS = [
   },
   {
     name: "forge_watch",
-    description: "WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-4.7) for narrative advice. The watcher CANNOT modify any files in the target project.",
+    description: "WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: " + DEFAULT_WATCHER_MODEL + ") for narrative advice. The watcher CANNOT modify any files in the target project.",
     inputSchema: {
       type: "object",
       properties: {
-        targetPath: { type: "string", description: "Absolute path to the project being watched (e.g., E:/GitHub/Rummag)" },
+        targetPath: { type: "string", description: "Absolute path to the project being watched (e.g., /path/to/my-app)" },
         runId: { type: "string", description: "Specific run directory under .forge/runs/ (default: latest)" },
         mode: { type: "string", enum: ["snapshot", "analyze"], description: "snapshot = file reads only, no AI cost. analyze = invokes watcher model for advice." },
-        model: { type: "string", description: "Override watcher model (default: claude-opus-4.7)" },
+        model: { type: "string", description: `Override watcher model (default: ${DEFAULT_WATCHER_MODEL})` },
         tailEvents: { type: "number", description: "Trailing events to include (1-200, default: 25). Lower = cheaper analyze prompts." },
         sinceTimestamp: { type: "string", description: "(v2.35) ISO timestamp cursor — only flag events newer than this. Pass back the previous report's `cursor` field for continuous monitoring." },
         recordHistory: { type: "boolean", description: "(v2.35) Append snapshot to watcher's own .forge/watch-history.jsonl (default: true)" },
@@ -321,6 +323,17 @@ export const TOOLS = [
       type: "object",
       properties: {
         path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_tool_profile",
+    description: "List, load or unload Plan Forge tool profiles. Only the core profile (plan execution, status, cost, search, diagnostics) is listed by default, to keep the tool list short; load another profile — bugs, liveguard, tempering, crucible, memory, code-intel, team, or full — when the task needs its tools. Returns { active, changed, listedTools, totalTools, unknown, profiles: [{ name, tools, active, description }], message }. Call with no arguments to see the profiles.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        load: { type: "array", items: { type: "string" }, description: "Profiles to add, e.g. [\"bugs\"] or [\"full\"]" },
+        unload: { type: "array", items: { type: "string" }, description: "Profiles to remove (core always stays)" },
       },
     },
   },
@@ -370,7 +383,7 @@ export const TOOLS = [
         rawIdea: { type: "string", description: "The raw idea text — a sentence or short paragraph describing the change." },
         mode: { type: "string", enum: ["tweak", "feature", "full", "bug-batch"], description: "Intake mode. Takes precedence over lane when both are supplied. Use 'bug-batch' for bug-fix smelts that need multi-slice plans." },
         lane: { type: "string", enum: ["tweak", "feature", "full"], description: "Override the recommended lane (legacy; prefer mode). Omit to accept the heuristic's choice." },
-        bugId: { type: "string", description: "Optional bug identifier (e.g. RMG-0035). Stored on the smelt and emitted in finalized plan frontmatter as bugId + linkedBugs." },
+        bugId: { type: "string", description: "Optional bug identifier (e.g. BUG-0035). Stored on the smelt and emitted in finalized plan frontmatter as bugId + linkedBugs." },
         source: { type: "string", enum: ["human", "agent"], description: "Who submitted the smelt. Default: human." },
         parentSmeltId: { type: "string", description: "Parent smelt id if this was spawned from another smelt (used for recursion depth tracking)." },
         path: { type: "string", description: "Project directory (default: current)" },
@@ -380,13 +393,14 @@ export const TOOLS = [
   },
   {
     name: "forge_crucible_ask",
-    description: "Advance the Crucible interview — supply an answer and get the next question, or mark the smelt ready for preview/finalize when the interview is complete. Call without `answer` to fetch the current question. USE FOR: the interactive Q&A loop that turns a raw idea into a hardened spec.",
+    description: "Advance the Crucible interview — supply an answer and get the next question, or mark the smelt ready for preview/finalize when the interview is complete. Call without `answer` to fetch the current question. The running draft is NOT returned by default, because it grows with every answer and a long interview would return it repeatedly; call forge_crucible_preview to read it, or pass includeDraft:true. USE FOR: the interactive Q&A loop that turns a raw idea into a hardened spec.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: "string", description: "Smelt id returned by forge_crucible_submit." },
         questionId: { type: "string", description: "Optional — the id of the question this answer is for. When supplied, the server validates it matches the pending question and refuses with ASK_QUESTION_MISMATCH on drift (Issue #138). Omit to trust the server's pending question." },
         answer: { type: "string", description: "Answer to the current question. Omit to fetch the current question without advancing." },
+        includeDraft: { type: "boolean", default: false, description: "Return the full Markdown draft on every call. Off by default to keep responses small; prefer forge_crucible_preview for on-demand review." },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["id"],
@@ -686,6 +700,9 @@ export const TOOLS = [
         type: { type: "string", description: "Memory type: decision | lesson | convention | pattern | gotcha (default: decision)", enum: ["decision", "lesson", "convention", "pattern", "gotcha"] },
         source: { type: "string", description: "Source identifier (e.g. 'openclaw-trigger', 'plan-forge/slice-3'). Default: 'forge_memory_capture'" },
         created_by: { type: "string", description: "Who captured this (e.g. 'openclaw', 'copilot-agent'). Default: 'forge_memory_capture'" },
+        origin: { type: "string", enum: [...MEMORY_ORIGINS], description: "Memory trust provenance. Default: trusted." },
+        visibility: { type: "string", enum: [...MEMORY_VISIBILITY], description: "Memory visibility scope. Default: normal." },
+        tags: { type: "array", maxItems: MEMORY_TAG_RULES.maxItems, items: { type: "string", pattern: MEMORY_TAG_RULES.pattern }, description: "Optional provenance tags (lowercase letters, digits, colon, and hyphen; up to 10 tags)." },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["content"],
@@ -1053,7 +1070,7 @@ export const TOOLS = [
   // Phase FORGE-SHOP-04 Slice 04.1 — Global search
   {
     name: "forge_search",
-    description: "Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets.",
+    description: "Search across forge artifacts — runs, bugs, incidents, tempering, hub events, review queue, memories, and plans. Reads existing L2 files and optional L3 OpenBrain index. Returns ranked results with snippets; memory hits include origin, visibility, and tags, while restricted hits from other projects (or without a project) are excluded.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1088,11 +1105,11 @@ export const TOOLS = [
   // Issue #73 — Runtime-aware quorum viability
   {
     name: "forge_doctor_quorum",
-    description: "Preflight quorum viability check — probes all models in a preset against the current runtime and reports availability, synthesis viability, and fallback recommendations.",
+    description: "Preflight quorum viability check — probes each model against the current runtime and reports availability, synthesis viability, and fallback recommendations. Use preset='config' to assess the models actually configured in .forge.json rather than a built-in preset; that is the only mode that can catch a typo in your own quorum.models. Each model carries `priced` (present in the cost registry), and `warnings` lists unpriced models — advisory only, since an unrecognised name may simply be a model newer than the registry.",
     inputSchema: {
       type: "object",
       properties: {
-        preset: { type: "string", enum: ["power", "speed", "all"], description: "Quorum preset to check. 'all' checks both presets. Default: all" },
+        preset: { type: "string", enum: ["power", "speed", "all", "config"], description: "What to check. 'power'/'speed' check a built-in preset, 'all' checks both, 'config' checks the effective quorum.models from .forge.json. Default: all" },
       },
       required: [],
     },
@@ -1104,7 +1121,7 @@ export const TOOLS = [
       type: "object",
       properties: {
         scenarioId: { type: "string", description: "Scenario fixture ID (filename stem under docs/plans/testbed-scenarios/)" },
-        testbedPath: { type: "string", description: "Path to testbed repository (default: from .forge.json testbed.path)" },
+        testbedPath: { type: "string", description: "Path to testbed repository (default: .forge.json testbed.path, else a plan-forge-testbed clone next to the project)" },
         dryRun: { type: "boolean", description: "If true, skip execute and teardown steps (default: false)" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
@@ -1113,16 +1130,105 @@ export const TOOLS = [
   },
   {
     name: "forge_master_ask",
-    description: "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, and session ID for conversation continuity.",
+    description: "Ask Forge-Master to reason about Plan Forge workflows — ideate features via Crucible, troubleshoot failures, query run status, or get operational guidance. Classifies intent, fetches memory context, and orchestrates read-only tool calls. Returns reply text, tool call history, token counts, usage, and session ID. Optional fields: caller (role/channel) and responseFormat shape the reply for the caller (e.g. brief, length-capped for chat); untrustedContext is fenced as third-party data and narrows the tools Forge-Master may use; contextBlocks add caller-supplied context; proposeActions:true returns up to 3 schema-validated proposedActions that Forge-Master never executes. When any optional field is supplied, truncated is an object with budget, reply, context, and untrusted flags.",
     inputSchema: {
       type: "object",
       properties: {
         message: { type: "string", description: "Your question or request for Forge-Master" },
         sessionId: { type: "string", description: "Session ID for conversation continuity (omit for new session)" },
         maxToolCalls: { type: "number", description: "Max tool calls per turn (default: 5, max: 10)" },
+        caller: {
+          type: "object",
+          description: "Optional caller identity. role and channel add a Caller section to the prompt; role also filters proposedActions (viewer: bug, idea, remember only). surface, projectId, and topic are informational.",
+          properties: {
+            role: { type: "string", enum: ["owner", "approver", "viewer"] },
+            channel: { type: "string", enum: ["dashboard", "vscode", "chat", "api"] },
+            surface: { type: "string" },
+            projectId: { type: "string" },
+            topic: { type: "string" },
+          },
+          required: ["role", "channel"],
+        },
+        responseFormat: {
+          type: "object",
+          description: "Optional reply shaping. style 'brief' leads with a short answer and uses bullets instead of tables; maxChars hard-caps the reply, cutting on a sentence boundary and appending '…(truncated — ask for more)'.",
+          properties: {
+            style: { type: "string", enum: ["standard", "brief"] },
+            maxChars: { type: "integer", minimum: 200, maximum: 20000 },
+          },
+        },
+        untrustedContext: {
+          type: "array",
+          description: "Optional third-party text (forwards, links, transcripts, files), fenced as data in the user message and never followed as instructions. When present, tools narrow to a read-only subset, tool calls cap at 3, and proposals are marked origin 'untrusted'. Text capped at 8 KB total.",
+          items: {
+            type: "object",
+            properties: {
+              kind: { type: "string", enum: ["forward", "link", "transcript", "file", "other"] },
+              source: { type: "string" },
+              text: { type: "string" },
+            },
+            required: ["kind", "text"],
+          },
+        },
+        contextBlocks: {
+          type: "array",
+          description: "Optional trusted context supplied by the caller, rendered under 'Operator context (supplied by caller)'. Text capped at 4 KB total.",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              text: { type: "string" },
+            },
+            required: ["title", "text"],
+          },
+        },
+        proposeActions: {
+          type: "boolean",
+          description: "When true, returns up to 3 schema-validated proposedActions (or an empty list plus proposedActionsMessage). Proposals are suggestions only: Forge-Master never executes, enqueues, or approves them.",
+        },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["message"],
+    },
+  },
+  {
+    // Proxied to the long-lived pforge-master studio child, which owns the
+    // observer and its insight ring. Property text matches pforge-master/server.mjs.
+    name: "forge_master_observe",
+    description: "Control the Forge-Master observer — a background hub subscriber that batches live Plan Forge events and can narrate notable patterns. status with limit or cursor returns insights with total, limit, cursor, nextCursor, hasMore, truncated, and an optional message. Read-only: cannot invoke write tools or modify project files. Proxied to the Forge-Master studio child so start, stop, and status share one observer and insight ring; when the child is unavailable returns { ok: false, error: 'FORGE_MASTER_UNAVAILABLE', message } (no in-process fallback). Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["start", "stop", "status"],
+          description: "start — begin observing hub events; stop — halt the observer; status — return current state.",
+        },
+        sessionId: {
+          type: "string",
+          description: "Optional session ID for tracing.",
+        },
+        detach: {
+          type: "boolean",
+          description: "If true, observer runs as a detached background process (not yet implemented — reserved for Slice 8).",
+        },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: 25,
+          default: 10,
+          description: "Optional insight page size for status (default 10, maximum 25).",
+        },
+        cursor: {
+          type: "string",
+          description: "Optional opaque numeric sequence cursor for the next insight status page.",
+        },
+        path: {
+          type: "string",
+          description: "Project directory (default: current)",
+        },
+      },
+      required: ["action"],
     },
   },
   {
@@ -1213,7 +1319,7 @@ export const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        testbedPath: { type: "string", description: "Path to testbed repository (default: from .forge.json testbed.path)" },
+        testbedPath: { type: "string", description: "Path to testbed repository (default: .forge.json testbed.path, else a plan-forge-testbed clone next to the project)" },
         dryRun: { type: "boolean", description: "If true, skip execute and teardown steps (default: false)" },
         path: { type: "string", description: "Project directory (default: current)" },
       },

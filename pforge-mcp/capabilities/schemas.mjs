@@ -6,6 +6,7 @@
  *
  * @module capabilities/schemas
  */
+import { DEFAULT_GROK_ADDIN_MODEL, DEFAULT_QUORUM_MODELS, DEFAULT_QUORUM_REVIEWER_MODEL } from "../orchestrator/constants.mjs";
 
 // ─── CLI Schema ───────────────────────────────────────────────────────
 
@@ -55,10 +56,27 @@ export const CLI_SCHEMA = {
       examples: ["pforge diff docs/plans/Phase-1-AUTH-PLAN.md"],
     },
     analyze: {
-      description: "Cross-artifact consistency scoring (0-100)",
+      description: "Cross-artifact consistency scoring (0-100); with --quorum or --models, a multi-model review of a plan or source file",
       args: [{ name: "plan", type: "path", required: true }],
-      flags: {},
-      examples: ["pforge analyze docs/plans/Phase-1-AUTH-PLAN.md"],
+      flags: {
+        "--quorum": { type: "boolean|string", description: "Multi-model review instead of the score; --quorum=<preset> picks power, speed or power-gov" },
+        "--models": { type: "string", description: "Comma-separated model list for the multi-model review (implies --quorum)" },
+        "--mode": { type: "string", enum: ["plan", "file"], description: "Default: plan for .md/.markdown, file otherwise. File mode needs --quorum" },
+      },
+      examples: [
+        "pforge analyze docs/plans/Phase-1-AUTH-PLAN.md",
+        "pforge analyze docs/plans/Phase-1-AUTH-PLAN.md --quorum=power",
+        "pforge analyze src/services/billing.ts --quorum",
+      ],
+    },
+    diagnose: {
+      description: "Multi-model bug investigation of a source file — root causes and fix recommendations",
+      args: [{ name: "file", type: "path", required: true }],
+      flags: {
+        "--models": { type: "string", description: "Comma-separated model list override" },
+        "--quorum": { type: "string", description: "--quorum=<preset> picks power, speed or power-gov" },
+      },
+      examples: ["pforge diagnose src/services/billing.ts", "pforge diagnose src/auth/token-validator.ts --models grok-4.7,claude-sonnet-5.5"],
     },
     "run-plan": {
       description: "Execute a hardened plan automatically or interactively",
@@ -66,7 +84,7 @@ export const CLI_SCHEMA = {
       flags: {
         "--estimate": { type: "boolean", description: "Cost prediction only" },
         "--assisted": { type: "boolean", description: "Human codes, orchestrator validates gates" },
-        "--model": { type: "string", description: "Model override (e.g., claude-sonnet-4.6)" },
+        "--model": { type: "string", description: "Model override (e.g., claude-sonnet-5.5)" },
         "--resume-from": { type: "number", description: "Skip completed slices, resume from N" },
         "--dry-run": { type: "boolean", description: "Parse and validate without executing" },
         "--quorum": { type: "boolean|auto", description: "Force quorum on all slices, or 'auto' for threshold-based" },
@@ -76,7 +94,7 @@ export const CLI_SCHEMA = {
         "pforge run-plan docs/plans/Phase-1.md",
         "pforge run-plan docs/plans/Phase-1.md --estimate",
         "pforge run-plan docs/plans/Phase-1.md --assisted",
-        "pforge run-plan docs/plans/Phase-1.md --model claude-sonnet-4.6",
+        "pforge run-plan docs/plans/Phase-1.md --model claude-sonnet-5.5",
         "pforge run-plan docs/plans/Phase-1.md --resume-from 3",
         "pforge run-plan docs/plans/Phase-1.md --quorum",
         "pforge run-plan docs/plans/Phase-1.md --quorum=auto",
@@ -260,6 +278,18 @@ export const CLI_SCHEMA = {
       flags: {},
       examples: ["pforge version-bump 2.53.0"],
     },
+    "pending": {
+      description: "List, diff, apply or discard guidance updates pforge update saved in .forge/update-pending/ instead of overwriting your edits",
+      args: [
+        { name: "subcommand", type: "string", required: false, enum: ["list", "diff", "apply", "discard"] },
+        { name: "path", type: "string", required: false },
+      ],
+      flags: {
+        "--all": { type: "boolean", description: "apply/discard every pending update" },
+        "--yes": { type: "boolean", description: "Make the change (apply/discard are dry runs without it)" },
+      },
+      examples: ["pforge pending", "pforge pending diff .github/instructions/git-workflow.instructions.md", "pforge pending apply --all --yes"],
+    },
     "migrate-memory": {
       description: "Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)",
       args: [],
@@ -354,29 +384,58 @@ export const CONFIG_SCHEMA = {
         review: { type: "string", description: "Model for reviews" },
         default: {
           type: "string",
-          enum: ["auto", "claude-opus-4.7", "claude-opus-4.6", "claude-sonnet-4.6", "claude-haiku-4.5", "gpt-5.4", "gpt-5.2-codex", "gpt-5-mini", "gemini-3-pro-preview"],
+          description: "Advisory list — any key in cost-service MODEL_PRICING is accepted at runtime; loadModelRouting() does not validate against this enum.",
+          enum: ["auto", "claude-opus-5.5", "claude-sonnet-5.5", "claude-fable-5.1", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4.5", "claude-opus-4.8", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex", "gemini-3.8-flash", "grok-4.7", "grok-4.6", "kimi-k3", "mai-code-1.1-flash"],
           default: "auto",
         },
       },
     },
     maxParallelism: { type: "number", default: 3, minimum: 1, maximum: 10, description: "Max concurrent parallel slices" },
     maxRetries: { type: "number", default: 1, minimum: 0, maximum: 5, description: "Gate failure retry attempts" },
+    toolProfiles: { type: ["string", "array"], items: { type: "string", enum: ["core", "bugs", "liveguard", "tempering", "crucible", "memory", "code-intel", "team", "full"] }, default: ["core"], description: "Which MCP tool profiles the server lists at start. 'core' (plan execution, status, cost, search, diagnostics) is always listed; agents load more with forge_tool_profile. 'full' lists every tool. Env override: PFORGE_TOOL_PROFILE=bugs,liveguard." },
+    gateRunner: { type: "string", enum: ["host", "devcontainer"], default: "host", description: "Where validation gates run. 'devcontainer' runs each gate inside the project's Dev Container (devcontainer exec), so gates use the toolchain in .devcontainer/devcontainer.json; the container starts once per run and the gate tool preflight checks inside it. Needs the Dev Containers CLI (npm install -g @devcontainers/cli) and Docker; PFORGE_DEVCONTAINER_CLI points at a specific CLI." },
+    gatePreflight: { type: "string", enum: ["warn", "block", "off"], default: "warn", description: "Before a run, check that every validation gate's tools are installed (on PATH or in node_modules/.bin). warn: print the missing ones; block: refuse to start; off: skip. A gate that fails because its command is not installed is reported as gate-unrunnable and not retried." },
+    resumeOnRetry: { type: "boolean", default: true, description: "A slice retry resumes the worker's previous session (Copilot CLI --session-id, SDK resumeSession) instead of starting cold, so it keeps the context it already built. A failed resume starts a fresh session. Env override: PFORGE_RESUME_ON_RETRY=0|1." },
     maxRunHistory: { type: "number", default: 50, minimum: 1, description: "Max run directories to retain" },
+    maxRunAgeDays: { type: "number", default: 30, minimum: 1, description: "Max age of a run directory in days; runs are pruned when they fail EITHER this or maxRunHistory" },
+    runIsolation: { type: "string", enum: ["branch", "none"], default: "branch", description: "Auto-mode runs work on their own pforge/run/<plan>-<time> branch, so a failed slice never lands on your branch. \"none\" runs on the current branch. Env override: PFORGE_RUN_ISOLATION." },
+    runIntegration: { type: "string", enum: ["fast-forward", "pull-request", "none"], default: "fast-forward", description: "What happens to the run branch when every slice passes: fast-forward your branch to it, push it and open a pull request (needs gh and an origin remote), or leave it for you to merge." },
+    draftPullRequest: { type: "boolean", default: true, description: "With runIntegration \"pull-request\", open the pull request as a draft." },
+    impactGate: {
+      type: "object",
+      description: "After a slice's own gate passes, run the tests related to the files it changed (changed tests, tests named after changed files, Lattice blast radius). Also accepts a mode string.",
+      properties: {
+        mode: { type: "string", enum: ["block", "warn", "off"], default: "block", description: "block: a failing related test fails the slice; warn: record it only; off: skip." },
+        command: { type: "string", description: "Test command with a {files} placeholder, for stacks Plan Forge cannot detect (e.g. \"bundle exec rspec {files}\"). Detected: vitest, jest, pytest, go test, dotnet test." },
+        maxTests: { type: "number", default: 40, minimum: 1, description: "Most related test files run per slice." },
+      },
+    },
     quorum: {
       type: "object",
-      description: "Multi-model consensus configuration (v2.5; defaults refreshed 2026-05-21)",
+      description: "Multi-model consensus configuration (v2.5; models refreshed 2026-09-30)",
       properties: {
         enabled: { type: "boolean", default: false, description: "Master switch for quorum mode" },
         auto: { type: "boolean", default: true, description: "When enabled, only quorum high-complexity slices" },
         threshold: { type: "number", default: 5, minimum: 1, maximum: 10, description: "Complexity score threshold for auto mode (raised 3→5 on 2026-05-21 — threshold=3 was triggering quorum on ~89% of slices)" },
         preset: { type: "string", enum: ["speed", "power", "power-gov", "false"], description: "Optional named preset (overrides models/threshold/reviewerModel). Equivalent to CLI --quorum=<name>." },
-        models: { type: "array", items: { type: "string" }, default: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"], description: "Models for dry-run fan-out (used when no preset is selected)" },
-        reviewerModel: { type: "string", default: "claude-opus-4.7", description: "Model for synthesis review" },
+        models: { type: "array", items: { type: "string" }, default: [...DEFAULT_QUORUM_MODELS], description: "Models for dry-run fan-out (used when no preset is selected)" },
+        reviewerModel: { type: "string", default: DEFAULT_QUORUM_REVIEWER_MODEL, description: "Model for synthesis review" },
         dryRunTimeout: { type: "number", default: 300000, description: "Timeout per dry-run worker (ms)" },
         strictAvailability: { type: "boolean", default: false, description: "When true, fast-fail (exit 2) if any configured model is unavailable. When false (default), drop unavailable models and continue if ≥1 remain" },
+        includeGrok: { type: ["boolean", "string"], enum: [false, true, "api", "cli"], default: false, description: `Additively append a Grok member to the quorum (${DEFAULT_GROK_ADDIN_MODEL} by default). 'api'/true = Copilot-served on Copilot hosts with xAI API fallback when XAI_API_KEY is set; 'cli' = Grok Build CLI (flat subscription). Purely additive — never removes existing members; no-op when no route is available. CLI equivalents: --with-grok / --with-grok-cli.` },
+        grokModel: { type: "string", default: DEFAULT_GROK_ADDIN_MODEL, description: `Model used for the includeGrok add-in member (default: flagship ${DEFAULT_GROK_ADDIN_MODEL}).` },
       },
     },
     extensions: { type: "array", items: { type: "string" }, description: "Installed extensions" },
+    routing: {
+      type: "object",
+      description: "Worker routing switches",
+      properties: {
+        grokCli: { type: "string", enum: ["off", "auto", "prefer"], default: "auto", description: "Route Grok-servable models through the Grok Build CLI when 'prefer'. 'auto' (default) uses the CLI if available." },
+        copilotSdk: { type: "string", enum: ["off", "prefer"], default: "prefer", description: "Route Copilot-servable models (gpt-*, Copilot Grok) through @github/copilot-sdk instead of spawning the Copilot CLI. Default 'prefer' (about a third cheaper per turn, falls back to the CLI if the SDK cannot start); 'off' always spawns the CLI." },
+        autoTier: { type: "string", enum: ["complexity", "efficiency", "balance", "intelligence", "off"], default: "complexity", description: "For slices on model 'auto': run them on the Copilot SDK and let it pick the model for a tier. 'complexity' (default) maps the slice complexity score to efficiency (1-3), balance (4-6) or intelligence (7-10); a tier name fixes it; 'off' keeps auto slices on the Copilot CLI's default model." },
+      },
+    },
     hooks: {
       type: "object",
       description: "LiveGuard hook configuration (v2.29)",

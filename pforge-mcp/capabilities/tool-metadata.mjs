@@ -4,6 +4,7 @@
  * Extracted from capabilities.mjs to reduce module size.
  * @module capabilities/tool-metadata
  */
+import { DEFAULT_WATCHER_MODEL, QUORUM_PRESETS } from "../orchestrator/constants.mjs";
 
 // ─── Enriched Tool Metadata ───────────────────────────────────────────
 
@@ -126,6 +127,7 @@ export const TOOL_METADATA = {
     sideEffects: [],
     errors: {
       PLAN_NOT_FOUND: { message: "Plan file not found", recovery: "Check the plan path" },
+      FILE_MODE_REQUIRES_QUORUM: { message: "Source-file (mode 'file') analysis needs quorum=true; the non-quorum scorer reads plans only", recovery: "Pass quorum: true for a multi-model code review, use forge_diagnose, or pass mode: 'plan' for a Markdown plan" },
       LOW_SCORE: { message: "Score below 60%", recovery: "Review gaps in traceability, coverage, tests, or gates" },
     },
     example: { input: { plan: "docs/plans/Phase-1.md" }, output: { score: 85, status: "passed" } },
@@ -144,7 +146,7 @@ export const TOOL_METADATA = {
       addedIn: "2.5.0",
       description: "Multi-model consensus: dispatch to 3+ models for dry-run analysis, synthesize best approach, then execute",
       parameters: {
-        quorum: { type: "string", enum: ["auto", "power", "speed", "false"], default: "auto", description: "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (claude-opus-4.7 + gpt-5.3-codex + grok-4.20-0309-reasoning, threshold 5); 'speed' = fast preset (claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning, threshold 7); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`." },
+        quorum: { type: "string", enum: ["auto", "power", "speed", "false"], default: "auto", description: "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (" + QUORUM_PRESETS.power.models.join(" + ") + ", threshold " + QUORUM_PRESETS.power.threshold + "); 'speed' = fast preset (" + QUORUM_PRESETS.speed.models.join(" + ") + ", threshold " + QUORUM_PRESETS.speed.threshold + "); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`." },
         quorumThreshold: { type: "number", description: "Complexity score threshold for auto mode (1-10, default: 5)" },
       },
       config: ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout, preset }",
@@ -210,7 +212,8 @@ export const TOOL_METADATA = {
     consumes: [".forge/cost-history.json", ".forge/model-performance.json"],
     sideEffects: [],
     errors: {},
-    example: { input: {}, output: { runs: 5, total_cost_usd: 1.23, by_model: {}, forge_model_stats: { "claude-sonnet-4.6": { total_slices: 10, passed: 9, failed: 1, success_rate: 0.9, avg_cost_usd: 0.05 } } } },
+    agentGuidance: "Use this for actual token and USD spend. gh-copilot runs are priced from copilot-pricing.json AI-credit token rates; claude-cli, codex-cli, and grok-cli remain flat subscription providers. Historical total_premium_requests may appear for back-compat but is not the current USD basis for gh-copilot.",
+    example: { input: {}, output: { runs: 5, total_cost_usd: 1.23, by_model: {}, forge_model_stats: { "claude-sonnet-5.5": { total_slices: 10, passed: 9, failed: 1, success_rate: 0.9, avg_cost_usd: 0.05 } } } },
   },
   forge_delegate_review: {
     intent: ["review", "delegate", "code-review", "pr"],
@@ -257,7 +260,7 @@ export const TOOL_METADATA = {
       PLAN_NOT_FOUND: { message: "Plan file not found", recovery: "Pass a valid planPath relative to the project root" },
       PLAN_PARSE_FAILED: { message: "Plan could not be parsed", recovery: "Run forge_analyze on the plan first to surface structural issues" },
     },
-    agentGuidance: "Call this tool before presenting any dollar amount or quorum-mode cost to the user. Do not hand-compute quorum costs in chat — the numbers you would invent drift quickly and have been observed to overshoot reality by an order of magnitude. This tool returns all four quorum modes (auto / power / speed / false) in one payload so you never need to make four separate calls or estimate.",
+    agentGuidance: "Call this tool before presenting any dollar amount or quorum-mode cost to the user. Do not hand-compute quorum costs in chat — the numbers you would invent drift quickly and have been observed to overshoot reality by an order of magnitude. This tool returns all four quorum modes (auto / power / speed / false) in one payload and uses Copilot AI-credit token rates for gh-copilot legs.",
     example: {
       input: { planPath: "docs/plans/Phase-27-COST-SERVICE-v2.60-PLAN.md" },
       output: {
@@ -284,7 +287,7 @@ export const TOOL_METADATA = {
       PLAN_NOT_FOUND: { message: "Plan file not found", recovery: "Pass a valid planPath relative to the project root" },
       SLICE_NOT_FOUND: { message: "Slice number not in plan", recovery: "Call forge_plan_status or forge_estimate_quorum to see available slice numbers" },
     },
-    agentGuidance: "Use this when you need cost for a single slice — cheaper than forge_estimate_quorum (which estimates the whole plan). Returns projected cost, complexity score, and a rationale for why the slice is or isn't quorum-eligible under the chosen mode.",
+    agentGuidance: "Use this when you need cost for a single slice — cheaper than forge_estimate_quorum (which estimates the whole plan). Returns projected cost, complexity score, and a rationale for why the slice is or isn't quorum-eligible under the chosen mode. gh-copilot projections use Copilot AI-credit token pricing, not legacy premium-request math.",
     example: {
       input: { planPath: "docs/plans/Phase-27.2-COST-REFINEMENT-v2.61-PLAN.md", sliceNumber: 4, mode: "power" },
       output: {
@@ -292,7 +295,7 @@ export const TOOL_METADATA = {
         baseCostUSD: 0.0425,
         overheadUSD: 1.7998,
         complexityScore: 6,
-        model: "claude-sonnet-4.5",
+        model: "claude-sonnet-5.5",
         quorumEligible: true,
         rationale: "mode power: all slices quorum-eligible",
         generatedAt: "2026-04-20T18:00:00.000Z",
@@ -368,6 +371,22 @@ export const TOOL_METADATA = {
     },
     example: { input: { file: "src/api.ts" }, output: { diagnosis: "Root cause identified", models: 3 } },
   },
+  forge_tool_profile: {
+    intent: ["configure", "tools", "discover"],
+    aliases: ["tool-profile", "load-tools"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "3.31.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge.json"],
+    sideEffects: ["changes which tools this MCP server lists (notifications/tools/list_changed)"],
+    errors: {},
+    example: {
+      input: { load: ["bugs"] },
+      output: { active: ["core", "bugs"], changed: true, listedTools: 36, totalTools: 106, unknown: [], profiles: [{ name: "bugs", tools: 14, active: true, description: "bug registry, triage, fix proposals, reviews, regression guard" }], message: "36 of 106 tools are now listed; your client refreshes its tool list automatically." },
+    },
+  },
   forge_skill_status: {
     intent: ["read", "status", "skills"],
     aliases: ["skill-events", "recent-skills"],
@@ -419,8 +438,22 @@ export const TOOL_METADATA = {
     produces: [],
     consumes: [],
     sideEffects: ["broadcasts memory-captured hub event"],
-    errors: {},
-    example: { input: { content: "Use JWT for auth", type: "convention" }, output: { event: "memory-captured" } },
+    errors: {
+      INVALID_ORIGIN: { message: "origin must be trusted or untrusted", recovery: "Choose one of the supported provenance values." },
+      INVALID_VISIBILITY: { message: "visibility must be normal or restricted", recovery: "Choose one of the supported visibility values." },
+      INVALID_TAGS: { message: "tags must match the provenance tag rules", recovery: "Pass up to 10 lowercase tags containing only letters, digits, colon, or hyphen; each tag may be up to 40 characters." },
+    },
+    example: {
+      input: { content: "Use JWT for auth", type: "convention", origin: "untrusted", tags: ["source:web"] },
+      output: {
+        thought: {
+          content: "[[pforge origin=untrusted tags=source:web]]\nUse JWT for auth",
+          origin: "untrusted",
+          visibility: "normal",
+          tags: ["source:web"],
+        },
+      },
+    },
   },
   forge_brain_test: {
     intent: ["test", "ping", "round-trip", "openbrain"],
@@ -474,7 +507,7 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { rawIdea: "add rate limiting to the login endpoint" },
-      output: { id: "uuid", recommendedLane: "feature", firstQuestion: null },
+      output: { id: "uuid", lane: "full", recommendedLane: "feature", firstQuestion: null },
     },
   },
   forge_crucible_ask: {
@@ -494,7 +527,7 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { id: "uuid", answer: "yes, API-wide rate limit" },
-      output: { done: true, nextQuestion: null, draftPreview: "# ..." },
+      output: { done: true, nextQuestion: null, draftHint: "Draft omitted to keep this response small — call forge_crucible_preview with id '<id>' to read it." },
     },
   },
   forge_crucible_preview: {
@@ -684,7 +717,7 @@ export const TOOL_METADATA = {
       "test runner available on PATH (npx/dotnet/pytest/go/mvn/cargo)",
     ],
     produces: [".forge/tempering/run-<ts>.json", ".forge/tempering/artifacts/<runId>/contract/report.json", ".forge/tempering/artifacts/<runId>/visual-diff/report.json"],
-    consumes: [".forge/tempering/config.json", "presets/<stack>/tempering-adapter.mjs"],
+    consumes: [".forge/tempering/config.json", "pforge-mcp/tempering/adapters/<stack>.mjs"],
     sideEffects: [
       "spawns a test-runner subprocess",
       "enforces config.runtimeBudgets.unitMaxMs (SIGTERM then SIGKILL)",
@@ -704,7 +737,7 @@ export const TOOL_METADATA = {
     },
     errors: {
       MISSING_PROJECTDIR: { message: "projectDir required", recovery: "Pass `path` or invoke from a project directory" },
-      NO_ADAPTER: { message: "No preset adapter for detected stack", recovery: "Install the matching preset or extend presets/<stack>/tempering-adapter.mjs" },
+      NO_ADAPTER: { message: "No adapter for detected stack", recovery: "Add or extend pforge-mcp/tempering/adapters/<stack>.mjs" },
       OBJECTIVE_BASELINE_FAILED: { message: "Objective command failed at baseline capture", recovery: "Ensure command exits 0 and prints a single numeric line" },
       OBJECTIVE_BASELINE_NON_NUMERIC: { message: "Objective command stdout was not a number", recovery: "Command must print exactly one numeric value (e.g., 87.5)" },
     },
@@ -1252,7 +1285,7 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { source: "drift", customQuestion: "Why did drift score drop 15 points?" },
-      output: { quorumPrompt: "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...", promptTokenEstimate: 250, suggestedModels: ["claude-opus-4.6", "grok-4.20", "gemini-3-pro-preview"], dataSnapshotAge: "12m ago", questionUsed: "Why did drift score drop 15 points?" },
+      output: { quorumPrompt: "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...", promptTokenEstimate: 250, suggestedModels: ["claude-opus-5.5", "gpt-6-astra", "grok-4.7"], dataSnapshotAge: "12m ago", questionUsed: "Why did drift score drop 15 points?" },
     },
   },
   forge_liveguard_run: {
@@ -1295,7 +1328,7 @@ export const TOOL_METADATA = {
     sideEffects: [
       "appends to watcher's own .forge/watch-history.jsonl (NEVER target's)",
       "may emit watch-snapshot-completed/watch-anomaly-detected/watch-advice-generated hub events",
-      "in 'analyze' mode, invokes a frontier model (default claude-opus-4.7)",
+      "in 'analyze' mode, invokes a frontier model (default " + DEFAULT_WATCHER_MODEL + ")",
     ],
     securityNote: "Read-only by design — cannot modify any files in the target project. History is written only to watcher's own cwd.",
     errors: {
@@ -1303,11 +1336,11 @@ export const TOOL_METADATA = {
       NO_RUNS: { message: "No run directory found", recovery: "Verify the target has executed at least one pforge run" },
     },
     example: {
-      input: { targetPath: "E:/GitHub/Rummag", mode: "snapshot" },
+      input: { targetPath: "/path/to/my-app", mode: "snapshot" },
       output: { ok: true, runState: "in-progress", counts: { started: 5, completed: 4, failed: 0, escalated: 0 }, anomalies: [], recommendations: [], cursor: "2025-04-17T12:34:56.789Z" },
     },
     crossRunExample: {
-      input: { targetPath: "E:/GitHub/Rummag", mode: "cross-run", crossRunWindow: "14d" },
+      input: { targetPath: "/path/to/my-app", mode: "cross-run", crossRunWindow: "14d" },
       output: { ok: true, mode: "cross-run", runsScanned: 8, anomalies: [{ code: "cross-run.recurring-gate-failure", severity: "error", sliceId: "slice-3", occurrences: 3 }], recommendations: [{ code: "cross-run.recurring-gate-failure", action: "Inspect gate for slice-3 across runs" }] },
     },
   },
@@ -1333,7 +1366,7 @@ export const TOOL_METADATA = {
       TARGET_NOT_FOUND: { message: "Target path does not exist", recovery: "Verify path and try again" },
     },
     example: {
-      input: { targetPath: "E:/GitHub/Rummag", durationMs: 30000 },
+      input: { targetPath: "/path/to/my-app", durationMs: 30000 },
       output: { ok: true, mode: "websocket", events: 42, capturedEvents: 42 },
     },
   },
@@ -1456,7 +1489,15 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { query: "blocker", tags: ["review"], limit: 10 },
-      output: { hits: [{ source: "bug", recordRef: "BUG-42", snippet: "…critical blocker in auth…", score: 2.1 }], total: 1, truncated: false, durationMs: 45 },
+      output: {
+        hits: [
+          { source: "bug", recordRef: "BUG-42", snippet: "…critical blocker in auth…", score: 2.1 },
+          { source: "openbrain", recordRef: "OB-7", snippet: "Use JWT for auth", score: 1.8, origin: "untrusted", visibility: "normal", tags: ["source:web"] },
+        ],
+        total: 2,
+        truncated: false,
+        durationMs: 45,
+      },
     },
   },
   // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
@@ -1499,11 +1540,12 @@ export const TOOL_METADATA = {
     network: false,
     risk: "low",
     errors: {
-      ERR_UNKNOWN_PRESET: { message: "Unknown preset name", recovery: "Use 'power', 'speed', or 'all'" },
+      ERR_UNKNOWN_PRESET: { message: "Unknown preset name", recovery: "Use 'power', 'speed', 'all', or 'config'" },
+      ERR_NO_MODELS: { message: "Quorum config has no models to assess", recovery: "Set quorum.models in .forge.json, or check a built-in preset instead" },
     },
     example: {
-      input: { preset: "all" },
-      output: { runtime: "cli-gh", presets: [{ preset: "power", declared: 3, effective: 1, synthesisViable: false, recommendation: { preset: "speed", reason: "..." } }] },
+      input: { preset: "config" },
+      output: { runtime: "cli-gh", presets: [{ preset: "config", declared: 2, effective: 2, synthesisViable: true, recommendation: null, models: [{ model: "claude-opus-5", status: "available", via: "cli", priced: true }, { model: "gtp-5.6-sol", status: "available", via: "cli", priced: false }], warnings: ["gtp-5.6-sol is not in the pricing registry — cost estimates fall back to a conservative rate, and the name may be a typo. Routing is unaffected."] }] },
     },
   },
   // NOTE: forge_self_update was removed in v3.15.2. It was never an MCP tool —
@@ -1525,7 +1567,8 @@ export const TOOL_METADATA = {
     network: false,
     risk: "medium",
     errors: {
-      ERR_TESTBED_NOT_FOUND: { message: "Testbed repo not found", recovery: "Set testbed.path in .forge.json" },
+      ERR_TESTBED_PATH_REQUIRED: { message: "No testbed configured", recovery: "Set testbed.path in .forge.json, pass testbedPath, or clone plan-forge-testbed next to the project" },
+      ERR_TESTBED_NOT_FOUND: { message: "Testbed repo not found", recovery: "Fix testbed.path in .forge.json" },
       ERR_TESTBED_DIRTY: { message: "Testbed has uncommitted changes", recovery: "Commit or stash changes in testbed" },
       ERR_TESTBED_LOCKED: { message: "Another scenario is running", recovery: "Wait or remove stale .forge/testbed.lock" },
       ERR_SCENARIO_NOT_FOUND: { message: "Scenario fixture not found", recovery: "Check docs/plans/testbed-scenarios/" },
@@ -1570,21 +1613,44 @@ export const TOOL_METADATA = {
     risk: "low",
     agentGuidance: "Use forge_master_ask for multi-step reasoning about Plan Forge workflows — ideating features, troubleshooting failures, querying run status, or funneling ideas into Crucible smelts. Also serves as the advisory / CTO-in-a-box lane for architectural guidance: ask 'should I refactor or ship X?', 'what is the right approach for Y?', 'architecture advice on Z' — the intent router classifies these to the advisory lane and the system prompt injects project principles. Forge-Master classifies intent, fetches memory context, and orchestrates tool calls on your behalf. Prefer this over manually calling individual forge tools when the task is open-ended or involves multiple steps. Do NOT use for direct file edits or code generation — Forge-Master is read-only.",
     errors: {
+      INVALID_INPUT: {
+        message: "A supplied forge_master_ask field is invalid",
+        recovery: "fix the named `field` (enum/type/range) and retry",
+      },
       reasoning_model_unavailable: {
         message: "No reasoning provider configured",
         recovery: "Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or XAI_API_KEY, or configure forgeMaster.reasoningModel in .forge.json",
       },
     },
     example: {
-      input: { message: "I want to add multi-tenant billing to my pipeline", sessionId: "sess-abc123" },
+      input: {
+        message: "How can I check the current status of my plan?",
+        sessionId: "sess-abc123",
+        caller: { role: "owner", channel: "chat", projectId: "example-project" },
+        responseFormat: { style: "brief", maxChars: 1200 },
+        untrustedContext: [{ kind: "forward", source: "chat", text: "A forwarded report says Slice 2 may need a retry." }],
+        contextBlocks: [{ title: "Project context", text: "The plan is paused after Slice 2." }],
+        proposeActions: true,
+      },
       output: {
         sessionId: "sess-abc123",
-        reply: "I've started a Crucible smelt for your multi-tenant billing feature...",
-        toolCalls: [{ name: "forge_crucible_submit", args: {}, resultSummary: "Smelt created", costUSD: 0.002 }],
-        tokensIn: 1200,
-        tokensOut: 450,
-        totalCostUSD: 0.003,
-        truncated: false,
+        reply: "Your current plan status is available through the read-only plan status tool.",
+        toolCalls: [{ name: "forge_plan_status", args: {}, resultSummary: "Plan status retrieved", costUSD: 0 }],
+        tokensIn: 120,
+        tokensOut: 45,
+        totalCostUSD: 0.0003,
+        truncated: { budget: false, reply: false, context: false, untrusted: false },
+        usage: { tokensIn: 120, tokensOut: 45, costUSD: 0.0003, model: "resolved-model", provider: "resolved-provider" },
+        proposedActions: [{
+          type: "retry",
+          projectId: "example-project",
+          args: { jobId: "job-2" },
+          rationale: "Retry the paused job after resolving the gate failure.",
+          confidence: "medium",
+          origin: "untrusted",
+          mutating: true,
+        }],
+        proposedActionsMessage: "1 action(s) proposed. Forge-Master does not execute them; the caller decides.",
       },
     },
   },
@@ -1628,40 +1694,71 @@ export const TOOL_METADATA = {
     },
   },
   forge_master_observe: {
-    intent: ["observe", "observer", "narrate", "forge-master", "start-observer", "stop-observer"],
+    intent: ["observe", "observer", "narrate", "forge-master", "start-observer", "stop-observer", "insights"],
     aliases: ["observe_forge", "forge_observe"],
     cost: "medium",
     maxConcurrent: 1,
     addedIn: "3.8.0",
-    prerequisites: ["forgeMaster.observer.enabled: true in .forge.json", "ANTHROPIC_API_KEY or OPENAI_API_KEY or XAI_API_KEY (for narration)"],
-    produces: [".forge/brain/session.forgemaster.observer.*.json (narrations)", ".forge/forge-master-observer.pid (when --detach)"],
+    prerequisites: ["forgeMaster.observer.enabled: true in .forge.json", "ANTHROPIC_API_KEY or OPENAI_API_KEY or XAI_API_KEY (for narration)", "pforge-master installed next to pforge-mcp (pforge-mcp proxies this tool to the Forge-Master studio child)"],
+    produces: [".forge/forge-master-observer-state.json (observer budget state)"],
     consumes: [".forge.json (observer config)", ".forge/runs/** (hub events via WebSocket)"],
     sideEffects: [
-      "starts or stops a background hub subscriber process",
-      "writes narration summaries to OpenBrain via brain.remember",
-      "emits observer-started/observer-stopped/observer-narration-captured hub events",
+      "starts or stops the hub subscriber inside the Forge-Master studio child (pforge-mcp spawns the child on first use and proxies every call to it, so start, stop, and status share one observer and insight ring)",
+      "retains up to 50 forge-master-insight entries in the studio child's in-memory ring (lost when the child exits)",
+      "emits observer:narration and forge-master-insight events to the hub when one is attached",
     ],
     writesFiles: false,
     network: true,
     risk: "low",
-    agentGuidance: "Use forge_master_observe to start/stop the live observer that narrates notable hub events during plan execution. Observer is muted by default — enable with forgeMaster.observer.enabled: true in .forge.json. Budget-capped via maxUsdPerDay and maxNarrationsPerHour. Read-only: cannot invoke write tools or modify project files. Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1.",
+    agentGuidance: "Use forge_master_observe to start/stop the live observer that narrates notable hub events during plan execution, and action:'status' with limit (1–25, default 10) and cursor (pass the previous page's nextCursor) to page retained insights. On pforge-mcp this tool is a proxy to the long-lived Forge-Master studio child — there is no in-process fallback, so FORGE_MASTER_UNAVAILABLE means the child could not be spawned or was lost (a respawned child starts stopped with an empty ring; call start again). Observer is muted by default — enable with forgeMaster.observer.enabled: true in .forge.json. Budget-capped via maxUsdPerDay and maxNarrationsPerHour. Read-only: cannot invoke write tools or modify project files. Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1 (start returns observer-disabled; batches are not analysed).",
     errors: {
       "observer-disabled": {
-        message: "Observer is disabled",
-        recovery: "Set forgeMaster.observer.enabled: true in .forge.json",
+        message: "Observer is disabled (config flag off or PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1)",
+        recovery: "Set forgeMaster.observer.enabled: true in .forge.json and unset PFORGE_FORGE_MASTER_OBSERVE_DISABLE",
       },
       "observer-budget-exceeded": {
-        message: "Daily USD or hourly narration cap reached",
+        message: "Daily USD or hourly narration cap reached — the turn is skipped and lastTurn.reason explains why",
         recovery: "Widen cap in .forge.json#forgeMaster.observer or wait for daily reset",
+      },
+      INVALID_INPUT: {
+        message: "action, limit, cursor, sessionId, detach, or path is invalid",
+        recovery: "Use action start|stop|status, an integer limit from 1 to 25, and a cursor copied from nextCursor",
+      },
+      FORGE_MASTER_UNAVAILABLE: {
+        message: "The Forge-Master studio child could not be spawned or the proxy connection was lost",
+        recovery: "Ensure pforge-master is installed (cd pforge-master && npm install), check pforge-mcp stderr, then retry and call start again",
       },
     },
     example: {
       input: { action: "start" },
-      output: { ok: true, status: "started", processId: 12345, message: "Observer started — batching hub events." },
+      output: {
+        ok: true,
+        message: "Observer started. Subscribing to hub events.",
+        status: { connected: false, stopped: false, retryCount: 0, bufferSize: 0, lastError: null, lastFlushAt: null, totalEventsReceived: 0, totalBatchesFlushed: 0, batchWindowMs: 60000 },
+      },
     },
     statusExample: {
+      input: { action: "status", limit: 2 },
+      output: {
+        ok: true,
+        status: { connected: true, stopped: false, retryCount: 0, bufferSize: 3, lastError: null, lastFlushAt: "2026-10-07T17:10:00.000Z", totalEventsReceived: 42, totalBatchesFlushed: 4, batchWindowMs: 60000 },
+        recentBatches: [{ receivedAt: "2026-10-07T17:10:00.000Z", events: [{ type: "slice-failed" }] }],
+        lastTurn: { at: "2026-10-07T17:10:01.000Z", ok: true, insightCount: 1 },
+        insights: {
+          ok: true,
+          insights: [{ seq: 7, insight: { id: "fmi-0123456789abcdef", severity: "warn", summary: "Slice 3 failed twice on the same gate.", evidence: [{ eventType: "slice-failed", ref: "slice-3" }], suggestedAction: null }, runId: "run-123", ts: "2026-10-07T17:10:01.000Z", count: 1, lastSeenAt: "2026-10-07T17:10:01.000Z" }],
+          total: 3,
+          limit: 2,
+          cursor: null,
+          nextCursor: "7",
+          hasMore: true,
+          truncated: false,
+        },
+      },
+    },
+    unavailableExample: {
       input: { action: "status" },
-      output: { ok: true, status: "running", processId: 12345, batchesProcessed: 4, narrationsGenerated: 1, budgetUsedUSD: 0.0012 },
+      output: { ok: false, error: "FORGE_MASTER_UNAVAILABLE", message: "The Forge-Master studio child is unavailable: pforge-master/server.mjs was not found next to pforge-mcp or failed to spawn. …" },
     },
   },
   forge_testbed_happypath: {
@@ -1678,7 +1775,8 @@ export const TOOL_METADATA = {
     network: false,
     risk: "medium",
     errors: {
-      ERR_TESTBED_NOT_FOUND: { message: "Testbed repo not found", recovery: "Set testbed.path in .forge.json" },
+      ERR_TESTBED_PATH_REQUIRED: { message: "No testbed configured", recovery: "Set testbed.path in .forge.json, pass testbedPath, or clone plan-forge-testbed next to the project" },
+      ERR_TESTBED_NOT_FOUND: { message: "Testbed repo not found", recovery: "Fix testbed.path in .forge.json" },
       ERR_TESTBED_LOCKED: { message: "Another scenario is running", recovery: "Wait or remove stale .forge/testbed.lock" },
       ERR_NO_HAPPYPATH_SCENARIOS: { message: "No happy-path scenarios found", recovery: "Add happy-path scenarios to docs/plans/testbed-scenarios/" },
     },
@@ -1928,27 +2026,6 @@ export const TOOL_METADATA = {
     },
   },
   // Roadmap C3 — forge_sync_instructions: generate .github/copilot-instructions.md from project context
-  forge_sync_instructions: {
-    intent: ["sync", "instructions", "copilot", "profile", "principles"],
-    aliases: ["sync-instructions", "copilot-instructions"],
-    cost: "low",
-    maxConcurrent: 1,
-    addedIn: "2.99.0",
-    prerequisites: [],
-    produces: [".github/copilot-instructions.md"],
-    consumes: [".github/instructions/project-profile.instructions.md", "docs/plans/PROJECT-PRINCIPLES.md", ".forge.json"],
-    sideEffects: ["writes .github/copilot-instructions.md"],
-    writesFiles: true,
-    network: false,
-    risk: "low",
-    errors: {
-      ERR_NO_CONTEXT: { message: "No project context found", recovery: "Generate project profile via project-profile.prompt.md or define principles in docs/plans/PROJECT-PRINCIPLES.md" },
-    },
-    example: {
-      input: { dryRun: false },
-      output: { ok: true, path: ".github/copilot-instructions.md", bytes: 4821 },
-    },
-  },
   // Phase LATTICE Slice 7 — Lattice code-graph index builder
   forge_lattice_index: {
     intent: ["lattice", "index", "code-graph", "chunk"],
@@ -2221,6 +2298,136 @@ export const TOOL_METADATA = {
         filters: { since: "2026-05-01", until: null, type: ["gate-fail", "slice-complete"], run: null, format: "json" },
         message: "Returned 1 event record.",
       },
+    },
+  },
+  forge_classifier_issue: {
+    intent: ["file-issue", "classifier", "triage"],
+    aliases: ["classifier-issue"],
+    cost: "low",
+    maxConcurrent: 3,
+    addedIn: "3.5.0",
+    prerequisites: ["gh CLI authenticated", "payload.lane === 'classifier'"],
+    produces: ["GitHub issue (classifier-noise)"],
+    consumes: [],
+    sideEffects: ["Creates or comments on a GitHub issue (deduped by finding class + reason hash)"],
+    writesFiles: false,
+    network: true,
+    risk: "medium",
+    errors: {
+      NOT_CLASSIFIER_LANE: {
+        message: "payload lane is not 'classifier'",
+        recovery: "Only route classifier-lane findings here; use forge_bug_register for product bugs and forge_meta_bug_file for self-repair defects",
+      },
+    },
+    example: {
+      input: { payload: { findingClass: "infra-noise", reason: "flaky-network" } },
+      output: { ok: true, issueNumber: 42, deduped: false },
+    },
+  },
+  forge_export_plan: {
+    intent: ["convert", "export", "plan-harden"],
+    aliases: ["export-plan"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "2.97.0",
+    prerequisites: [],
+    produces: ["docs/plans/Phase-X-PLAN.md (when outputPath is set)"],
+    consumes: [],
+    sideEffects: ["Writes a plan file when outputPath is provided"],
+    writesFiles: true,
+    network: false,
+    risk: "low",
+    errors: {
+      EMPTY_INPUT: {
+        message: "input markdown is empty or has no parseable steps",
+        recovery: "Provide numbered or bulleted plan steps in the input field",
+      },
+    },
+    example: {
+      input: { input: "1. Add auth\n2. Add tests", phaseName: "AUTH" },
+      output: { ok: true, slices: 2 },
+    },
+  },
+  forge_github_metrics: {
+    intent: ["metrics", "github", "activity"],
+    aliases: ["github-metrics"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "2.87.0",
+    prerequisites: ["gh CLI authenticated"],
+    produces: [],
+    consumes: ["git remote", ".forge/copilot-metrics/*.jsonl"],
+    sideEffects: [],
+    writesFiles: false,
+    network: true,
+    risk: "low",
+    errors: {
+      GH_UNAVAILABLE: {
+        message: "gh CLI not available or not authenticated",
+        recovery: "Run `gh auth login`; tool returns null fields gracefully when gh is absent",
+      },
+    },
+    example: {
+      input: { period: "30d" },
+      output: { ok: true, stars: 0, forks: 0, openIssues: 0 },
+    },
+  },
+  forge_github_status: {
+    intent: ["diagnose", "inspect", "github-readiness"],
+    aliases: ["github-status", "github-stack"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.85.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".github/", "AGENTS.md", ".vscode/mcp.json"],
+    sideEffects: [],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    errors: {},
+    example: {
+      input: { path: "." },
+      output: { ok: true, checks: [{ id: "copilot-instructions", status: "pass" }] },
+    },
+  },
+  forge_patterns_list: {
+    intent: ["list", "patterns", "advisory"],
+    aliases: ["patterns-list"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "2.77.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/runs/", ".forge/patterns/"],
+    sideEffects: [],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    advisoryOnly: true,
+    errors: {},
+    example: {
+      input: {},
+      output: { ok: true, patterns: [{ kind: "gate-failure-recurrence", count: 3 }] },
+    },
+  },
+  forge_team_dashboard: {
+    intent: ["team", "coordination", "dashboard"],
+    aliases: ["team-dashboard"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "3.4.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/team-activity.jsonl"],
+    sideEffects: [],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    errors: {},
+    example: {
+      input: { limit: 50 },
+      output: { ok: true, developers: [], conflictRisk: "low" },
     },
   },
 };
