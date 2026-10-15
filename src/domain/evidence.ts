@@ -13,12 +13,26 @@ import { z } from 'zod';
 /** How an observation was obtained. `consensus` is an appeal to authority, not an observation. */
 export const EvidenceKindSchema = z.enum(['experiment', 'observation', 'statistical', 'anecdote', 'consensus']);
 
+/** A DOI as published ("10.1103/PhysRevLett.116.061102"); a doi.org URL is accepted and normalized. */
+export const DOI_PATTERN = /^10\.\d{4,9}\/\S+$/;
+
+/** Reduce "https://doi.org/10.x/y" or "doi:10.x/y" to the bare lowercase DOI; `undefined` if malformed. */
+export function normalizeDoi(input: string): string | undefined {
+  const bare = input
+    .trim()
+    .replace(/^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)/i, '')
+    .toLowerCase();
+  return DOI_PATTERN.test(bare) ? bare : undefined;
+}
+
 export const EvidenceSchema = z.object({
   /** What was observed or measured. */
   observation: z.string().min(1),
   kind: EvidenceKindSchema.optional(),
-  /** Where it came from: a citation, dataset, or protocol name. */
+  /** Where it came from: a citation, dataset, or protocol name. Asserted, not checked. */
   source: z.string().min(1).optional(),
+  /** The source's DOI. Earns more credit than a bare `source` once checked with `falsify_verify_source`. */
+  doi: z.string().min(1).refine((v) => normalizeDoi(v) !== undefined, 'not a valid DOI').optional(),
   sampleSize: z.number().int().positive().optional(),
   effectSize: z.number().optional(),
   pValue: z.number().min(0).max(1).optional(),
@@ -29,18 +43,24 @@ export const EvidenceSchema = z.object({
 export type EvidenceKind = z.infer<typeof EvidenceKindSchema>;
 export type Evidence = z.infer<typeof EvidenceSchema>;
 
-/** An evidence item whose `kind` has been resolved. */
-export type ResolvedEvidence = Evidence & { kind: EvidenceKind };
+/** An evidence item whose `kind` has been resolved, and whose DOI (if any) has been looked up. */
+export type ResolvedEvidence = Evidence & {
+  kind: EvidenceKind;
+  /** True only when the DOI was confirmed to exist in this session. */
+  sourceVerified?: boolean;
+};
 
 /**
  * Merge free-text and structured evidence into one list with every kind resolved.
  * An item that reads as an appeal to authority is `consensus` whatever it claims
  * to be, so consensus cannot be laundered into an observation by relabelling it.
+ * `verifiedDois` are the DOIs already confirmed for this inquiry.
  */
 export function normalizeEvidence(
   cited: readonly string[],
   structured: readonly Evidence[],
   isAppeal: (text: string) => boolean,
+  verifiedDois: ReadonlySet<string> = new Set(),
 ): ResolvedEvidence[] {
   const items: Evidence[] = [...cited.map((observation) => ({ observation })), ...structured];
   return items.map((item) => {
@@ -49,7 +69,8 @@ export function normalizeEvidence(
     }
     const inferred: EvidenceKind =
       item.kind ?? (item.pValue !== undefined || item.sampleSize !== undefined ? 'statistical' : 'observation');
-    return { ...item, kind: inferred };
+    const doi = item.doi !== undefined ? normalizeDoi(item.doi) : undefined;
+    return { ...item, kind: inferred, ...(doi !== undefined && verifiedDois.has(doi) ? { sourceVerified: true } : {}) };
   });
 }
 
@@ -75,7 +96,9 @@ export function evidenceQuality(item: ResolvedEvidence): number {
     return 0;
   }
   let quality = KIND_BASE[item.kind];
-  if (item.source !== undefined) quality += 0.1;
+  // A source anyone can type earns little; one confirmed to exist earns more.
+  if (item.sourceVerified === true) quality += 0.15;
+  else if (item.source !== undefined || item.doi !== undefined) quality += 0.05;
   if (item.sampleSize !== undefined) {
     if (item.sampleSize >= LARGE_SAMPLE) quality += 0.15;
     else if (item.sampleSize >= MIN_ADEQUATE_SAMPLE) quality += 0.1;

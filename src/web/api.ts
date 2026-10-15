@@ -31,6 +31,7 @@ import type { CycleContext } from '../cycle/context.js';
 import { SessionStore } from '../cycle/session.js';
 import { opRelated } from '../cycle/related.js';
 import { opDissent } from '../cycle/dissent.js';
+import { opVerifySource } from '../cycle/verify.js';
 import { DissentPositionSchema } from '../mcp/tools/dissent.js';
 import type { MemoryReader } from '../memory/openbrainClient.js';
 import { NotebookStore } from '../memory/notebook.js';
@@ -109,6 +110,11 @@ const relatedBody = z.object({
 const dissentBody = z.object({
   question: z.string().optional(),
   positions: z.array(DissentPositionSchema).min(2),
+});
+
+const verifySourceBody = z.object({
+  doi: z.string().min(1),
+  sessionId: z.string().optional(),
 });
 
 const recallBody = z.object({
@@ -205,6 +211,10 @@ export async function handleRequest(
     case 'POST /api/related': {
       const p = parse(relatedBody, body);
       return 'response' in p ? p.response : fromOp(await opRelated(p.value, ctx));
+    }
+    case 'POST /api/verify-source': {
+      const p = parse(verifySourceBody, body);
+      return 'response' in p ? p.response : fromOp(await opVerifySource(p.value, ctx));
     }
     case 'POST /api/dissent': {
       const p = parse(dissentBody, body);

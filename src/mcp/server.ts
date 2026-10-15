@@ -19,6 +19,7 @@ import { registerReview } from './tools/review.js';
 import { registerRecall } from './tools/recall.js';
 import { registerRelated } from './tools/related.js';
 import { registerDissent } from './tools/dissent.js';
+import { registerVerifySource } from './tools/verifySource.js';
 import { SessionStore } from '../cycle/session.js';
 import type { CycleContext } from '../cycle/context.js';
 import { createDefaultContext } from '../cycle/defaultContext.js';
@@ -41,6 +42,7 @@ export function createFalsifyServer(deps: FalsifyServerDeps = {}): McpServer {
   registerRecall(server, deps);
   registerRelated(server, ctx);
   registerDissent(server, ctx);
+  registerVerifySource(server, ctx);
 
   return server;
 }

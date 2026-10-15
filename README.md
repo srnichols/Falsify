@@ -25,12 +25,13 @@ iterating design.
 
 ## Use Falsify inside your agent (MCP)
 
-Falsify ships as an MCP server exposing eight discipline-enforcing tools —
+Falsify ships as an MCP server exposing nine discipline-enforcing tools —
 `falsify_intake`, `falsify_hypothesize`, `falsify_experiment`, `falsify_analyze`,
 `falsify_review`, `falsify_recall`, plus `falsify_related` (which knowledge tiers a
-claim touches, with semantic matching when the corpus is reachable) and
-`falsify_dissent` (compare competing hypotheses from several models and surface where
-they disagree, never picking a winner). They never generate an answer; they take your
+claim touches, with semantic matching when the corpus is reachable), `falsify_dissent`
+(compare competing hypotheses from several models and surface where they disagree,
+never picking a winner) and `falsify_verify_source` (confirm that a DOI you cite as
+evidence is a real publication). They never generate an answer; they take your
 draft, run it through the cycle, and **refuse** anything that breaks the rules (a
 hypothesis with no falsification condition, an experiment that cannot fail, a Yes
 that skipped review).
@@ -77,7 +78,9 @@ live under `.falsify/` (git-ignored); set `FALSIFY_DATA_DIR` to keep them elsewh
 result names the `next` tool and repeats the `sessionId`, and a step without a session
 carries a `sessionWarning`. If your host keeps dropping the session, set
 `FALSIFY_REQUIRE_SESSION=1` in the server's environment and any step after intake
-without one is refused with `session:required`. After
+without one is refused with `session:required`. The claim-score weights can be retuned
+with `FALSIFY_WEIGHTS` (for example `{"evidence":0.9,"consensus":0.05}`); a setting that
+stops consensus being the smallest weight is rejected at startup. After
 rebuilding, reload the `falsify` server in your MCP host (in VS Code, restart it from
 the MCP servers list) so it picks up new tools; a running server keeps the old build.
 See [DESIGN.md](./DESIGN.md) §3.

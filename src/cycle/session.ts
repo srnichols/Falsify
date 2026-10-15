@@ -54,6 +54,8 @@ export interface SessionRecord {
   hypothesis?: LockedHypothesis;
   /** Hypotheses refuted by earlier loops, oldest first. */
   refuted: LockedHypothesis[];
+  /** DOIs confirmed to exist (via `falsify_verify_source`), keyed by normalized DOI. */
+  verifiedSources?: Record<string, { title: string; venue?: string; year?: number; checkedAt: string }>;
   experiment?: { decisiveEvidence: string[] };
   analysis?: {
     verdict: 'yes' | 'no';

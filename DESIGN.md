@@ -209,10 +209,21 @@ claim_score =
 > The score is reported with its signals, its consensus-free part, and exactly what
 > consensus added (at most `w_consensus`); a recorded theory carries its evidence
 > strength. A *yes* that conflicts with Bedrock/Established knowledge must cite a
-> sourced experiment or statistical result. The per-kind credits are heuristics and
-> tunable; the ordering of weights is the commitment. `compareClaims` is not yet used
-> by the cycle (it is for comparing rival claims, which Contested questions
-> deliberately never do — they present every side).
+> sourced experiment or statistical result. The per-kind credits are heuristics; the
+> ordering of weights is the commitment, and it is enforced rather than assumed:
+> `FALSIFY_WEIGHTS` (a JSON object of partial overrides) retunes the numbers but is
+> rejected on load if it would stop consensus being the strictly smallest weight, and
+> tests pin both a ladder of evidence profiles (weakest to strongest must score in order)
+> and a 500-case property test that consensus cannot flip an evidence-decided comparison
+> under any valid weighting. `compareClaims` is not used by the cycle (it is for
+> comparing rival claims, which Contested questions deliberately never do — they present
+> every side).
+>
+> **Sources are checked, not just asserted.** A typed-in `source` earns only a small
+> credit. Give the evidence item a `doi` and call `falsify_verify_source`: Crossref
+> confirms the work exists (only the DOI is sent), the session records it, and the item
+> then earns full source credit. This confirms the work is real, not that it says what
+> the evidence claims.
 
 ### Who decides the tier
 
@@ -368,12 +379,15 @@ picks — because the whole point is to surface disagreement, not bury it.
 
 ## 7. Open Design Questions (to iterate)
 
-- [ ] **Weights:** starting values for `w_*` in §4. Ordering is fixed; numbers TBD.
+- [x] **Weights:** starting values for `w_*` in §4. *Resolved as far as it can be:* the
+      defaults are heuristics, tunable with `FALSIFY_WEIGHTS`, and what is fixed (and
+      tested) is the ordering. Calibrating the numbers against real outcomes would
+      need a body of resolved inquiries Falsify does not yet have.
 - [x] **"Evidence" sourcing:** how does the agent obtain *data* (papers, datasets,
-      user-supplied observations)? *Partly resolved:* the caller supplies evidence as
-      structured items (kind, source, sample size, effect size, p-value, replication),
-      which feed the claim score (§4). Still open: Falsify does not retrieve or verify
-      sources itself; a `source` is a string the caller asserts.
+      user-supplied observations)? *Resolved to the extent Falsify can:* the caller
+      supplies structured evidence, and a cited DOI can be confirmed to exist
+      (`falsify_verify_source`) for full source credit. Falsify does not retrieve data
+      itself, and cannot confirm that a real paper supports the claim made from it.
 - [ ] **Falsifiability classifier:** how do we reliably detect an unfalsifiable
       claim? (Heuristics + model judgment + a checklist.) *Partly done:* intake uses
       narrow lexical patterns and falsification conditions get substance checks; both

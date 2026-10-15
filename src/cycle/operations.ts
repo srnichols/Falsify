@@ -617,7 +617,8 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
   }
   const { session, state } = resolved;
 
-  const items = normalizeEvidence(input.evidenceCited ?? [], input.evidence ?? [], isConsensusAppeal);
+  const verifiedDois = new Set(Object.keys(session?.verifiedSources ?? {}));
+  const items = normalizeEvidence(input.evidenceCited ?? [], input.evidence ?? [], isConsensusAppeal, verifiedDois);
   const parsed = AnalysisSchema.safeParse({
     verdict: input.verdict,
     evidenceCited: items.map((i) => i.observation),
@@ -683,6 +684,17 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
         )
       : undefined;
   const scoring: Record<string, unknown> = report !== undefined ? { claimScore: report } : {};
+  const doiItems = items.filter((i) => i.doi !== undefined);
+  if (doiItems.length > 0) {
+    const unverified = doiItems.filter((i) => i.sourceVerified !== true).map((i) => i.doi);
+    scoring.sourceCheck = {
+      verified: doiItems.length - unverified.length,
+      unverified,
+      ...(unverified.length > 0
+        ? { note: 'Call falsify_verify_source for each unverified DOI (with this sessionId) to earn full source credit.' }
+        : {}),
+    };
+  }
   const recordAnalysis = (): void => {
     if (session === undefined) return;
     session.analysis = {
