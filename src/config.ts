@@ -7,7 +7,18 @@
  * the secret value.
  */
 
+import { resolve } from 'node:path';
 import { z } from 'zod';
+
+/**
+ * Where Falsify keeps its local state (sessions, notebook, offline queue).
+ * Defaults to `.falsify` under the working directory; set `FALSIFY_DATA_DIR` to
+ * keep it elsewhere (for example a throwaway directory in an end-to-end test).
+ */
+export function resolveDataDir(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = env.FALSIFY_DATA_DIR;
+  return configured !== undefined && configured !== '' ? resolve(configured) : resolve(process.cwd(), '.falsify');
+}
 
 /** Thrown when the environment does not provide a usable Falsify config. */
 export class ConfigError extends Error {

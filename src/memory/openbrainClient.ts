@@ -12,8 +12,9 @@
  */
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
 import type { FalsifyConfig } from '../config.js';
+import { resolveDataDir } from '../config.js';
 
 /**
  * Minimal fetch shape — abstracted so the client does not depend on the DOM lib
@@ -79,7 +80,7 @@ export class BrainHttpError extends Error {
   }
 }
 
-export const DEFAULT_QUEUE_DIR = resolve(process.cwd(), '.falsify', 'queue');
+export const DEFAULT_QUEUE_DIR = join(resolveDataDir(), 'queue');
 
 export class OpenBrainClient {
   private readonly queueDir: string;

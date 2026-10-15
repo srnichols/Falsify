@@ -11,12 +11,13 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
+import { resolveDataDir } from '../config.js';
 import type { CycleState } from '../domain/types.js';
 import type { EvidenceStrength, ResolvedEvidence } from '../domain/evidence.js';
 
 /** Default on-disk location for sessions, mirroring `.falsify/notebook`. */
-export const DEFAULT_SESSION_DIR = resolve(process.cwd(), '.falsify', 'sessions');
+export const DEFAULT_SESSION_DIR = join(resolveDataDir(), 'sessions');
 
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

@@ -11,10 +11,10 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
-import { DEFAULT_PROJECT } from '../config.js';
+import { DEFAULT_PROJECT, resolveDataDir } from '../config.js';
 
 /** Default on-disk location for the notebook, mirroring `.falsify/queue`. */
-export const DEFAULT_NOTEBOOK_DIR = resolve(process.cwd(), '.falsify', 'notebook');
+export const DEFAULT_NOTEBOOK_DIR = join(resolveDataDir(), 'notebook');
 
 /** An appended "new entry" event. */
 interface EntryEvent {
