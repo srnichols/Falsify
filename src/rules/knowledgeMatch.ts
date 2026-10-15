@@ -255,12 +255,16 @@ function isNegated(text: string): boolean {
   return (text.match(NEGATION)?.length ?? 0) % 2 === 1;
 }
 
-/** A match found only by meaning (not wording) below this score may be about something else. */
+/** A match whose strongest signal is below this score, and which meaning helped find, may be about something else. */
 const MIN_SEMANTIC_ONLY_SCORE = 0.7;
 
-/** Found by meaning alone and not clearly on topic: negation tells us nothing about it. */
+/**
+ * Found with the help of meaning (alone, or alongside a thin wording overlap) and not clearly
+ * on topic. A match that is "both" keeps the higher of its two scores, so below the cutoff
+ * neither signal was strong; negation tells us nothing about it.
+ */
 function isWeakSemanticMatch(match: KnowledgeMatch): boolean {
-  return (match.via === 'semantic' || match.via === 'embedding') && match.score < MIN_SEMANTIC_ONLY_SCORE;
+  return (match.via === 'semantic' || match.via === 'embedding' || match.via === 'both') && match.score < MIN_SEMANTIC_ONLY_SCORE;
 }
 
 /**

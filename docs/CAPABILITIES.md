@@ -110,7 +110,8 @@ entries: 21 Bedrock, 84 Established, 19 Contested, 23 Quantitative, 27 Refuted.
 - **Coverage** is part of curation: the lint warns when one field exceeds 40% of claim
   entries. The human sciences are still much thinner than physics and biology.
 - The matcher reads **stance** (`asserts`, `denies`, `unclear`) from negation only, and
-  marks weak meaning-only matches (below 0.7) `unclear` and possibly off-topic.
+  marks weak matches that meaning helped find (semantic or embedding, alone or with a thin
+  wording overlap, below 0.7) `unclear` and possibly off-topic.
 
 ## Settings (environment variables)
 

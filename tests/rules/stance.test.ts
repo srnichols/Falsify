@@ -66,10 +66,17 @@ describe('stance on matches found by meaning alone', () => {
     expect(withStance(claim, vitalism({ via: 'embedding' })).stance).toBe('unclear');
   });
 
-  it('still reads stance for a strong semantic match, and for any lexical or combined match', () => {
+  it('treats a "both" match the same way when neither signal is strong (the live vitalism case)', () => {
+    const m = withStance(claim, vitalism({ via: 'both', score: 0.663 }));
+    expect(m.stance).toBe('unclear');
+    expect(m.directive).toMatch(/may be about something else/);
+    expect(m.directive).not.toMatch(/agrees with the record/);
+  });
+
+  it('still reads stance for a strong semantic or combined match, and for a lexical-only match', () => {
     expect(withStance(claim, vitalism({ score: 0.82 })).stance).toBe('denies');
+    expect(withStance(claim, vitalism({ via: 'both', score: 0.82 })).stance).toBe('denies');
     expect(withStance(claim, vitalism({ via: 'lexical', score: 0.4 })).stance).toBe('denies');
-    expect(withStance(claim, vitalism({ via: 'both', score: 0.5 })).stance).toBe('denies');
   });
 
   it('does not touch a Contested or Established directive on a weak match beyond the warning', () => {
