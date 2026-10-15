@@ -311,7 +311,9 @@ entries:
     expect(Math.max(...counts.values()) / total).toBeLessThanOrEqual(0.4);
     expect(counts.get('social-science') ?? 0).toBeGreaterThanOrEqual(12);
     expect(counts.get('medicine') ?? 0).toBeGreaterThanOrEqual(12);
-    expect(counts.get('economics') ?? 0).toBeGreaterThanOrEqual(3);
+    expect(counts.get('economics') ?? 0).toBeGreaterThanOrEqual(5);
+    expect(counts.get('neuroscience') ?? 0).toBeGreaterThanOrEqual(3);
+    expect(counts.get('climate') ?? 0).toBeGreaterThanOrEqual(2);
   });
 
   it('reports duplicate ids and tier/id prefix mismatches', () => {

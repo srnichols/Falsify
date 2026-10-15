@@ -203,7 +203,7 @@ sync fails, the YAML corpus is still authoritative and recoverable from git.
 ## Status
 
 Working and in active use, still iterating. Ten MCP tools and a local web UI sit on one
-transport-neutral core, with a 174-entry tiered knowledge corpus. Be clear about what it
+transport-neutral core, with a 182-entry tiered knowledge corpus. Be clear about what it
 is: it enforces discipline on what an agent *submits*, and records a **process**, not
 proof. It cannot tell whether a paper supports a claim or whether the numbers are true,
 its score weights are priors that real recorded outcomes have not yet calibrated, and its

@@ -98,8 +98,8 @@ get past it.
 
 ## Knowledge
 
-`knowledge/*.yaml` is the source of truth (OpenBrain is only a searchable mirror). 174
-entries: 21 Bedrock, 84 Established, 19 Contested, 23 Quantitative, 27 Refuted.
+`knowledge/*.yaml` is the source of truth (OpenBrain is only a searchable mirror). 182
+entries: 21 Bedrock, 88 Established, 22 Contested, 23 Quantitative, 28 Refuted.
 
 - **Bedrock / Established** entries state what they rest on, what would overturn them and
   their domain of validity; the lint advises when one lacks two sources, a validity domain

@@ -59,6 +59,15 @@ describe('docs/CAPABILITIES.md stays in step with the code', () => {
     }
   });
 
+  it('keeps the Copilot instructions describing this project, not the Plan Forge template', () => {
+    const instructions = readFileSync(join(root, '.github', 'copilot-instructions.md'), 'utf8');
+    for (const stale of ['pnpm install', 'Prisma Client', 'React 18', 'What your app does']) {
+      expect(instructions, `copilot-instructions.md still contains template text: ${stale}`).not.toContain(stale);
+    }
+    expect(instructions).toContain('docs/CAPABILITIES.md');
+    expect(instructions).toContain('falsify-inquiry.instructions.md');
+  });
+
   it('points at guidance files that exist', () => {
     for (const rel of [
       '.github/instructions/falsify-inquiry.instructions.md',

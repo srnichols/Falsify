@@ -706,3 +706,141 @@ entries:
           and it is not a reason to dismiss either position above once they pick
           a definition.
     engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.climate.equilibrium_sensitivity
+    keywords: ["climate sensitivity", "how much warming for doubling CO2", "equilibrium climate sensitivity", "ECS", "how hot will it get"]
+    question: "How much does global mean temperature rise for a doubling of atmospheric carbon dioxide (equilibrium climate sensitivity)?"
+    domain: climate/atmospheric-science
+    note: >-
+      That human greenhouse gases are warming the climate is not what is contested here
+      (see the Established entry). The contested part is the size of the response, and
+      how much weight each line of evidence deserves. A 2020 multi-line assessment gave
+      a central range near 2.6 to 3.9 degrees C and found values below about 2 degrees C
+      very unlikely, while not excluding a high tail. Positions are listed with their
+      falsifiers, and each is held to the same test.
+    positions:
+      - label: "a central value near 3 degrees C (roughly 2.6 to 3.9)"
+        claim: >-
+          Combining process understanding, the historical record and paleoclimate
+          evidence puts the most likely sensitivity near 3 degrees C per doubling.
+        falsifiable: true
+        falsified_if: >-
+          Independent lines of evidence, correctly accounting for their own
+          uncertainties, consistently place the value outside that range, for
+          example paleoclimate and process-based feedback estimates both converging
+          well below or above it.
+        falsifiability_status: scientific
+        evidence_pointers: ["Sherwood et al. 2020, Rev Geophys, doi:10.1029/2019RG000678", "cloud and water-vapour feedback estimates", "paleoclimate constraints"]
+      - label: "lower values (roughly 1.5 to 2.5) are not excluded by historical estimates"
+        claim: >-
+          Energy-balance estimates from the historical record allow values lower than
+          the central range, because the observed warming so far has been modest
+          relative to the forcing.
+        falsifiable: true
+        falsified_if: >-
+          Corrections for the changing pattern of ocean warming and for uncertainty in
+          historical forcing consistently lift historical energy-balance estimates
+          into the central range, or other lines of evidence exclude the lower values.
+        falsifiability_status: scientific
+        evidence_pointers: ["historical energy-balance estimates", "pattern-effect corrections", "aerosol forcing uncertainty"]
+        note: >-
+          Listed because it makes a testable claim that some analyses have supported;
+          the 2020 synthesis found values below about 2 degrees C very unlikely.
+      - label: "a high tail above about 4.5 degrees C cannot be excluded"
+        claim: >-
+          Uncertainty in cloud and other feedbacks leaves a small but real chance of a
+          sensitivity above the central range.
+        falsifiable: true
+        falsified_if: >-
+          Observational and paleoclimate constraints jointly exclude values above
+          about 4.5 degrees C at high confidence, or improved cloud-feedback
+          observations remove the processes that allow it.
+        falsifiability_status: scientific
+        evidence_pointers: ["cloud-feedback uncertainty", "emergent constraints from model ensembles", "paleoclimate states with high warming"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.economics.fiscal_multiplier
+    keywords: ["fiscal multiplier", "does government spending boost the economy", "stimulus effectiveness", "government spending multiplier", "recession stimulus"]
+    question: "How large is the output multiplier of government spending, and does it depend on the state of the economy?"
+    domain: economics/macroeconomics
+    note: >-
+      Estimates depend on how a spending change is identified, how it is financed, and
+      the monetary and economic conditions at the time, so a multiplier is not one
+      number.
+    positions:
+      - label: "larger than 1 in slack economies and at the zero lower bound"
+        claim: >-
+          When the economy has spare capacity or interest rates cannot fall further,
+          an extra unit of government spending raises output by more than one unit.
+        falsifiable: true
+        falsified_if: >-
+          Well-identified spending changes during recessions and zero-lower-bound
+          episodes consistently give multipliers of one or less across samples and
+          methods.
+        falsifiability_status: scientific
+        evidence_pointers: ["Auerbach & Gorodnichenko 2012, AEJ Economic Policy, doi:10.1257/pol.4.2.1", "state-dependent estimation methods"]
+      - label: "around or below 1 in all states"
+        claim: >-
+          Average multipliers are close to or below one whatever the state of the
+          economy, and apparent larger values reflect how shocks are identified.
+        falsifiable: true
+        falsified_if: >-
+          Robustly identified spending shocks give multipliers clearly above one in
+          recessions across independent datasets.
+        falsifiability_status: scientific
+        evidence_pointers: ["Ramey 2019, J Economic Perspectives, doi:10.1257/jep.33.2.89", "narrative identification of defence-spending news"]
+      - label: "identification is too weak to tell"
+        claim: >-
+          The data and identification strategies available cannot reliably separate
+          state-dependent multipliers from noise, so neither claim is established.
+        falsifiable: true
+        falsified_if: >-
+          Independent identification strategies applied to the same episodes yield
+          stable, mutually consistent state-dependent estimates.
+        falsifiability_status: scientific
+        evidence_pointers: ["sensitivity of estimates to the identification method", "limited number of large episodes"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.neuroscience.adult_hippocampal_neurogenesis
+    keywords: ["adult neurogenesis", "new neurons in adults", "do adults grow new brain cells", "hippocampus neurogenesis humans"]
+    question: "Do adult humans generate new neurons in the hippocampus throughout life?"
+    domain: neuroscience/neurogenesis
+    note: >-
+      Adult neurogenesis is well established in rodents. In humans, two prominent 2018
+      studies reached opposite conclusions from post-mortem tissue, and the dispute
+      turns largely on method: which markers identify immature neurons, and how tissue
+      is collected and preserved.
+    positions:
+      - label: "neurogenesis persists through ageing"
+        claim: >-
+          Adult humans keep generating new hippocampal neurons into old age, at a
+          rate that declines slowly.
+        falsifiable: true
+        falsified_if: >-
+          Validated markers applied to well-preserved adult human tissue repeatedly
+          fail to find immature neurons beyond childhood.
+        falsifiability_status: scientific
+        evidence_pointers: ["Boldrini et al. 2018, Cell Stem Cell, doi:10.1016/j.stem.2018.03.015", "Altman & Das 1965, J Comp Neurol, doi:10.1002/cne.901240303 (rodent origin of the idea)"]
+      - label: "neurogenesis falls to undetectable levels after childhood"
+        claim: >-
+          Hippocampal neurogenesis drops sharply in childhood and is undetectable in
+          adult humans.
+        falsifiable: true
+        falsified_if: >-
+          Validated methods applied to well-preserved adult human tissue repeatedly
+          find immature neurons in adults, in numbers that independent laboratories
+          reproduce.
+        falsifiability_status: scientific
+        evidence_pointers: ["Sorrells et al. 2018, Nature, doi:10.1038/nature25975"]
+      - label: "the answer depends on detection method and tissue handling"
+        claim: >-
+          The two findings can both be reproduced because markers, tissue sources and
+          post-mortem delay change what is detectable, so current evidence cannot settle
+          the question.
+        falsifiable: true
+        falsified_if: >-
+          A direct method comparison on the same tissue gives concordant results
+          across laboratories, so the disagreement was not about method.
+        falsifiability_status: scientific
+        evidence_pointers: ["marker specificity", "post-mortem interval and fixation effects"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"

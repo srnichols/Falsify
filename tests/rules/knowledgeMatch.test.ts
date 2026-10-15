@@ -83,6 +83,16 @@ describe('matchKnowledge', () => {
     expect(top('Is specified complexity a reliable empirical indicator of intelligent design?')).toBe(info);
   });
 
+  it('finds the climate, economics and neuroscience entries from plain questions', () => {
+    const top = (claim: string): string | undefined => matchKnowledge(index, claim, { limit: 1 })[0]?.id;
+    expect(top('Are human greenhouse gas emissions the cause of global warming?')).toBe('established.climate.human_greenhouse_warming');
+    expect(top('How much warming do we get for a doubling of CO2, the climate sensitivity?')).toBe('contested.climate.equilibrium_sensitivity');
+    expect(top('Does government stimulus spending have a multiplier above one in a recession?')).toBe('contested.economics.fiscal_multiplier');
+    expect(top('Do adults grow new neurons in the hippocampus?')).toBe('contested.neuroscience.adult_hippocampal_neurogenesis');
+    expect(top('Can policymakers permanently trade higher inflation for lower unemployment on the Phillips curve?')).toBe('refuted.economics.stable_phillips_tradeoff');
+    expect(top('Does hippocampal damage stop people forming new memories, like patient H.M.?')).toBe('established.neuroscience.hippocampus_declarative_memory');
+  });
+
   it('presents every position of a contested entry, with the same falsifiability standard on each', () => {
     const entry = matchKnowledge(index, 'Does the Cambrian explosion show new body plans', { limit: 1 })[0];
     const positions = (entry?.details.positions ?? []) as { label: string; falsifiability_status: string }[];

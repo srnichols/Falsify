@@ -524,3 +524,23 @@ entries:
       sham-controlled trial is ethical when the procedure's benefit is
       unproven.
     sources: ["Moseley et al. 2002, N Engl J Med, doi:10.1056/NEJMoa013259"]
+
+  - id: refuted.economics.stable_phillips_tradeoff
+    keywords: ["Phillips curve", "trade inflation for unemployment", "permanent tradeoff between inflation and unemployment", "stagflation"]
+    claim: >-
+      Policymakers can permanently lower unemployment by accepting higher inflation,
+      because the relationship between inflation and unemployment is a stable
+      tradeoff.
+    domain: economics/macroeconomics
+    type: refuted-theory
+    era: "1958 to the early 1970s"
+    falsified_by: >-
+      The stagflation of the 1970s, with high inflation and high unemployment at the
+      same time, and the earlier prediction that no permanent tradeoff exists once
+      people's expectations of inflation adjust.
+    superseded_by: "The expectations-augmented Phillips curve: a short-run tradeoff that shifts as expectations of inflation change."
+    lesson: >-
+      A statistical regularity observed under one policy regime can fail when policy
+      tries to exploit it, because people change their behaviour. Check whether a
+      relationship holds when the conditions that produced it change.
+    sources: ["Phillips 1958, Economica, doi:10.2307/2550759", "Phelps 1967, Economica, doi:10.2307/2552025"]

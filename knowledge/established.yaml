@@ -1718,3 +1718,82 @@ entries:
       vary widely by good and time horizon, and rare exceptions such as Giffen
       behaviour have been documented in narrow settings.
     sources: ["Bijmolt, van Heerde & Pieters 2005, J Marketing Research, doi:10.1509/jmkr.42.2.141.62296", "Gallet & List 2003, Health Economics, doi:10.1002/hec.765", "Jensen & Miller 2008, American Economic Review, doi:10.1257/aer.98.4.1553"]
+
+  - id: established.climate.human_greenhouse_warming
+    keywords: ["global warming", "climate change cause", "carbon dioxide warming", "greenhouse gases", "human caused warming", "anthropogenic warming"]
+    statement: >-
+      Human emissions of greenhouse gases, mainly carbon dioxide, are the dominant
+      cause of the global warming observed since the mid-20th century.
+    domain: climate/atmospheric-science
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Independent attribution analyses show that natural forcings alone reproduce
+      the observed warming and its pattern, or the observed vertical pattern of
+      tropospheric warming with stratospheric cooling that greenhouse forcing
+      predicts is shown not to exist in properly homogenized records.
+    status: well-supported
+    confirmations: ["tropospheric warming with stratospheric cooling", "rising ocean heat content", "several independent surface temperature records", "attribution studies that separate human and natural forcings"]
+    domain_of_validity: >-
+      A claim about the cause of the observed rise in global mean temperature. It does
+      not state how large future warming will be (that depends on climate sensitivity
+      and emissions, a separate Contested question), nor regional effects, impacts, or
+      what policy should follow.
+    sources: ["Manabe & Wetherald 1967, J Atmos Sci, doi:10.1175/1520-0469(1967)024<0241:TEOTAW>2.0.CO;2", "Gillett et al. 2021, Nature Climate Change, doi:10.1038/s41558-020-00965-9", "IPCC AR6 Working Group I report 2021 (report, no DOI checked here)"]
+
+  - id: established.economics.comparative_advantage
+    keywords: ["comparative advantage", "gains from trade", "countries export what they are relatively good at", "Ricardo trade"]
+    statement: >-
+      Countries tend to export the goods in which their relative productivity is
+      higher, so patterns of trade follow comparative advantage.
+    domain: economics/trade
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Cross-country trade data, with productivity measured independently of trade
+      flows, show no relationship between relative productivity and export patterns.
+    status: well-supported
+    confirmations: ["cross-country and cross-industry productivity and trade data", "estimates of the gains from trade"]
+    domain_of_validity: >-
+      A statistical tendency in trade in goods. It does not say that trade benefits
+      every group within a country (distributional effects are real), nor that
+      comparative advantage alone determines every trade flow.
+    sources: ["Costinot & Donaldson 2012, American Economic Review, doi:10.1257/aer.102.3.453", "Ricardo 1817, On the Principles of Political Economy and Taxation (book, no DOI)"]
+
+  - id: established.neuroscience.hippocampus_declarative_memory
+    keywords: ["hippocampus and memory", "patient H.M.", "amnesia after hippocampal damage", "forming new memories", "medial temporal lobe memory"]
+    statement: >-
+      The medial temporal lobe, including the hippocampus, is required to form new
+      declarative (explicit) memories.
+    domain: neuroscience/memory
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Bilateral hippocampal damage in carefully tested patients leaves the formation
+      of new explicit memories intact.
+    status: well-supported
+    confirmations: ["severe anterograde amnesia after bilateral medial temporal lobe removal", "preserved skill learning and short-term memory alongside the deficit", "later lesion and imaging studies"]
+    domain_of_validity: >-
+      Concerns the formation of new explicit memories. It does not mean all memory
+      depends on the hippocampus (skills and priming are spared), nor does it settle
+      where long-term memories are finally stored, which is still debated.
+    sources: ["Scoville & Milner 1957, J Neurol Neurosurg Psychiatry, doi:10.1136/jnnp.20.1.11", "Corkin 2002, Nature Reviews Neuroscience, doi:10.1038/nrn726", "Squire 2009, Neuron, doi:10.1016/j.neuron.2008.12.023"]
+
+  - id: established.neuroscience.long_term_potentiation
+    keywords: ["long-term potentiation", "LTP", "synaptic plasticity", "neurons that fire together", "synapse strengthening and learning"]
+    statement: >-
+      Repeated synaptic activity can produce a lasting strengthening of synapses
+      (long-term potentiation), and blocking it impairs some forms of learning.
+    domain: neuroscience/synaptic-plasticity
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Lasting potentiation cannot be reproduced by independent laboratories, or
+      blocking its induction leaves every tested form of learning unimpaired.
+    status: well-supported
+    confirmations: ["lasting potentiation in the dentate area after brief high-frequency stimulation", "NMDA-receptor blockade that prevents potentiation and impairs spatial learning"]
+    domain_of_validity: >-
+      Shows that the phenomenon exists and is involved in some learning tasks. It
+      does not show that potentiation is the mechanism of all memory; results differ
+      by task and manipulation, and that wider claim is still debated.
+    sources: ["Bliss & Lomo 1973, J Physiol, doi:10.1113/jphysiol.1973.sp010273", "Morris et al. 1986, Nature, doi:10.1038/319774a0"]
