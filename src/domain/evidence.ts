@@ -46,8 +46,10 @@ export type Evidence = z.infer<typeof EvidenceSchema>;
 /** An evidence item whose `kind` has been resolved, and whose DOI (if any) has been looked up. */
 export type ResolvedEvidence = Evidence & {
   kind: EvidenceKind;
-  /** True only when the DOI was confirmed to exist in this session. */
+  /** True only when the DOI was confirmed to exist in this session and its title relates to the claim. */
   sourceVerified?: boolean;
+  /** The DOI exists but its title shares nothing with the claim or observation: possibly unrelated. */
+  sourceTopicMismatch?: boolean;
 };
 
 /**

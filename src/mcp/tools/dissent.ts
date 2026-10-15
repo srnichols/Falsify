@@ -20,6 +20,9 @@ export const DissentPositionSchema = z.object({
   predicts: z.string().min(1),
   falsificationConditions: z.array(z.object({ description: z.string(), observable: z.boolean().optional() })).optional(),
   evidence: z.array(EvidenceSchema).optional(),
+  outcome: z
+    .object({ variable: z.string().min(1), direction: z.enum(['increase', 'decrease', 'no-change']) })
+    .optional(),
 });
 
 const inputShape = {
@@ -36,7 +39,9 @@ export function registerDissent(server: McpServer, ctx?: CycleContext): void {
         'Compare competing hypotheses (for example, one from each of several models) and surface ' +
         'where they disagree instead of burying it. Each position must pass the same honesty rules ' +
         'as falsify_hypothesize. Returns pairwise agreement, the falsifiers unique to each position ' +
-        '(the tests that would discriminate between them), and any Contested entry the question ' +
+        'and the tests that would discriminate between them. Give each position an `outcome` ' +
+        '({variable, direction: increase|decrease|no-change}) so agreement is judged from what is ' +
+        'predicted rather than guessed from wording. Also returns any Contested entry the question ' +
         'matches. It never picks a winner, and warns when positions agree, because several models ' +
         'agreeing is a consensus signal, not an experiment. Falsify does not call models: gather the ' +
         'positions yourself and submit them here.',

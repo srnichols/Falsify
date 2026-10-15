@@ -29,8 +29,9 @@ import { buildKnowledgeIndex, lookupEntry, matchKnowledge } from '../rules/knowl
 import type { KnowledgeIndex } from '../rules/knowledgeMatch.js';
 import { COMPARISON_PATTERN, scoreClaim } from '../rules/signals.js';
 import type { KnowledgeRelation, ResolvedKnowledgeRef } from '../rules/signals.js';
-import { normalizeEvidence } from '../domain/evidence.js';
+import { normalizeDoi, normalizeEvidence } from '../domain/evidence.js';
 import type { Evidence } from '../domain/evidence.js';
+import { titleRelatesTo } from '../rules/sourceCheck.js';
 import { loadAllKnowledge } from '../knowledge/loader.js';
 import type { CycleContext } from './context.js';
 import type { LockedHypothesis, SessionRecord } from './session.js';
@@ -618,7 +619,19 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
   const { session, state } = resolved;
 
   const verifiedDois = new Set(Object.keys(session?.verifiedSources ?? {}));
-  const items = normalizeEvidence(input.evidenceCited ?? [], input.evidence ?? [], isConsensusAppeal, verifiedDois);
+  const items = normalizeEvidence(input.evidenceCited ?? [], input.evidence ?? [], isConsensusAppeal, verifiedDois).map((item) => {
+    const doi = item.doi !== undefined ? normalizeDoi(item.doi) : undefined;
+    const title = doi !== undefined ? session?.verifiedSources?.[doi]?.title : undefined;
+    if (item.sourceVerified !== true || title === undefined) return item;
+    const related = titleRelatesTo(title, [
+      item.observation,
+      session?.hypothesis?.statement ?? '',
+      session?.hypothesis?.predicts ?? '',
+    ]);
+    if (related) return item;
+    // A real paper on an unrelated topic is not support: withhold the verified credit.
+    return { ...item, sourceVerified: false, sourceTopicMismatch: true };
+  });
   const parsed = AnalysisSchema.safeParse({
     verdict: input.verdict,
     evidenceCited: items.map((i) => i.observation),
@@ -686,10 +699,18 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
   const scoring: Record<string, unknown> = report !== undefined ? { claimScore: report } : {};
   const doiItems = items.filter((i) => i.doi !== undefined);
   if (doiItems.length > 0) {
-    const unverified = doiItems.filter((i) => i.sourceVerified !== true).map((i) => i.doi);
+    const unverified = doiItems.filter((i) => i.sourceVerified !== true && i.sourceTopicMismatch !== true).map((i) => i.doi);
+    const mismatched = doiItems.filter((i) => i.sourceTopicMismatch === true).map((i) => i.doi);
     scoring.sourceCheck = {
-      verified: doiItems.length - unverified.length,
+      verified: doiItems.filter((i) => i.sourceVerified === true).length,
       unverified,
+      ...(mismatched.length > 0
+        ? {
+            possiblyUnrelated: mismatched,
+            mismatchNote:
+              'These DOIs exist, but their titles share nothing with your claim or observation, so they earn no verified credit. Cite the work that actually reports this observation.',
+          }
+        : {}),
       ...(unverified.length > 0
         ? { note: 'Call falsify_verify_source for each unverified DOI (with this sessionId) to earn full source credit.' }
         : {}),

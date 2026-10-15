@@ -46,6 +46,30 @@ describe('opDissent', () => {
     ]);
   });
 
+  it('judges agreement from stated outcomes when every position gives one, not from wording', () => {
+    const a: DissentPositionInput = { ...rising, outcome: { variable: 'mean reaction time', direction: 'decrease' } };
+    // Worded almost identically to `a`, but the stated direction is the opposite.
+    const b: DissentPositionInput = {
+      ...rising,
+      label: 'model-b',
+      predicts: 'reaction time falls after a 200mg dose, ironically',
+      outcome: { variable: 'reaction time', direction: 'increase' },
+    };
+    const opposedPair = ok(opDissent({ positions: [a, b] })).agreement as { pairs: { relation: string; basis: string }[]; summary: string };
+    expect(opposedPair.pairs[0]).toMatchObject({ relation: 'opposed', basis: 'stated' });
+    expect(opposedPair.summary).toBe('split');
+
+    const c: DissentPositionInput = { ...opposed, label: 'model-c', outcome: { variable: 'mean reaction time', direction: 'decrease' } };
+    const agreeing = ok(opDissent({ positions: [a, c] })).agreement as { pairs: { relation: string }[]; summary: string };
+    expect(agreeing.pairs[0]?.relation).toBe('agree');
+    expect(agreeing.summary).toBe('unanimous');
+
+    const d: DissentPositionInput = { ...opposed, label: 'model-d', outcome: { variable: 'systolic blood pressure', direction: 'increase' } };
+    const different = ok(opDissent({ positions: [a, d] })).agreement as { pairs: { relation: string }[]; summary: string };
+    expect(different.pairs[0]?.relation).toBe('different-outcomes');
+    expect(different.summary).toBe('split');
+  });
+
   it('warns that agreement between models is a consensus signal, not an experiment', () => {
     const twin = { ...rising, label: 'model-c', source: 'model C' };
     const p = ok(opDissent({ positions: [rising, twin] }));

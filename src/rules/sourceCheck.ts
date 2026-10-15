@@ -12,6 +12,7 @@
  */
 
 import { normalizeDoi } from '../domain/evidence.js';
+import { tokenize } from './knowledgeMatch.js';
 
 /** The slice of `fetch` this module needs, so tests can inject a fake. */
 export type SourceFetch = (
@@ -44,6 +45,17 @@ interface CrossrefMessage {
 
 const firstString = (value: unknown): string | undefined =>
   Array.isArray(value) && typeof value[0] === 'string' ? value[0] : undefined;
+
+/** True when a work's title shares at least one meaningful term with the text citing it. */
+export function titleRelatesTo(title: string, citingTexts: readonly string[]): boolean {
+  const titleTokens = tokenize(title);
+  for (const text of citingTexts) {
+    for (const token of tokenize(text)) {
+      if (titleTokens.has(token)) return true;
+    }
+  }
+  return false;
+}
 
 /** Look a DOI up in Crossref. Never throws. */
 export async function checkDoi(

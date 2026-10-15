@@ -35,6 +35,12 @@ export interface DissentPositionInput {
   predicts: string;
   falsificationConditions?: { description: string; observable?: boolean | undefined }[] | undefined;
   evidence?: Evidence[] | undefined;
+  /**
+   * What the position predicts, stated structurally. When every pair of positions
+   * has one, agreement is judged from the named variable and direction instead of
+   * guessed from wording, which is far more reliable.
+   */
+  outcome?: { variable: string; direction: 'increase' | 'decrease' | 'no-change' } | undefined;
 }
 
 export interface DissentInput {
@@ -47,6 +53,8 @@ export interface DissentInput {
 const AGREE_OVERLAP = 0.6;
 /** Below this they share little wording and are treated as diverging. */
 const PARTIAL_OVERLAP = 0.3;
+/** Two stated outcome variables this similar (Jaccard) are the same variable. */
+const SAME_VARIABLE_OVERLAP = 0.5;
 /** A falsifier this similar to another position's is shared, not distinguishing. */
 const SHARED_FALSIFIER_OVERLAP = 0.5;
 /** All pairs at least this close: warn that agreement is not evidence. */
@@ -153,6 +161,22 @@ export function opDissent(input: DissentInput, ctx?: CycleContext): OpResult {
   let closest = 1;
   for (let i = 0; i < valid.length; i++) {
     for (let j = i + 1; j < valid.length; j++) {
+      const a = valid[i]!.input.outcome;
+      const b = valid[j]!.input.outcome;
+      if (a !== undefined && b !== undefined) {
+        // Stated outcomes remove the guesswork: compare the named variable and direction directly.
+        const sameVariable = jaccard(tokenize(a.variable), tokenize(b.variable)) >= SAME_VARIABLE_OVERLAP;
+        const relation = !sameVariable ? 'different-outcomes' : a.direction === b.direction ? 'agree' : 'opposed';
+        closest = Math.min(closest, relation === 'agree' ? 1 : relation === 'opposed' ? 0 : PARTIAL_OVERLAP);
+        pairs.push({
+          a: valid[i]!.input.label,
+          b: valid[j]!.input.label,
+          relation,
+          basis: 'stated',
+          outcomes: { [valid[i]!.input.label]: a, [valid[j]!.input.label]: b },
+        });
+        continue;
+      }
       const overlap = jaccard(predictionTokens[i]!, predictionTokens[j]!);
       const opposed = directions[i] !== 'unclear' && directions[j] !== 'unclear' && directions[i] !== directions[j];
       closest = Math.min(closest, opposed ? 0 : overlap);
@@ -167,6 +191,7 @@ export function opDissent(input: DissentInput, ctx?: CycleContext): OpResult {
         a: valid[i]!.input.label,
         b: valid[j]!.input.label,
         relation,
+        basis: 'wording',
         predictionOverlap: Number(overlap.toFixed(2)),
         sharedTerms: [...predictionTokens[i]!].filter((t) => predictionTokens[j]!.has(t)),
       });

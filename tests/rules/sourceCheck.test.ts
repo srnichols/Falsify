@@ -95,7 +95,7 @@ describe('verified sources in scoring', () => {
 
   it('credits a DOI only after it is verified for this session, and says what is unverified', async () => {
     const sessions = new SessionStore();
-    const ctx: CycleContext = { sessions, verifySource: async () => ({ verified: true, doi: '10.1103/physrevlett.116.061102', title: 'T', venue: 'V', year: 2016, authors: [] }) };
+    const ctx: CycleContext = { sessions, verifySource: async () => ({ verified: true, doi: '10.1103/physrevlett.116.061102', title: 'Caffeine and reaction time: a randomized trial', venue: 'V', year: 2016, authors: [] }) };
     const sessionId = ok(opIntake({ question: 'Does a 200mg caffeine dose lower reaction time?' }, ctx)).sessionId as string;
     ok(opHypothesize({ statement: 'Caffeine lowers reaction time', predicts: 'faster responses', falsificationConditions: [{ description: 'no drop in reaction time versus placebo' }], sessionId }, [], ctx));
     ok(opExperiment({ couldFail: true, decisiveEvidence: ['blinded placebo-controlled test'], sessionId }, ctx));
@@ -110,5 +110,23 @@ describe('verified sources in scoring', () => {
     expect((after.sourceCheck as { verified: number }).verified).toBe(1);
     const gain = (after.claimScore as { nonConsensusScore: number }).nonConsensusScore - (before.claimScore as { nonConsensusScore: number }).nonConsensusScore;
     expect(gain).toBeGreaterThan(0);
+  });
+
+  it('withholds verified credit from a real paper whose title has nothing to do with the claim', async () => {
+    const sessions = new SessionStore();
+    const ctx: CycleContext = {
+      sessions,
+      verifySource: async () => ({ verified: true, doi: '10.1103/physrevlett.116.061102', title: 'Observation of Gravitational Waves from a Binary Black Hole Merger', venue: 'PRL', year: 2016, authors: ['Abbott'] }),
+    };
+    const sessionId = ok(opIntake({ question: 'Does a 200mg caffeine dose lower reaction time?' }, ctx)).sessionId as string;
+    ok(opHypothesize({ statement: 'Caffeine lowers reaction time', predicts: 'faster responses', falsificationConditions: [{ description: 'no drop in reaction time versus placebo' }], sessionId }, [], ctx));
+    ok(opExperiment({ couldFail: true, decisiveEvidence: ['blinded placebo-controlled test'], sessionId }, ctx));
+    await opVerifySource({ doi: '10.1103/PhysRevLett.116.061102', sessionId }, ctx);
+
+    const p = ok(opAnalyze({ verdict: 'yes', evidence: [{ observation: 'randomized trial showed faster responses', kind: 'experiment', doi: '10.1103/PhysRevLett.116.061102', sampleSize: 400 }], sessionId }, ctx));
+    const check = p.sourceCheck as { verified: number; possiblyUnrelated: string[]; mismatchNote: string };
+    expect(check.verified).toBe(0);
+    expect(check.possiblyUnrelated).toEqual(['10.1103/PhysRevLett.116.061102']);
+    expect(check.mismatchNote).toMatch(/nothing to do|share nothing/i);
   });
 });

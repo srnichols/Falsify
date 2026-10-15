@@ -7,7 +7,7 @@
  */
 
 import { normalizeDoi } from '../domain/evidence.js';
-import { checkDoi } from '../rules/sourceCheck.js';
+import { checkDoi, titleRelatesTo } from '../rules/sourceCheck.js';
 import type { CycleContext } from './context.js';
 import { errorResult, okResult } from './operations.js';
 import type { OpResult } from './operations.js';
@@ -65,6 +65,7 @@ export async function opVerifySource(input: VerifySourceInput, ctx?: CycleContex
     ctx.sessions.save(session);
   }
 
+  const claimText = session?.hypothesis !== undefined ? [session.hypothesis.statement, session.hypothesis.predicts] : undefined;
   return okResult({
     doi,
     verified: true,
@@ -73,6 +74,9 @@ export async function opVerifySource(input: VerifySourceInput, ctx?: CycleContex
     year: check.year,
     authors: check.authors,
     ...(session !== undefined ? { sessionId: session.id, recordedInSession: true } : {}),
+    ...(claimText !== undefined && !titleRelatesTo(check.title, claimText)
+      ? { warning: 'This title shares no terms with your hypothesis. If it is the work you meant, name the shared subject in the evidence observation; otherwise cite the work that reports this observation.' }
+      : {}),
     note: 'This confirms the work exists, not that it supports your claim. Check that the title is the work you meant.',
   });
 }
