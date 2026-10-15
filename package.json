@@ -31,7 +31,8 @@
     "web": "node dist/src/web/server.js",
     "seed-sync": "node dist/src/cli/seedSync.js",
     "knowledge": "node dist/src/cli/knowledge.js",
-    "calibrate": "node dist/src/cli/calibrate.js"
+    "calibrate": "node dist/src/cli/calibrate.js",
+    "calibrate:replication": "node dist/src/cli/calibrateReplication.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

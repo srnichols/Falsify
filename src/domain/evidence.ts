@@ -9,6 +9,7 @@
  */
 
 import { z } from 'zod';
+import { effectToR, replicationProbability } from '../rules/replicationModel.js';
 
 /** How an observation was obtained. `consensus` is an appeal to authority, not an observation. */
 export const EvidenceKindSchema = z.enum(['experiment', 'observation', 'statistical', 'anecdote', 'consensus']);
@@ -34,7 +35,9 @@ export const EvidenceSchema = z.object({
   /** The source's DOI. Earns more credit than a bare `source` once checked with `falsify_verify_source`. */
   doi: z.string().min(1).refine((v) => normalizeDoi(v) !== undefined, 'not a valid DOI').optional(),
   sampleSize: z.number().int().positive().optional(),
+  /** Effect size. A correlation (|x| <= 1) unless `effectMetric` says it is Cohen's d. */
   effectSize: z.number().optional(),
+  effectMetric: z.enum(['r', 'd']).optional(),
   pValue: z.number().min(0).max(1).optional(),
   /** True when an independent party reproduced the result. */
   replicated: z.boolean().optional(),
@@ -85,16 +88,15 @@ const KIND_BASE: Record<EvidenceKind, number> = {
   consensus: 0,
 };
 
-/** A sample this large earns the full sample-size credit. */
-const LARGE_SAMPLE = 300;
-const MIN_ADEQUATE_SAMPLE = 30;
-/** Multiplier on the reliability and statistical credit of a result nobody has reproduced. */
+/** Multiplier on the reliability of a result nobody has reproduced (about 39% of RPP studies replicated). */
 const UNREPLICATED_DISCOUNT = 0.75;
-const UNREPLICATED_STATS_DISCOUNT = 0.5;
+/** What a result an independent party has reproduced is worth as statistical support. */
+const REPLICATED_SUPPORT = 0.9;
 
 /**
  * Reliability of one item in [0, 1]. A heuristic, not a verdict: a base by kind,
- * plus credit for a named source, an adequate sample, and independent replication.
+ * plus credit for a named source and for independent replication. Sample size earns
+ * nothing: in the Reproducibility Project it did not predict which results held up.
  */
 export function evidenceQuality(item: ResolvedEvidence): number {
   if (item.kind === 'consensus') {
@@ -104,10 +106,6 @@ export function evidenceQuality(item: ResolvedEvidence): number {
   // A source anyone can type earns little; one confirmed to exist earns more.
   if (item.sourceVerified === true) quality += 0.15;
   else if (item.source !== undefined || item.doi !== undefined) quality += 0.05;
-  if (item.sampleSize !== undefined) {
-    if (item.sampleSize >= LARGE_SAMPLE) quality += 0.15;
-    else if (item.sampleSize >= MIN_ADEQUATE_SAMPLE) quality += 0.1;
-  }
   if (item.replicated === true) quality += 0.2;
   // An unreplicated result is fragile however it is dressed: the replication record, not the
   // p-value, is what separates results that survive from ones that do not.
@@ -115,21 +113,32 @@ export function evidenceQuality(item: ResolvedEvidence): number {
 }
 
 /**
- * Statistical support in [0, 1] from the strongest statistical item: sample size
- * (log-scaled), a pre-stated significance result, and a reported effect size.
- * Zero when no item reports any statistics — absence is not support.
+ * An item's effect size as a correlation, if it reports one. The metric defaults to
+ * a correlation when the value could be one (|x| <= 1) and to Cohen's d otherwise.
+ */
+function effectAsR(item: Evidence): number | undefined {
+  if (item.effectSize === undefined) return undefined;
+  const metric = item.effectMetric ?? (Math.abs(item.effectSize) <= 1 ? 'r' : 'd');
+  return effectToR(item.effectSize, metric);
+}
+
+/**
+ * Statistical support in [0, 1] from the strongest item that reports a p-value: the
+ * probability, from a model fitted to real replication outcomes, that a result with
+ * these statistics replicates; 0.9 if it already has. Zero when no item reports a
+ * p-value. Absence is not support, and neither is a big sample on its own.
  */
 export function statisticalSupport(items: readonly ResolvedEvidence[]): number {
   let best = 0;
   for (const item of items) {
-    if (item.kind === 'consensus') continue;
-    let score = 0;
-    if (item.sampleSize !== undefined) score += Math.min(0.5, Math.log10(item.sampleSize) / 6);
-    if (item.pValue !== undefined) score += item.pValue < 0.01 ? 0.4 : item.pValue < 0.05 ? 0.3 : 0;
-    if (item.effectSize !== undefined) score += 0.1;
-    best = Math.max(best, item.replicated === true ? score : score * UNREPLICATED_STATS_DISCOUNT);
+    if (item.kind === 'consensus' || item.pValue === undefined) continue;
+    const support =
+      item.replicated === true
+        ? REPLICATED_SUPPORT
+        : replicationProbability({ pValue: item.pValue, effectR: effectAsR(item) });
+    best = Math.max(best, support);
   }
-  return Math.min(1, best);
+  return best;
 }
 
 /** How strongly the observations (not the consensus) support the verdict. */

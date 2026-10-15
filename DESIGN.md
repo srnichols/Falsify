@@ -206,7 +206,7 @@ claim_score =
 > | Signal | Derived from |
 > |---|---|
 > | `directEvidence` | the best non-consensus evidence item (kind, source, sample size, replication); an unreplicated item is discounted, and "strong" needs a replicated one |
-> | `statisticalSupport` | reported sample size, p-value and effect size (halved if unreplicated); zero if none are reported |
+> | `statisticalSupport` | the probability, from a model fitted to real replication outcomes (below), that a result with this p-value and effect size replicates; 0.9 once replicated; zero with no p-value. Sample size earns nothing |
 > | `falsifiabilityQuality` | observable falsifiers, numeric thresholds, claim type, a comparison in the test |
 > | `bedrockSupport` / `establishedSupport` | `knowledgeRefs` the analyst links (ids must exist; a conflict zeroes the tier) |
 > | `institutionalConsensus` | the share of cited items that were appeals to authority |
@@ -386,16 +386,23 @@ picks — because the whole point is to surface disagreement, not bury it.
 
 ## 7. Open Design Questions (to iterate)
 
-- [x] **Weights:** starting values for `w_*` in §4. *Resolved as far as it can be:* the
-      defaults are heuristics, tunable with `FALSIFY_WEIGHTS`, and what is fixed (and
-      tested) is the ordering. `npm run calibrate` scores a small, sourced set of results
-      that held up or were refuted (`calibration/cases.json`) and reports how well the
-      score separates them (currently 94% of pairs; the misordered pairs are named in
-      the test as known limits). That set already earned one change: a result nobody has
-      reproduced is now discounted, and can be at most "moderate", because the first
-      run ranked an unreplicated 6-sigma anomaly above the Higgs. It is a smoke test
-      and regression guard, not proof the score predicts truth, and tuning to it
-      repeatedly would only fit the set. Real calibration needs many resolved inquiries.
+- [x] **Weights:** starting values for `w_*` in §4. *Partly grounded in real data, and
+      the rest is honest about what it is.* The weights remain heuristics, tunable with
+      `FALSIFY_WEIGHTS`; what is fixed (and tested) is their ordering. The statistical
+      signal, however, is now fitted to real outcomes: against the 96 studies of the
+      Reproducibility Project: Psychology with a known replication result
+      (`calibration/data/`, refit with `npm run calibrate:replication`), the original
+      heuristic (which rewarded large samples) scored an AUC of **0.45, worse than chance**,
+      because sample size did not predict replication. It was replaced by a logistic model
+      on the p-value and effect size, calibrated to the observed 39% replication rate, with
+      a cross-validated AUC of about **0.64**: original statistics predict replication only
+      modestly, and that is what the score now says. Scope: psychology experiments, not
+      every field. Separately, `npm run calibrate` scores 12 sourced historical cases
+      (`calibration/cases.json`) and reports 97% pairwise accuracy with the one misordered
+      pair named as a known limit; that set is a smoke test, not validation, and it earlier
+      earned one change (unreplicated results are discounted and cannot be "strong"). The
+      remaining weights (evidence, falsifiability, tier support) have no equivalent
+      outcome data; they would need many resolved inquiries.
 - [x] **"Evidence" sourcing:** how does the agent obtain *data* (papers, datasets,
       user-supplied observations)? *Resolved to the extent Falsify can:* the caller
       supplies structured evidence, and a cited DOI can be confirmed to exist
