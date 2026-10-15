@@ -672,12 +672,15 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
     lockedAt !== undefined ? { predictionLockedAt: lockedAt } : {};
   const report =
     session?.hypothesis !== undefined
-      ? scoreClaim({
-          hypothesis: session.hypothesis,
-          experimentEvidence: session.experiment?.decisiveEvidence ?? [],
-          evidence: items,
-          knowledgeRefs: refs,
-        })
+      ? scoreClaim(
+          {
+            hypothesis: session.hypothesis,
+            experimentEvidence: session.experiment?.decisiveEvidence ?? [],
+            evidence: items,
+            knowledgeRefs: refs,
+          },
+          ctx?.weights,
+        )
       : undefined;
   const scoring: Record<string, unknown> = report !== undefined ? { claimScore: report } : {};
   const recordAnalysis = (): void => {

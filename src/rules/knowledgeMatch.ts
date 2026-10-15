@@ -84,15 +84,16 @@ function isRefuted(entry: KnowledgeEntry): entry is RefutedEntry {
 
 /** The searchable text and display title for an entry; `undefined` for the Quantitative lens. */
 function describe(entry: KnowledgeEntry): { title: string; text: string } | undefined {
+  const keywords = 'keywords' in entry && entry.keywords !== undefined ? entry.keywords.join(' ') : '';
   if (isContested(entry)) {
     const sides = entry.positions.map((p) => `${p.label} ${p.claim}`).join(' ');
-    return { title: entry.question, text: `${entry.question} ${entry.domain} ${sides}` };
+    return { title: entry.question, text: `${entry.question} ${entry.domain} ${sides} ${keywords}` };
   }
   if (isRefuted(entry)) {
-    return { title: entry.claim, text: `${entry.claim} ${entry.domain}` };
+    return { title: entry.claim, text: `${entry.claim} ${entry.domain} ${keywords}` };
   }
   if (isFact(entry)) {
-    return { title: entry.statement, text: `${entry.statement} ${entry.domain}` };
+    return { title: entry.statement, text: `${entry.statement} ${entry.domain} ${keywords}` };
   }
   return undefined;
 }

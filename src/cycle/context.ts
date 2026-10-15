@@ -10,6 +10,7 @@ import type { SessionStore } from './session.js';
 import type { NotebookStore } from '../memory/notebook.js';
 import type { MemoryReader, MemoryWriter } from '../memory/openbrainClient.js';
 import type { KnowledgeIndex } from '../rules/knowledgeMatch.js';
+import type { ScoreWeights } from '../rules/claimScore.js';
 
 export interface CycleContext {
   /** Server-side session store; makes cycle state authoritative. */
@@ -22,6 +23,8 @@ export interface CycleContext {
   memory?: MemoryReader;
   /** Refuse any step after intake that does not carry a sessionId (`FALSIFY_REQUIRE_SESSION=1`). */
   requireSession?: boolean;
+  /** Claim-score weights; defaults to {@link DEFAULT_WEIGHTS}. Ordering is validated on load. */
+  weights?: ScoreWeights;
   /** Searchable view of the knowledge tiers. Defaulted from `knowledge/*.yaml`. */
   knowledge?: KnowledgeIndex;
 }

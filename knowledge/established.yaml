@@ -73,6 +73,7 @@ entries:
       ["Born, Heisenberg, Schrodinger, Dirac", "Aspect, Dalibard & Roger 1982, Bell-inequality test with time-varying analyzers, Phys. Rev. Lett. 49, 1804"]
 
   - id: established.geology.plate_tectonics
+    keywords: ["continental drift", "earthquakes", "volcanoes", "continents move", "mid-ocean ridge"]
     statement: >-
       Earth's lithosphere is divided into plates that move over the
       asthenosphere, explaining earthquakes, volcanism, and mountain building.
@@ -91,6 +92,7 @@ entries:
     sources: ["Wegener (continental drift)", "1960s seafloor-spreading synthesis"]
 
   - id: established.biology.germ_theory
+    keywords: ["bacteria cause disease", "microbes", "infection", "viruses", "hand washing", "pathogens"]
     statement: >-
       Many diseases are caused by microorganisms that infect a host.
     domain: biology/medicine
@@ -109,6 +111,7 @@ entries:
     sources: ["Pasteur", "Koch"]
 
   - id: established.cosmology.big_bang
+    keywords: ["expanding universe", "cosmic microwave background", "age of the universe", "origin of the universe"]
     statement: >-
       The observable universe expanded from a hot, dense early state ~13.8
       billion years ago.
@@ -128,6 +131,7 @@ entries:
     sources: ["Lemaitre", "Penzias & Wilson 1965"]
 
   - id: established.biology.evolution_natural_selection
+    keywords: ["species change over time", "survival of the fittest", "common descent", "adaptation", "antibiotic resistance"]
     statement: >-
       Populations evolve over generations through differential reproduction of
       heritable variation; natural selection, together with mutation, drift, and
@@ -230,6 +234,7 @@ entries:
     sources: ["Mitchell 1961", "Boyer binding-change mechanism", "Walker ATP synthase structure"]
 
   - id: established.physics.universal_gravitation
+    keywords: ["things fall", "orbits", "planets", "tides", "weight"]
     statement: >-
       Every mass attracts every other mass with a force proportional to the
       product of their masses and inversely proportional to the square of the
@@ -287,6 +292,7 @@ entries:
     sources: ["Glashow-Weinberg-Salam", "ATLAS & CMS 2012"]
 
   - id: established.physics.ohms_law
+    keywords: ["resistance", "voltage and current", "resistor"]
     statement: >-
       For many conductors the current through them is directly proportional to
       the voltage across them, with resistance as the constant of proportionality
@@ -667,6 +673,7 @@ entries:
     sources: ["classical statics", "simple machine analysis", "engineering mechanics texts"]
 
   - id: established.astronomy.kepler_laws
+    keywords: ["planetary orbits", "ellipse", "orbital period"]
     statement: >-
       Planets move in ellipses with the Sun at one focus; a planet sweeps equal
       areas in equal times; and the square of a planet's orbital period is

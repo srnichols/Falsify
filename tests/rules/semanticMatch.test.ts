@@ -6,26 +6,27 @@ import { opRelated } from '../../src/cycle/related.js';
 import type { MemoryReader } from '../../src/memory/openbrainClient.js';
 
 const index = buildKnowledgeIndex(loadAllKnowledge());
-const PARAPHRASE = 'Heavier objects fall faster than lighter ones when there is no air';
+const PARAPHRASE = 'Springs stretch in proportion to the load hung on them';
+const HOOKE = 'established.physics.hookes_law';
 
 const reader = (hits: unknown[]): MemoryReader => ({ recall: async () => hits });
 
 describe('matchKnowledgeSemantic', () => {
   it('misses a paraphrase lexically but finds it through semantic recall, resolving tier from the YAML', async () => {
     const lexicalOnly = await matchKnowledgeSemantic(index, undefined, PARAPHRASE);
-    expect(lexicalOnly.matches.some((m) => m.id === 'bedrock.equivalence.principle')).toBe(false);
+    expect(lexicalOnly.matches.some((m) => m.id === HOOKE)).toBe(false);
     expect(lexicalOnly.semantic).toBe('unavailable');
 
     const hit = {
-      content: 'Equivalence principle text\n\n— Falsify knowledge seed —\ntier: WRONG_TIER_FROM_BACKEND\nsource_id: bedrock.equivalence.principle',
+      content: `Hooke's law text\n\n— Falsify knowledge seed —\ntier: WRONG_TIER_FROM_BACKEND\nsource_id: ${HOOKE}`,
       similarity: 0.88,
     };
     const result = await matchKnowledgeSemantic(index, reader([hit]), PARAPHRASE);
-    const found = result.matches.find((m) => m.id === 'bedrock.equivalence.principle');
+    const found = result.matches.find((m) => m.id === HOOKE);
     expect(found?.via).toBe('semantic');
-    expect(found?.tier).toBe('bedrock');
+    expect(found?.tier).toBe('established');
     expect(found?.score).toBe(0.88);
-    expect(found?.directive).toMatch(/Bedrock law/);
+    expect(found?.directive).toMatch(/Established theory/);
     expect(result.semantic).toBe('used');
   });
 
@@ -39,9 +40,9 @@ describe('matchKnowledgeSemantic', () => {
   });
 
   it('ignores hits that name no known entry and falls back to rank scores', async () => {
-    const hits = [{ content: 'no id here' }, { content: 'source_id: nope.missing' }, 'source_id: bedrock.equivalence.principle'];
+    const hits = [{ content: 'no id here' }, { content: 'source_id: nope.missing' }, `source_id: ${HOOKE}`];
     const result = await matchKnowledgeSemantic(index, reader(hits), PARAPHRASE);
-    expect(result.matches.map((m) => m.id)).toEqual(['bedrock.equivalence.principle']);
+    expect(result.matches.map((m) => m.id)).toEqual([HOOKE]);
     expect(result.matches[0]?.score).toBeGreaterThanOrEqual(0.4);
   });
 
@@ -74,7 +75,7 @@ describe('opRelated', () => {
   });
 
   it('uses the context memory reader', async () => {
-    const hit = { content: 'x\nsource_id: bedrock.equivalence.principle', similarity: 0.9 };
+    const hit = { content: `x\nsource_id: ${HOOKE}`, similarity: 0.9 };
     const result = await opRelated({ claim: PARAPHRASE }, { knowledge: index, memory: reader([hit]) });
     if (result.kind === 'ok') {
       expect(result.payload.semantic).toBe('used');

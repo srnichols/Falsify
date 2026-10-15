@@ -44,6 +44,19 @@ describe('matchKnowledge', () => {
     expect(contested?.directive).toMatch(/never pick a winner/i);
   });
 
+  it('finds plain-language paraphrases through curated keywords', () => {
+    const cases: [string, string][] = [
+      ['Heavier objects fall faster than lighter ones when there is no air', 'bedrock.equivalence.principle'],
+      ['Vaccines cause autism in children', 'refuted.medicine.vaccines_autism'],
+      ['Bad air from swamps causes cholera', 'refuted.medicine.miasma'],
+      ['Visual learners learn better when taught visually', 'refuted.education.learning_styles'],
+      ['A free energy machine that runs forever', 'refuted.engineering.perpetual_motion'],
+    ];
+    for (const [claim, id] of cases) {
+      expect(matchKnowledge(index, claim)[0]?.id, claim).toBe(id);
+    }
+  });
+
   it('returns nothing for an unrelated or empty claim, and respects the limit', () => {
     expect(matchKnowledge(index, 'zzz qqq')).toEqual([]);
     expect(matchKnowledge(index, '')).toEqual([]);

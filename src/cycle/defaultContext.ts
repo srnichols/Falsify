@@ -8,6 +8,7 @@
 
 import { loadConfig } from '../config.js';
 import { NotebookStore } from '../memory/notebook.js';
+import { loadWeights } from '../rules/weights.js';
 import { OpenBrainMcpClient } from '../memory/openbrainMcpClient.js';
 import type { CycleContext } from './context.js';
 import { DEFAULT_SESSION_DIR, SessionStore } from './session.js';
@@ -18,6 +19,7 @@ export function createDefaultContext(): CycleContext {
     sessions: new SessionStore(DEFAULT_SESSION_DIR),
     notebook: new NotebookStore(),
     requireSession: process.env.FALSIFY_REQUIRE_SESSION === '1',
+    weights: loadWeights(),
   };
   try {
     const client = new OpenBrainMcpClient(loadConfig());

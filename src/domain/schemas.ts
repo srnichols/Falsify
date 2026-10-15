@@ -37,6 +37,13 @@ export const FalsifiableFlagSchema = z.union([
   z.literal('conditional'),
 ]);
 
+/**
+ * Plain-language terms people use for a claim's subject. Optional search aids only:
+ * they help the matcher find an entry for a paraphrase, and carry no claim and no
+ * weight. Keep them to everyday phrasings the entry's own wording would not contain.
+ */
+const KeywordsSchema = z.array(z.string().min(1)).optional();
+
 /** A fact entry — Bedrock and Established tiers share this shape. */
 export const FactEntrySchema = z.object({
   id: z.string().min(1),
@@ -49,6 +56,7 @@ export const FactEntrySchema = z.object({
   confidence: z.string().min(1).optional(),
   domain_of_validity: z.string().min(1).optional(),
   confirmations: z.array(z.string().min(1)).optional(),
+  keywords: KeywordsSchema,
   sources: z.array(z.string().min(1)).min(1),
 });
 
@@ -70,6 +78,7 @@ export const ContestedEntrySchema = z.object({
   domain: z.string().min(1),
   note: z.string().min(1).optional(),
   positions: z.array(PositionSchema).min(2),
+  keywords: KeywordsSchema,
   engine_directive: z.string().min(1),
 });
 
@@ -98,6 +107,7 @@ export const RefutedEntrySchema = z.object({
   era: z.string().min(1).optional(),
   falsified_by: z.string().min(1),
   superseded_by: z.string().min(1).optional(),
+  keywords: KeywordsSchema,
   lesson: z.string().min(1),
   sources: z.array(z.string().min(1)).min(1),
 });

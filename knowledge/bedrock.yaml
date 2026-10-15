@@ -15,6 +15,7 @@ tier: bedrock
 weight: 1.0
 entries:
   - id: bedrock.energy.conservation
+    keywords: ["perpetual motion", "free energy", "energy from nothing", "overunity", "more energy out than in"]
     statement: >-
       Energy is neither created nor destroyed in an isolated system; total
       energy stays constant over time.
@@ -32,6 +33,7 @@ entries:
     sources: ["First law of thermodynamics", "Noether's theorem (time symmetry)"]
 
   - id: bedrock.thermo.entropy
+    keywords: ["disorder", "heat flows from cold to hot", "perpetual motion of the second kind", "arrow of time"]
     statement: >-
       The total entropy of an isolated system never decreases; it tends toward
       a maximum.
@@ -51,6 +53,7 @@ entries:
     sources: ["Second law of thermodynamics", "Clausius 1865", "Boltzmann"]
 
   - id: bedrock.momentum.conservation
+    keywords: ["collisions", "recoil", "rocket propulsion", "billiard balls"]
     statement: >-
       The total linear momentum of a closed system is constant absent external
       forces.
@@ -88,6 +91,7 @@ entries:
       ["Maxwell's equations (continuity equation)", "Griffiths, Introduction to Electrodynamics (charge conservation and the continuity equation)"]
 
   - id: bedrock.lightspeed.invariance
+    keywords: ["faster than light", "FTL travel", "luminiferous ether", "light speed limit"]
     statement: >-
       The speed of light in vacuum is the same for all inertial observers,
       independent of the motion of source or observer.
@@ -183,6 +187,7 @@ entries:
       ["Lavoisier (conservation of mass)", "Lavoisier 1789, Traité élémentaire de chimie"]
 
   - id: bedrock.equivalence.principle
+    keywords: ["free fall", "falling objects", "heavy and light objects fall at the same rate", "heavier objects fall faster", "feather and hammer", "Galileo", "gravitational and inertial mass"]
     statement: >-
       Inertial mass (resistance to acceleration) and gravitational mass (the
       source of weight) are equal, so all bodies fall with the same acceleration
@@ -219,6 +224,7 @@ entries:
     sources: ["Pauli 1925", "structure of the periodic table", "electron-degeneracy pressure"]
 
   - id: bedrock.quantum.uncertainty
+    keywords: ["observer effect", "measurement disturbs the system", "cannot know position and speed together"]
     statement: >-
       Certain pairs of properties (e.g. position and momentum) cannot both be
       known to arbitrary precision; the product of their uncertainties has a

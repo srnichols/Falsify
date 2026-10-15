@@ -21,6 +21,7 @@ tier: refuted
 weight: 0   # the graveyard supports nothing; it only instructs
 entries:
   - id: refuted.physics.aether
+    keywords: ["ether", "light needs a medium"]
     claim: >-
       Light propagates through a stationary "luminiferous aether" that fills all
       space and serves as the medium and absolute rest frame for electromagnetic
@@ -74,6 +75,7 @@ entries:
     sources: ["Rumford 1798", "Joule", "first law of thermodynamics"]
 
   - id: refuted.biology.spontaneous_generation
+    keywords: ["maggots from meat", "mice from grain", "flies from rotting meat"]
     claim: >-
       Living organisms arise spontaneously from non-living matter (maggots from
       rotting meat, microbes from broth).
@@ -109,6 +111,7 @@ entries:
     sources: ["Galileo 1610", "Kepler", "Copernicus 1543"]
 
   - id: refuted.medicine.miasma
+    keywords: ["bad air", "foul smells cause disease"]
     claim: >-
       Epidemic diseases such as cholera are caused by "miasma" — bad air or
       noxious vapors from rotting matter.
@@ -187,6 +190,7 @@ entries:
     sources: ["Hoyle, Bondi & Gold 1948", "Penzias & Wilson 1965"]
 
   - id: refuted.engineering.perpetual_motion
+    keywords: ["free energy machine", "overunity", "self-running machine"]
     claim: >-
       A machine can be built that runs forever and/or delivers more work than the
       energy put into it, without an external energy source (perpetual motion of
@@ -336,6 +340,7 @@ entries:
     sources: ["Halsted doctrine", "NSABP trials", "modern breast oncology"]
 
   - id: refuted.medicine.vaccines_autism
+    keywords: ["vaccines cause autism", "MMR", "thimerosal"]
     claim: >-
       Routine childhood vaccination, especially the MMR vaccine, causes autism
       spectrum disorder.
@@ -355,6 +360,7 @@ entries:
     sources: ["Wakefield et al. 1998 (retracted)", "large Scandinavian and UK cohort studies", "Institute of Medicine reviews"]
 
   - id: refuted.education.learning_styles
+    keywords: ["visual learners", "auditory learners", "kinesthetic learners", "teaching to a learning style"]
     claim: >-
       Students learn best when instruction is matched to their preferred
       learning style (such as visual, auditory, or kinesthetic), and style
