@@ -29,6 +29,9 @@ import {
 import type { OpResult } from '../cycle/operations.js';
 import type { CycleContext } from '../cycle/context.js';
 import { SessionStore } from '../cycle/session.js';
+import { opRelated } from '../cycle/related.js';
+import { opDissent } from '../cycle/dissent.js';
+import { DissentPositionSchema } from '../mcp/tools/dissent.js';
 import type { MemoryReader } from '../memory/openbrainClient.js';
 import { NotebookStore } from '../memory/notebook.js';
 
@@ -96,6 +99,16 @@ const reviewBody = z.object({
 
 const sessionBody = z.object({
   sessionId: z.string().min(1),
+});
+
+const relatedBody = z.object({
+  claim: z.string().min(1),
+  limit: z.number().int().positive().max(20).optional(),
+});
+
+const dissentBody = z.object({
+  question: z.string().optional(),
+  positions: z.array(DissentPositionSchema).min(2),
 });
 
 const recallBody = z.object({
@@ -188,6 +201,14 @@ export async function handleRequest(
     case 'POST /api/review': {
       const p = parse(reviewBody, body);
       return 'response' in p ? p.response : fromOp(opReview(p.value, ctx));
+    }
+    case 'POST /api/related': {
+      const p = parse(relatedBody, body);
+      return 'response' in p ? p.response : fromOp(await opRelated(p.value, ctx));
+    }
+    case 'POST /api/dissent': {
+      const p = parse(dissentBody, body);
+      return 'response' in p ? p.response : fromOp(opDissent(p.value, ctx));
     }
     case 'POST /api/session': {
       const p = parse(sessionBody, body);

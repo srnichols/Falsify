@@ -86,11 +86,11 @@ export function isConsensusAppeal(text: string): boolean {
   return matches(text, CONSENSUS_APPEAL_PATTERNS);
 }
 
-function okResult(payload: Record<string, unknown>): OpResult {
+export function okResult(payload: Record<string, unknown>): OpResult {
   return { kind: 'ok', payload };
 }
 
-function errorResult(error: string, rule: string, guidance: string): OpResult {
+export function errorResult(error: string, rule: string, guidance: string): OpResult {
   return { kind: 'error', error, rule, guidance };
 }
 

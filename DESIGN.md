@@ -128,7 +128,10 @@ lives in the transport-free core (`src/cycle/operations.ts`):
 - **The tiers are consulted.** At hypothesis time the claim is matched (offline,
   lexically) against every tier: refuted lookalikes, the Bedrock/Established burden of
   proof, and the full set of Contested positions. A lexical match shows *relevance*,
-  not contradiction; it cannot prove a claim conflicts with a law.
+  not contradiction; it cannot prove a claim conflicts with a law. `falsify_related`
+  adds semantic recall from the Corpus (when `OPENBRAIN_KEY` is set) to find paraphrases
+  the wording match misses; recall only nominates entries, and each is resolved against
+  the local YAML (see "Who decides the tier", §4).
 - **Claims are scored from the record.** Each analysis returns a `claimScore` built from
   structured evidence and the Bedrock/Established entries the analyst links (see §4).
 - **Outcomes are kept.** A refuted hypothesis is written to the notebook and struck
@@ -210,6 +213,26 @@ claim_score =
 > tunable; the ordering of weights is the commitment. `compareClaims` is not yet used
 > by the cycle (it is for comparing rival claims, which Contested questions
 > deliberately never do — they present every side).
+
+### Who decides the tier
+
+"A-political by construction" is only as true as the curation of the tiers, so the
+rule is explicit: **a tier is assigned by a reviewed change to `knowledge/*.yaml`, never
+by a model and never at run time.**
+
+- Recall and semantic search can only *nominate* an entry; its tier, wording and
+  directive are always read back from the YAML (`src/rules/semanticMatch.ts`). A
+  mislabelled or stale record in OpenBrain cannot change what a claim is held to.
+- A fact that survives a test in a run is recorded as `tier: survived-test`. It is
+  never promoted automatically; promotion into Established or Bedrock is a pull
+  request with the evidence attached.
+- Bedrock and Established entries are expected to be independently sourced (2+),
+  to state their `domain_of_validity`, and to carry a falsifier that names an
+  observation. `npm run knowledge -- lint` reports entries that fall short as
+  *advisories* (they do not fail the lint). The corpus currently carries a backlog of
+  such advisories; closing it is curation work, not code.
+- Contested is for questions with several legitimate positions; an entry sits there
+  because the positions are all live, and the engine presents all of them.
 
 ### Knowledge storage — two stores, one truth
 
@@ -329,9 +352,17 @@ fan the prompt to multiple models *in parallel*, then **extract the disagreement
 and present competing hypotheses with their evidence. **No auto-winner.** The human
 picks — because the whole point is to surface disagreement, not bury it.
 
-> **Status: not implemented.** Falsify's tools never call a model, so there is no
-> fan-out. The host agent can already do this itself; what is missing is a tool that
-> accepts several models' competing hypotheses and extracts their disagreement.
+> **Status: implemented as `falsify_dissent`** (`src/cycle/dissent.ts`). Falsify's tools
+> never call a model, so the fan-out stays with the host agent: it gathers one
+> hypothesis per model or school and submits them. Falsify then holds each to the
+> hypothesis honesty rules and extracts the disagreement: pairwise agreement (with
+> opposed predictions detected), the falsifiers unique to each position (the tests that
+> would discriminate), per-position evidence strength, and any Contested entry the
+> question matches. It returns `winner: null` always, and when the positions agree it
+> warns that agreement among models is a consensus signal, not an experiment. The
+> agreement measure is lexical, so treat the discriminating tests, not the percentages,
+> as the output that matters. `compareClaims` is deliberately unused here: ranking
+> rival positions is exactly what this tool refuses to do.
 
 ---
 
@@ -371,8 +402,10 @@ picks — because the whole point is to surface disagreement, not bury it.
       for a local/devbox brain that exposes the REST port.
 - [x] **Knowledge expansion:** corpus grown 19 → 51 entries across 5 tiers
       (added the refuted/graveyard tier). Continue growing via PR.
-- [ ] **Tier tagging:** manual curation vs. model-assisted classification of which
-      tier a claim belongs to.
+- [x] **Tier tagging:** manual curation vs. model-assisted classification of which
+      tier a claim belongs to. **Resolved: curation only.** See "Who decides the tier"
+      in §4. A model never assigns a tier; it can only *find* entries
+      (`falsify_related`), and the tier always comes from the YAML.
 - [ ] **Output format:** the exact "hypothesis + falsification condition" card the
       user sees.
 

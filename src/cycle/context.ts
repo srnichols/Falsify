@@ -8,7 +8,7 @@
 
 import type { SessionStore } from './session.js';
 import type { NotebookStore } from '../memory/notebook.js';
-import type { MemoryWriter } from '../memory/openbrainClient.js';
+import type { MemoryReader, MemoryWriter } from '../memory/openbrainClient.js';
 import type { KnowledgeIndex } from '../rules/knowledgeMatch.js';
 
 export interface CycleContext {
@@ -18,6 +18,8 @@ export interface CycleContext {
   notebook?: NotebookStore;
   /** Corpus tier writer for theories that survived their test. */
   corpus?: MemoryWriter;
+  /** Corpus tier reader: semantic recall, used by `falsify_related`. */
+  memory?: MemoryReader;
   /** Searchable view of the knowledge tiers. Defaulted from `knowledge/*.yaml`. */
   knowledge?: KnowledgeIndex;
 }

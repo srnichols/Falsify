@@ -20,6 +20,7 @@ import {
 } from '../domain/schemas.js';
 import type { KnowledgeEntry, Tier } from '../domain/types.js';
 import { OpenBrainMcpClient } from '../memory/openbrainMcpClient.js';
+import { assessFalsificationCondition } from '../rules/substance.js';
 import {
   DEFAULT_KNOWLEDGE_DIR,
   KnowledgeFileSchema,
@@ -39,8 +40,11 @@ export type KnowledgeLintIssueCode =
   | 'duplicate-primary-text'
   | 'tier-id-prefix-mismatch';
 
+/** Advisories about whether an entry has earned the tier it sits in. They never fail the lint. */
+export type KnowledgeLintWarningCode = 'thin-sourcing' | 'missing-validity-domain' | 'weak-falsifier';
+
 export interface KnowledgeLintIssue {
-  code: KnowledgeLintIssueCode;
+  code: KnowledgeLintIssueCode | KnowledgeLintWarningCode;
   message: string;
   id?: string;
   tier?: Tier;
@@ -50,6 +54,9 @@ export interface KnowledgeLintIssue {
 export interface KnowledgeLintSummary {
   issueCount: number;
   issues: KnowledgeLintIssue[];
+  /** Tier-admission advisories (see DESIGN.md §4, "Who decides the tier"). */
+  warningCount: number;
+  warnings: KnowledgeLintIssue[];
 }
 
 export interface KnowledgeMutationResult {
@@ -278,10 +285,12 @@ export function getKnowledgeTemplate(tier: Tier): KnowledgeTemplate {
 export function lintKnowledge(knowledgeDir: string = DEFAULT_KNOWLEDGE_DIR): KnowledgeLintSummary {
   const knowledge = loadAllKnowledge(knowledgeDir);
   const issues: KnowledgeLintIssue[] = [];
+  const warnings: KnowledgeLintIssue[] = [];
   const seenIds = new Map<string, Tier>();
   const seenPrimaryText = new Map<string, { id: string; tier: Tier }>();
 
   for (const { tier, entry } of allEntries(knowledge)) {
+    warnings.push(...tierAdmissionWarnings(tier, entry));
     const expectedPrefix = `${tier}.`;
     const acceptedPrefixes = tier === 'quantitative' ? [expectedPrefix, QUANTITATIVE_ID_ALIAS] : [expectedPrefix];
     if (!acceptedPrefixes.some((prefix) => entry.id.startsWith(prefix))) {
@@ -326,7 +335,33 @@ export function lintKnowledge(knowledgeDir: string = DEFAULT_KNOWLEDGE_DIR): Kno
   return {
     issueCount: issues.length,
     issues,
+    warningCount: warnings.length,
+    warnings,
   };
+}
+
+/**
+ * Advisories for the tiers that carry the most weight. Bedrock and Established
+ * entries must have earned their place: independent sourcing, a stated domain of
+ * validity (we never inflate certainty), and a falsifier that names an observation.
+ */
+function tierAdmissionWarnings(tier: Tier, entry: KnowledgeEntry): KnowledgeLintIssue[] {
+  if ((tier !== 'bedrock' && tier !== 'established') || !('falsified_if' in entry)) {
+    return [];
+  }
+  const out: KnowledgeLintIssue[] = [];
+  const where = { id: entry.id, tier } as const;
+  if (entry.sources.length < 2) {
+    out.push({ ...where, code: 'thin-sourcing', message: `'${entry.id}' (${tier}) cites one source; ${tier} entries should be independently confirmed (2+).` });
+  }
+  if (entry.domain_of_validity === undefined) {
+    out.push({ ...where, code: 'missing-validity-domain', message: `'${entry.id}' (${tier}) states no domain_of_validity; say where the claim stops holding.` });
+  }
+  const falsifier = assessFalsificationCondition(entry.falsified_if);
+  if (!falsifier.ok) {
+    out.push({ ...where, code: 'weak-falsifier', message: `'${entry.id}' (${tier}) falsified_if is weak: ${falsifier.reason}` });
+  }
+  return out;
 }
 
 export function addKnowledgeEntry(

@@ -115,6 +115,12 @@ async function run(): Promise<void> {
 
   if (command === 'lint') {
     const summary = lintKnowledge(knowledgeDir);
+    if (summary.warningCount > 0) {
+      console.log(`[knowledge] ${summary.warningCount} tier-admission advisory(ies) (do not fail the lint):`);
+      for (const warning of summary.warnings) {
+        console.log(`  ~ ${warning.code}: ${warning.message}`);
+      }
+    }
     if (summary.issueCount === 0) {
       console.log('[knowledge] lint clean: no duplicate ids, duplicate primary texts, or tier/id prefix mismatches.');
       return;

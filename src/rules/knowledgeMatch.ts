@@ -23,6 +23,8 @@ export interface KnowledgeMatch {
   directive: string;
   /** Tier-specific context for the caller (falsifiers, positions, lessons). */
   details: Record<string, unknown>;
+  /** How the entry was found; absent on plain lexical results from {@link matchKnowledge}. */
+  via?: 'lexical' | 'semantic' | 'both';
 }
 
 interface IndexedEntry {
@@ -165,6 +167,31 @@ function directiveFor(tier: Tier, entry: KnowledgeEntry): { directive: string; d
 export function lookupEntry(index: KnowledgeIndex, id: string): { tier: Tier; entry: KnowledgeEntry } | undefined {
   const found = index.entries.find((e) => e.entry.id === id);
   return found === undefined ? undefined : { tier: found.tier, entry: found.entry };
+}
+
+/**
+ * Build a match for a known entry id (e.g. one a semantic search returned). The
+ * tier, title, and directive always come from the local YAML, never from whatever
+ * the search backend stored, so the corpus stays the single source of truth.
+ */
+export function matchFromId(
+  index: KnowledgeIndex,
+  id: string,
+  score: number,
+  via: 'lexical' | 'semantic' | 'both',
+): KnowledgeMatch | undefined {
+  const indexed = index.entries.find((e) => e.entry.id === id);
+  if (indexed === undefined) return undefined;
+  const { directive, details } = directiveFor(indexed.tier, indexed.entry);
+  return {
+    tier: indexed.tier,
+    id,
+    title: indexed.title,
+    score: Math.min(1, Number(score.toFixed(3))),
+    directive,
+    details,
+    via,
+  };
 }
 
 /** Options for {@link matchKnowledge}. */

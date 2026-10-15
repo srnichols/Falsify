@@ -262,6 +262,19 @@ entries:
     );
   });
 
+  it('advises, without failing, when a Bedrock or Established entry has not earned its tier', () => {
+    const dir = createKnowledgeDir();
+
+    const summary = lintKnowledge(dir);
+
+    expect(summary.issueCount).toBe(0);
+    const codes = summary.warnings.map((w) => w.code);
+    expect(codes).toContain('thin-sourcing');
+    expect(codes).toContain('missing-validity-domain');
+    expect(summary.warnings.every((w) => w.tier === 'bedrock' || w.tier === 'established')).toBe(true);
+    expect(summary.warningCount).toBe(summary.warnings.length);
+  });
+
   it('reports duplicate ids and tier/id prefix mismatches', () => {
     const dir = createKnowledgeDir();
     writeFileSync(

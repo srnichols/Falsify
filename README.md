@@ -25,9 +25,12 @@ iterating design.
 
 ## Use Falsify inside your agent (MCP)
 
-Falsify ships as an MCP server exposing six discipline-enforcing tools —
+Falsify ships as an MCP server exposing eight discipline-enforcing tools —
 `falsify_intake`, `falsify_hypothesize`, `falsify_experiment`, `falsify_analyze`,
-`falsify_review`, `falsify_recall`. They never generate an answer; they take your
+`falsify_review`, `falsify_recall`, plus `falsify_related` (which knowledge tiers a
+claim touches, with semantic matching when the corpus is reachable) and
+`falsify_dissent` (compare competing hypotheses from several models and surface where
+they disagree, never picking a winner). They never generate an answer; they take your
 draft, run it through the cycle, and **refuse** anything that breaks the rules (a
 hypothesis with no falsification condition, an experiment that cannot fail, a Yes
 that skipped review).
@@ -58,7 +61,7 @@ This workspace already includes a local MCP registration at
 them under the same top-level `servers` object rather than replacing the file.
 
 `OPENBRAIN_KEY` is optional and only enables `falsify_recall` (semantic recall from
-the OpenBrain corpus) and writing surviving theories to the corpus; the reasoning
+the OpenBrain corpus), semantic matching in `falsify_related`, and writing surviving theories to the corpus; the reasoning
 tools work without it. The key is read from the environment and is never stored in
 the repo.
 

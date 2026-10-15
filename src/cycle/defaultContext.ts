@@ -19,7 +19,9 @@ export function createDefaultContext(): CycleContext {
     notebook: new NotebookStore(),
   };
   try {
-    ctx.corpus = new OpenBrainMcpClient(loadConfig());
+    const client = new OpenBrainMcpClient(loadConfig());
+    ctx.corpus = client;
+    ctx.memory = client;
   } catch {
     // No OPENBRAIN_KEY: surviving theories still reach the notebook, just not the corpus.
   }
