@@ -8,6 +8,7 @@ import type { WebDeps } from '../../src/web/api.js';
 import { NotebookStore } from '../../src/memory/notebook.js';
 import type { MemoryReader } from '../../src/memory/openbrainClient.js';
 import type { Server } from 'node:http';
+import { request as httpRequest } from 'node:http';
 
 /** Boot a server on an ephemeral localhost port and return its base URL. */
 async function boot(deps: WebDeps): Promise<{ base: string; host: string; server: Server }> {
@@ -67,6 +68,60 @@ describe('Falsify web server', () => {
     expect(res.status).toBe(400);
     const json = (await res.json()) as { rule: string };
     expect(json.rule).toBe('request:invalid-json');
+  });
+
+  it('refuses DNS-rebinding hosts, cross-origin writes, and non-JSON bodies', async () => {
+    const booted = await boot({ notebook: new NotebookStore(dir, 'test') });
+    server = booted.server;
+    const port = Number(new URL(booted.base).port);
+
+    const send = (headers: Record<string, string>, method = 'POST'): Promise<{ status: number; rule?: string }> =>
+      new Promise((resolve, reject) => {
+        const req = httpRequest({ host: '127.0.0.1', port, path: '/api/intake', method, headers }, (res) => {
+          let raw = '';
+          res.on('data', (c: Buffer) => (raw += c.toString()));
+          res.on('end', () => {
+            const parsed = raw ? (JSON.parse(raw) as { rule?: string }) : {};
+            resolve({ status: res.statusCode ?? 0, ...(parsed.rule !== undefined ? { rule: parsed.rule } : {}) });
+          });
+        });
+        req.on('error', reject);
+        req.end(JSON.stringify({ question: 'Does X lower Y within an hour?' }));
+      });
+
+    const json = { 'content-type': 'application/json' };
+    expect(await send({ ...json, host: 'evil.example:4319' })).toEqual({ status: 403, rule: 'request:forbidden-host' });
+    expect(await send({ ...json, host: `127.0.0.1:${port}`, origin: 'http://evil.example' })).toEqual({
+      status: 403,
+      rule: 'request:forbidden-origin',
+    });
+    expect(await send({ ...json, host: `127.0.0.1:${port}`, origin: 'null' })).toEqual({
+      status: 403,
+      rule: 'request:forbidden-origin',
+    });
+    expect(await send({ 'content-type': 'text/plain', host: `127.0.0.1:${port}` })).toEqual({
+      status: 415,
+      rule: 'request:unsupported-media-type',
+    });
+    expect((await send({ ...json, host: `127.0.0.1:${port}`, origin: `http://127.0.0.1:${port}` })).status).toBe(200);
+  });
+
+  it('refuses to read the notebook through a rebinding host', async () => {
+    const booted = await boot({ notebook: new NotebookStore(dir, 'test') });
+    server = booted.server;
+    const port = Number(new URL(booted.base).port);
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest(
+        { host: '127.0.0.1', port, path: '/api/notebook', method: 'GET', headers: { host: 'evil.example' } },
+        (res) => {
+          res.resume();
+          res.on('end', () => resolve(res.statusCode ?? 0));
+        },
+      );
+      req.on('error', reject);
+      req.end();
+    });
+    expect(status).toBe(403);
   });
 
   it('never includes a key-bearing reader error in the HTTP response', async () => {

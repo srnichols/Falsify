@@ -9,33 +9,41 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CycleStateSchema } from '../../domain/schemas.js';
 import { opAnalyze } from '../../cycle/operations.js';
+import type { CycleContext } from '../../cycle/context.js';
 import { toCallToolResult } from '../result.js';
 
 /** The validated input shape for `falsify_analyze`. */
 const inputShape = {
   verdict: z.enum(['yes', 'no']),
   evidenceCited: z.array(z.string()).optional(),
+  sessionId: z.string().optional(),
   cycleState: CycleStateSchema.optional(),
 } as const;
 
 /** Register `falsify_analyze` on the server. */
-export function registerAnalyze(server: McpServer): void {
+export function registerAnalyze(server: McpServer, ctx?: CycleContext): void {
   server.registerTool(
     'falsify_analyze',
     {
       description:
-        'Compare the data to the prediction: verdict yes or no. A "no" takes the mandatory No ' +
+        'Compare the data to the prediction: verdict yes or no, citing the observations it rests ' +
+        'on. Appeals to consensus are not evidence and are refused. A "no" takes the mandatory No ' +
         'branch to Review. A "yes" is NOT final \u2014 Review is mandatory even on a yes, so the result ' +
-        'reports reviewRequired and you must call falsify_review (outcome: confirm) to finalize a Theory.',
+        'reports reviewRequired and you must call falsify_review (outcome: confirm) to finalize a Theory. ' +
+        'Pass the sessionId from falsify_intake.',
       inputSchema: inputShape,
     },
     (args) =>
       toCallToolResult(
-        opAnalyze({
-          verdict: args.verdict,
-          evidenceCited: args.evidenceCited,
-          cycleState: args.cycleState,
-        }),
+        opAnalyze(
+          {
+            verdict: args.verdict,
+            evidenceCited: args.evidenceCited,
+            sessionId: args.sessionId,
+            cycleState: args.cycleState,
+          },
+          ctx,
+        ),
       ),
   );
 }

@@ -81,7 +81,7 @@ describe('full cycle over HTTP', () => {
     const rev1 = await post('/api/review', {
       q1Methods: 'methods were sound',
       q2Hypothesis: 'hypothesis too strong',
-      q3Theory: 'theory intact',
+      q3Theory: 'the theory remains intact',
       outcome: 'revise',
       cycleState: 'review',
     });
@@ -114,9 +114,9 @@ describe('full cycle over HTTP', () => {
 
     // Review confirm — finalize the Theory.
     const rev2 = await post('/api/review', {
-      q1Methods: 'methods sound',
-      q2Hypothesis: 'hypothesis held',
-      q3Theory: 'theory intact',
+      q1Methods: 'the methods were sound',
+      q2Hypothesis: 'the hypothesis held up',
+      q3Theory: 'the theory remains intact',
       outcome: 'confirm',
       cycleState: 'analysis',
     });

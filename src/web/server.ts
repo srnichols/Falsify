@@ -16,6 +16,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, sep, extname } from 'node:path';
 import { handleRequest } from './api.js';
 import type { WebDeps } from './api.js';
+import { createDefaultContext } from '../cycle/defaultContext.js';
 
 /** Default localhost bind host. */
 const DEFAULT_HOST = '127.0.0.1';
@@ -92,6 +93,68 @@ export function createWebServer(deps: WebDeps = {}): Server {
   });
 }
 
+/** Hostnames the local-only server answers to. Anything else is a DNS-rebinding attempt. */
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** True when a `Host` header names this machine's loopback interface. */
+export function isLocalHostHeader(host: string | undefined): boolean {
+  if (host === undefined || host === '') return false;
+  const hostname = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : (host.split(':')[0] ?? '');
+  return LOCAL_HOSTNAMES.has(hostname.toLowerCase());
+}
+
+function forbidden(rule: string, error: string, guidance: string): { status: number; json: Record<string, unknown> } {
+  return { status: 403, json: { error, rule, guidance } };
+}
+
+/**
+ * Guard a local single-user server against the two ways a web page the user
+ * happens to visit can reach it: DNS rebinding (a hostile name resolving to
+ * 127.0.0.1) and cross-site requests. Returns a refusal, or `undefined` to proceed.
+ */
+export function checkRequestGuard(
+  method: string,
+  headers: IncomingMessage['headers'],
+): { status: number; json: Record<string, unknown> } | undefined {
+  if (!isLocalHostHeader(headers.host)) {
+    return forbidden(
+      'request:forbidden-host',
+      'This server answers only to localhost.',
+      'Open the UI at http://127.0.0.1 or http://localhost.',
+    );
+  }
+  if (method === 'GET' || method === 'HEAD') {
+    return undefined;
+  }
+  const origin = headers.origin;
+  if (origin !== undefined) {
+    let sameOrigin: boolean;
+    try {
+      sameOrigin = new URL(origin).host.toLowerCase() === (headers.host ?? '').toLowerCase();
+    } catch {
+      sameOrigin = false;
+    }
+    if (!sameOrigin) {
+      return forbidden(
+        'request:forbidden-origin',
+        'Cross-origin requests are not allowed.',
+        'Use the UI served by this server, or call the API without an Origin header.',
+      );
+    }
+  }
+  if (!(headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
+    return {
+      status: 415,
+      json: {
+        error: 'Request bodies must be application/json.',
+        rule: 'request:unsupported-media-type',
+        guidance: 'Send the body as JSON with content-type: application/json.',
+      },
+    };
+  }
+  return undefined;
+}
+
 async function handleConnection(
   req: IncomingMessage,
   res: ServerResponse,
@@ -107,6 +170,12 @@ async function handleConnection(
       return;
     }
     await serveStatic(pathname, res);
+    return;
+  }
+
+  const refusal = checkRequestGuard(method, req.headers);
+  if (refusal) {
+    sendJson(res, refusal.status, refusal.json);
     return;
   }
 
@@ -139,7 +208,7 @@ async function handleConnection(
 function main(): void {
   const port = Number(process.env.FALSIFY_WEB_PORT ?? DEFAULT_PORT);
   const host = DEFAULT_HOST;
-  const server = createWebServer();
+  const server = createWebServer(createDefaultContext());
   server.listen(port, host, () => {
     console.error(`Falsify web UI listening on http://${host}:${port}`);
   });

@@ -26,18 +26,21 @@ import {
   opRecall,
 } from '../cycle/operations.js';
 import type { OpResult } from '../cycle/operations.js';
+import type { CycleContext } from '../cycle/context.js';
+import { SessionStore } from '../cycle/session.js';
 import type { MemoryReader } from '../memory/openbrainClient.js';
 import { NotebookStore } from '../memory/notebook.js';
 
 /** Resources injected into the web handler. All optional; defaulted lazily. */
-export interface WebDeps {
+export interface WebDeps extends CycleContext {
   /** Memory backend for `/api/recall`. Defaulted to OpenBrain only if used. */
   memory?: MemoryReader;
   /** Quantitative-tier principles for the lens. Defaulted from the seed. */
   quantPrinciples?: QuantEntry[];
-  /** The visible-mistakes notebook. Defaulted to the on-disk `.falsify` store. */
-  notebook?: NotebookStore;
 }
+
+/** Process-wide fallback so sessions persist across requests when none is injected. */
+const fallbackSessions = new SessionStore();
 
 /** A handler outcome: an HTTP status and a JSON body. */
 export interface ApiResponse {
@@ -56,18 +59,24 @@ const hypothesizeBody = z.object({
   falsificationConditions: z
     .array(z.object({ description: z.string(), observable: z.boolean().optional() }))
     .optional(),
+  claimType: z.enum(['universal', 'existential', 'probabilistic', 'causal']).optional(),
+  assumptions: z.array(z.string()).optional(),
+  revisionNote: z.string().optional(),
+  sessionId: z.string().optional(),
   cycleState: CycleStateSchema.optional(),
 });
 
 const experimentBody = z.object({
   decisiveEvidence: z.array(z.string()).optional(),
   couldFail: z.boolean(),
+  sessionId: z.string().optional(),
   cycleState: CycleStateSchema.optional(),
 });
 
 const analyzeBody = z.object({
   verdict: z.enum(['yes', 'no']),
   evidenceCited: z.array(z.string()).optional(),
+  sessionId: z.string().optional(),
   cycleState: CycleStateSchema.optional(),
 });
 
@@ -76,7 +85,12 @@ const reviewBody = z.object({
   q2Hypothesis: z.string(),
   q3Theory: z.string(),
   outcome: z.enum(['revise', 'confirm']),
+  sessionId: z.string().optional(),
   cycleState: CycleStateSchema.optional(),
+});
+
+const sessionBody = z.object({
+  sessionId: z.string().min(1),
 });
 
 const recallBody = z.object({
@@ -147,27 +161,43 @@ export async function handleRequest(
   deps: WebDeps = {},
 ): Promise<ApiResponse> {
   const route = `${method.toUpperCase()} ${path}`;
+  const ctx: CycleContext = { ...deps, sessions: deps.sessions ?? fallbackSessions };
 
   switch (route) {
     case 'POST /api/intake': {
       const p = parse(intakeBody, body);
-      return 'response' in p ? p.response : fromOp(opIntake(p.value));
+      return 'response' in p ? p.response : fromOp(opIntake(p.value, ctx));
     }
     case 'POST /api/hypothesize': {
       const p = parse(hypothesizeBody, body);
-      return 'response' in p ? p.response : fromOp(opHypothesize(p.value, deps.quantPrinciples));
+      return 'response' in p ? p.response : fromOp(opHypothesize(p.value, deps.quantPrinciples, ctx));
     }
     case 'POST /api/experiment': {
       const p = parse(experimentBody, body);
-      return 'response' in p ? p.response : fromOp(opExperiment(p.value));
+      return 'response' in p ? p.response : fromOp(opExperiment(p.value, ctx));
     }
     case 'POST /api/analyze': {
       const p = parse(analyzeBody, body);
-      return 'response' in p ? p.response : fromOp(opAnalyze(p.value));
+      return 'response' in p ? p.response : fromOp(opAnalyze(p.value, ctx));
     }
     case 'POST /api/review': {
       const p = parse(reviewBody, body);
-      return 'response' in p ? p.response : fromOp(opReview(p.value));
+      return 'response' in p ? p.response : fromOp(opReview(p.value, ctx));
+    }
+    case 'POST /api/session': {
+      const p = parse(sessionBody, body);
+      if ('response' in p) return p.response;
+      const session = ctx.sessions?.get(p.value.sessionId);
+      return session === undefined
+        ? {
+            status: 404,
+            json: {
+              error: `No session '${p.value.sessionId}'.`,
+              rule: 'session:unknown',
+              guidance: 'Start a new inquiry with POST /api/intake.',
+            },
+          }
+        : { status: 200, json: { session } };
     }
     case 'POST /api/recall': {
       const p = parse(recallBody, body);

@@ -10,6 +10,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CycleStateSchema } from '../../domain/schemas.js';
 import { opReview } from '../../cycle/operations.js';
+import type { CycleContext } from '../../cycle/context.js';
 import { toCallToolResult } from '../result.js';
 
 /** The validated input shape for `falsify_review`. */
@@ -18,30 +19,36 @@ const inputShape = {
   q2Hypothesis: z.string(),
   q3Theory: z.string(),
   outcome: z.enum(['revise', 'confirm']),
+  sessionId: z.string().optional(),
   cycleState: CycleStateSchema.optional(),
 } as const;
 
 /** Register `falsify_review` on the server. */
-export function registerReview(server: McpServer): void {
+export function registerReview(server: McpServer, ctx?: CycleContext): void {
   server.registerTool(
     'falsify_review',
     {
       description:
         'The mandatory review checkpoint. Answer three questions IN ORDER \u2014 1) were the methods ' +
-        'sound? 2) was the hypothesis wrong? 3) is the underlying theory wrong? Use outcome "revise" ' +
-        'to loop back to Hypothesis (the No branch), or outcome "confirm" (only after a yes verdict) ' +
-        'to finalize a Theory.',
+        'sound? 2) was the hypothesis wrong? 3) is the underlying theory wrong? Each needs a real ' +
+        'answer, not a placeholder. Use outcome "revise" to loop back to Hypothesis (the No branch; the ' +
+        'refuted hypothesis is struck through in the notebook), or outcome "confirm" to finalize a ' +
+        'Theory \u2014 which, with a sessionId, requires a recorded yes verdict and is then recorded.',
       inputSchema: inputShape,
     },
     (args) =>
       toCallToolResult(
-        opReview({
-          q1Methods: args.q1Methods,
-          q2Hypothesis: args.q2Hypothesis,
-          q3Theory: args.q3Theory,
-          outcome: args.outcome,
-          cycleState: args.cycleState,
-        }),
+        opReview(
+          {
+            q1Methods: args.q1Methods,
+            q2Hypothesis: args.q2Hypothesis,
+            q3Theory: args.q3Theory,
+            outcome: args.outcome,
+            sessionId: args.sessionId,
+            cycleState: args.cycleState,
+          },
+          ctx,
+        ),
       ),
   );
 }

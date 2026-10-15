@@ -9,6 +9,7 @@
 
 import type { QuantEntry } from '../domain/types.js';
 import type { MemoryReader } from '../memory/openbrainClient.js';
+import type { CycleContext } from '../cycle/context.js';
 
 /**
  * Re-exported from the core memory module so existing MCP-side imports keep
@@ -17,8 +18,12 @@ import type { MemoryReader } from '../memory/openbrainClient.js';
  */
 export type { MemoryReader };
 
-/** Resources injected into the server at construction time. All optional. */
-export interface FalsifyServerDeps {
+/**
+ * Resources injected into the server at construction time. All optional. The
+ * cycle collaborators (sessions, notebook, corpus, knowledge) come from
+ * {@link CycleContext}; sessions default to an in-memory store.
+ */
+export interface FalsifyServerDeps extends CycleContext {
   /** Memory backend for `falsify_recall`. Lazily defaulted to OpenBrain if absent. */
   memory?: MemoryReader;
   /** Quantitative-tier principles for the cross-cutting lens. Defaulted from the seed. */

@@ -90,7 +90,7 @@ describe('full cycle over MCP — Slice 5', () => {
           arguments: {
             q1Methods: 'Methods were sound.',
             q2Hypothesis: 'Dose was too low; revise upward.',
-            q3Theory: 'Theory holds.',
+            q3Theory: 'The underlying theory still holds.',
             outcome: 'revise',
             cycleState: ana1.cycleState,
           },
@@ -145,7 +145,7 @@ describe('full cycle over MCP — Slice 5', () => {
           arguments: {
             q1Methods: 'Methods were sound and blinded.',
             q2Hypothesis: 'Hypothesis matched the data.',
-            q3Theory: 'Theory is supported.',
+            q3Theory: 'The theory is supported by the data.',
             outcome: 'confirm',
             cycleState: ana2.cycleState,
           },

@@ -20,7 +20,16 @@ import type { CycleState, QuantEntry } from '../domain/types.js';
 import { legalEvents, transition, CycleTransitionError } from './stateMachine.js';
 import type { CycleEvent } from './stateMachine.js';
 import { applyQuantitativeLens } from '../rules/quantitative.js';
+import {
+  assessEvidenceList,
+  assessFalsificationCondition,
+  assessReviewAnswer,
+} from '../rules/substance.js';
+import { buildKnowledgeIndex, matchKnowledge } from '../rules/knowledgeMatch.js';
+import type { KnowledgeIndex } from '../rules/knowledgeMatch.js';
 import { loadAllKnowledge } from '../knowledge/loader.js';
+import type { CycleContext } from './context.js';
+import type { LockedHypothesis, SessionRecord } from './session.js';
 import { loadConfig } from '../config.js';
 import { OpenBrainMcpClient } from '../memory/openbrainMcpClient.js';
 import type { MemoryReader, RecallQuery } from '../memory/openbrainClient.js';
@@ -46,12 +55,19 @@ const CONSENSUS_APPEAL_PATTERNS: readonly RegExp[] = [
   /\b\d{1,3}\s?% of (?:scientists|experts|doctors)\b/i,
 ];
 
-/** Phrases that signal a normative / value claim — outside the method. */
+/**
+ * Phrases that signal a normative / value claim — outside the method. Kept narrow
+ * on purpose: "must" and "good" alone are common in empirical sentences ("the
+ * bridge must carry 10 t", "copper is a good conductor"), so only prescriptions
+ * aimed at agents and explicit moral/aesthetic predicates match.
+ */
 const NORMATIVE_PATTERNS: readonly RegExp[] = [
-  /\b(?:should|ought to|must)\b/i,
-  /\b(?:morally|ethically) (?:right|wrong)\b/i,
-  /\bis (?:better|worse|best|the best) than?\b/i,
-  /\b(?:beautiful|ugly|good|evil|immoral)\b/i,
+  /^\s*should\b/i,
+  /\b(?:we|you|they|people|society|government(?:s)?|everyone|nobody|one|schools?|companies|nations?|doctors|voters) (?:should|shouldn't|ought to|must|must not)\b/i,
+  /\bshould (?:not )?be (?:banned|allowed|illegal|legal|required|mandatory|forbidden|prohibited|punished|rewarded|abolished)\b/i,
+  /\b(?:morally|ethically) (?:right|wrong|acceptable|justified|permissible)\b/i,
+  /\b(?:is|are) (?:inherently |objectively |simply )?(?:evil|beautiful|ugly|immoral|wicked|virtuous)\b/i,
+  /\b(?:is|are) (?:inherently |objectively |simply )?good\b(?! (?:for|at|enough|to)\b)/i,
 ];
 
 /** Phrases that signal a definitional / tautological claim — unfalsifiable. */
@@ -59,6 +75,11 @@ const DEFINITIONAL_PATTERNS: readonly RegExp[] = [/\bby definition\b/i, /\bis de
 
 function matches(text: string, patterns: readonly RegExp[]): boolean {
   return patterns.some((p) => p.test(text));
+}
+
+/** True when the text leans on consensus or authority rather than an observation. */
+export function isConsensusAppeal(text: string): boolean {
+  return matches(text, CONSENSUS_APPEAL_PATTERNS);
 }
 
 function okResult(payload: Record<string, unknown>): OpResult {
@@ -104,6 +125,82 @@ function getDefaultQuantPrinciples(): QuantEntry[] {
   return cachedPrinciples;
 }
 
+/** Lazily-built, memoized index over the default knowledge tiers. */
+let cachedIndex: KnowledgeIndex | undefined;
+function getDefaultKnowledgeIndex(): KnowledgeIndex {
+  if (cachedIndex === undefined) {
+    cachedIndex = buildKnowledgeIndex(loadAllKnowledge());
+  }
+  return cachedIndex;
+}
+
+/** Everything a session-aware operation needs to resolve and advance its session. */
+interface SessionLookup {
+  session?: SessionRecord;
+  state: CycleState;
+}
+
+/**
+ * Resolve the cycle state for an operation. With a `sessionId` the session is
+ * authoritative and a conflicting caller-supplied `cycleState` is rejected;
+ * without one the operation is stateless and trusts the caller.
+ */
+function resolveState(
+  sessionId: string | undefined,
+  ctx: CycleContext | undefined,
+  cycleState: CycleState | undefined,
+  fallback: CycleState,
+): SessionLookup | { err: OpResult } {
+  if (sessionId === undefined) {
+    return { state: cycleState ?? fallback };
+  }
+  if (ctx?.sessions === undefined) {
+    return {
+      err: errorResult(
+        'Sessions are not available on this server.',
+        'session:unavailable',
+        'Omit sessionId and pass cycleState instead.',
+      ),
+    };
+  }
+  const session = ctx.sessions.get(sessionId);
+  if (session === undefined) {
+    return {
+      err: errorResult(
+        `No session '${sessionId}'.`,
+        'session:unknown',
+        'Start a new inquiry with falsify_intake and use the sessionId it returns.',
+      ),
+    };
+  }
+  if (cycleState !== undefined && cycleState !== session.state) {
+    return {
+      err: errorResult(
+        `cycleState '${cycleState}' conflicts with the session, which is at '${session.state}'.`,
+        'session:state-mismatch',
+        'Omit cycleState when you pass a sessionId; the session tracks the state itself.',
+      ),
+    };
+  }
+  return { session, state: session.state };
+}
+
+/** Record a successful transition on the session and persist it. */
+function commit(
+  ctx: CycleContext | undefined,
+  session: SessionRecord | undefined,
+  event: string,
+  next: CycleState,
+  summary: string,
+): void {
+  if (session === undefined || ctx?.sessions === undefined) {
+    return;
+  }
+  session.history.push({ at: new Date().toISOString(), event, from: session.state, to: next, summary });
+  session.state = next;
+  ctx.sessions.save(session);
+}
+
 /** Lazily-constructed, memoized live reader (only built if actually used). */
 let cachedReader: MemoryReader | undefined;
 function getDefaultReader(): MemoryReader {
@@ -127,7 +224,7 @@ export interface IntakeInput {
  * with the essay's challenge, never deference. A falsifiable claim advances
  * Intake → Hypothesis.
  */
-export function opIntake(input: IntakeInput): OpResult {
+export function opIntake(input: IntakeInput, ctx?: CycleContext): OpResult {
   const { question } = input;
   const state: CycleState = input.cycleState ?? 'intake';
 
@@ -166,24 +263,62 @@ export function opIntake(input: IntakeInput): OpResult {
     payload.consensusAppeal = true;
     payload.challenge = CONSENSUS_CHALLENGE;
   }
+  if (ctx?.sessions !== undefined) {
+    payload.sessionId = ctx.sessions.create(question).id;
+  }
   return withState(payload, moved.next);
 }
+
+/** The kinds of claim whose falsification works differently. */
+export type ClaimType = 'universal' | 'existential' | 'probabilistic' | 'causal';
 
 /** Hypothesize input. */
 export interface HypothesizeInput {
   statement: string;
   predicts: string;
   falsificationConditions?: { description: string; observable?: boolean | undefined }[] | undefined;
+  /** Shape of the claim; changes what a valid falsifier must look like. */
+  claimType?: ClaimType | undefined;
+  /** Background assumptions the test relies on (Duhem–Quine); checked again at Review. */
+  assumptions?: string[] | undefined;
+  /** After a refutation: what changed and why, other than fitting the data. */
+  revisionNote?: string | undefined;
+  sessionId?: string | undefined;
   cycleState?: CycleState | undefined;
 }
 
+const CLAIM_TYPE_GUIDANCE: Record<ClaimType, string> = {
+  universal: 'A single well-controlled counterexample refutes a universal claim; make the falsifier that counterexample.',
+  existential:
+    'An existence claim is refuted only by an exhaustive search of a stated scope; failing to find it once is not a refutation. State the scope.',
+  probabilistic: 'A statistical claim is refuted by a pre-stated threshold; the falsifier must name it.',
+  causal: 'A causal claim needs a comparison (control, placebo, or intervention); the experiment must include one.',
+};
+
+/** Minimum words for a revision note to count as an explanation. */
+const MIN_REVISION_NOTE_WORDS = 5;
+
 /**
  * Turn a candidate claim into a disciplined hypothesis. REQUIRES at least one
- * falsification condition or the claim is refused with a named honesty rule.
- * Applies the quantitative lens, then advances Hypothesis → Experiment.
+ * falsification condition that names an observation, or the claim is refused with
+ * a named honesty rule. Surfaces the knowledge tiers the claim touches, applies
+ * the quantitative lens, locks the prediction into the session (pre-registration),
+ * and advances Hypothesis → Experiment.
+ *
+ * After a refutation, a revised hypothesis must say what changed and may not
+ * become less falsifiable than the one it replaces — no rescuing a claim by
+ * making it harder to refute.
  */
-export function opHypothesize(input: HypothesizeInput, principles?: QuantEntry[]): OpResult {
-  const state: CycleState = input.cycleState ?? 'hypothesis';
+export function opHypothesize(
+  input: HypothesizeInput,
+  principles?: QuantEntry[],
+  ctx?: CycleContext,
+): OpResult {
+  const resolved = resolveState(input.sessionId, ctx, input.cycleState, 'hypothesis');
+  if ('err' in resolved) {
+    return resolved.err;
+  }
+  const { session, state } = resolved;
 
   const parsed = HypothesisSchema.safeParse({
     statement: input.statement,
@@ -197,32 +332,124 @@ export function opHypothesize(input: HypothesizeInput, principles?: QuantEntry[]
       'Add a non-empty falsificationConditions entry describing what you would observe if the hypothesis were false.',
     );
   }
+  const hypothesis = parsed.data;
+
+  for (const condition of hypothesis.falsificationConditions) {
+    const assessed = assessFalsificationCondition(condition.description);
+    if (!assessed.ok) {
+      return errorResult(
+        assessed.reason,
+        'honesty:falsification-condition-vacuous',
+        'Describe what would be measured and what result would refute the claim, e.g. "no drop in reaction time versus placebo after two weeks".',
+      );
+    }
+  }
+  if (hypothesis.falsificationConditions.every((c) => !c.observable)) {
+    return errorResult(
+      'Every falsification condition is marked unobservable.',
+      'honesty:falsification-condition-unobservable',
+      'At least one condition must be an observation someone could actually make.',
+    );
+  }
+  if (
+    input.claimType === 'probabilistic' &&
+    !hypothesis.falsificationConditions.some((c) => /\d/.test(c.description))
+  ) {
+    return errorResult(
+      'A probabilistic claim needs a numeric falsification threshold.',
+      'honesty:statistical-threshold-required',
+      'State the threshold (effect size, alpha, or sample size) in at least one falsification condition.',
+    );
+  }
+
+  if (session?.pendingRevision === true) {
+    const note = (input.revisionNote ?? '').trim();
+    if (note.split(/\s+/).filter(Boolean).length < MIN_REVISION_NOTE_WORDS) {
+      return errorResult(
+        'A revised hypothesis must explain what changed and why.',
+        'honesty:revision-note-required',
+        'Pass revisionNote: say what the refutation taught you and what you changed in response, other than fitting the data.',
+      );
+    }
+    const previous = session.refuted[session.refuted.length - 1];
+    if (previous !== undefined && hypothesis.falsificationConditions.length < previous.falsificationConditions.length) {
+      return errorResult(
+        `The revision drops falsification conditions (${hypothesis.falsificationConditions.length} < ${previous.falsificationConditions.length}); it is easier to survive than the claim it replaces.`,
+        'honesty:revision-weakens-falsifiability',
+        'Keep every earlier falsification condition (or replace each with an equally strict one) and add new ones as needed.',
+      );
+    }
+  }
 
   const lens = principles ?? getDefaultQuantPrinciples();
-  const quantFlags = applyQuantitativeLens(`${parsed.data.statement} ${parsed.data.predicts}`, lens);
+  const claimText = `${hypothesis.statement} ${hypothesis.predicts}`;
+  const quantFlags = applyQuantitativeLens(claimText, lens);
+
+  let knowledgeMatches: ReturnType<typeof matchKnowledge> = [];
+  try {
+    knowledgeMatches = matchKnowledge(ctx?.knowledge ?? getDefaultKnowledgeIndex(), claimText);
+  } catch {
+    // The knowledge tiers are advisory here; a missing corpus must not block the cycle.
+  }
 
   const moved = advance(state, 'experiment');
   if ('err' in moved) {
     return moved.err;
   }
 
-  return withState({ hypothesis: parsed.data, quantFlags }, moved.next);
+  const payload: Record<string, unknown> = { hypothesis, quantFlags, knowledgeMatches };
+  if (input.claimType !== undefined) {
+    payload.claimGuidance = CLAIM_TYPE_GUIDANCE[input.claimType];
+  }
+  if (input.assumptions !== undefined && input.assumptions.length > 0) {
+    payload.assumptionsToRevisit = input.assumptions;
+  }
+
+  if (session !== undefined) {
+    const revision = session.refuted.length;
+    const locked: LockedHypothesis = {
+      statement: hypothesis.statement,
+      predicts: hypothesis.predicts,
+      falsificationConditions: hypothesis.falsificationConditions,
+      lockedAt: new Date().toISOString(),
+      revision,
+      ...(input.claimType !== undefined ? { claimType: input.claimType } : {}),
+      ...(input.assumptions !== undefined ? { assumptions: input.assumptions } : {}),
+      ...(session.pendingRevision && input.revisionNote !== undefined ? { revisionNote: input.revisionNote.trim() } : {}),
+    };
+    session.hypothesis = locked;
+    session.pendingRevision = false;
+    delete session.analysis;
+    delete session.experiment;
+    payload.sessionId = session.id;
+    payload.lockedAt = locked.lockedAt;
+    payload.revision = revision;
+    commit(ctx, session, 'experiment', moved.next, `Hypothesis locked (revision ${revision}).`);
+  }
+
+  return withState(payload, moved.next);
 }
 
 /** Experiment input. */
 export interface ExperimentInput {
   decisiveEvidence?: string[] | undefined;
   couldFail: boolean;
+  sessionId?: string | undefined;
   cycleState?: CycleState | undefined;
 }
 
 /**
  * Design the decisive test, which MUST be able to fail. Refuses a test that
- * cannot come out the other way, or one with no decisive evidence. Advances
- * Experiment → Analysis.
+ * cannot come out the other way, or one with no (or only placeholder) decisive
+ * evidence. For a causal hypothesis the test must include a comparison.
+ * Advances Experiment → Analysis.
  */
-export function opExperiment(input: ExperimentInput): OpResult {
-  const state: CycleState = input.cycleState ?? 'experiment';
+export function opExperiment(input: ExperimentInput, ctx?: CycleContext): OpResult {
+  const resolved = resolveState(input.sessionId, ctx, input.cycleState, 'experiment');
+  if ('err' in resolved) {
+    return resolved.err;
+  }
+  const { session, state } = resolved;
 
   if (input.couldFail !== true) {
     return errorResult(
@@ -244,11 +471,38 @@ export function opExperiment(input: ExperimentInput): OpResult {
     );
   }
 
+  const evidenceCheck = assessEvidenceList(parsed.data.decisiveEvidence);
+  if (!evidenceCheck.ok) {
+    return errorResult(
+      evidenceCheck.reason,
+      'honesty:experiment-evidence-vague',
+      'Name the measurement or observation that would decide the hypothesis, e.g. "blinded reaction-time test before and after dosing".',
+    );
+  }
+
+  if (session?.hypothesis?.claimType === 'causal') {
+    const hasComparison = parsed.data.decisiveEvidence.some((e) =>
+      /\b(?:control|placebo|comparison|compared|versus|vs\.?|randomi[sz]ed|intervention|baseline|before and after|blinded)\b/i.test(e),
+    );
+    if (!hasComparison) {
+      return errorResult(
+        'A causal hypothesis needs a comparison in its test.',
+        'honesty:causal-claim-needs-comparison',
+        'Include a control, placebo, randomized comparison, or before/after intervention in the decisive evidence.',
+      );
+    }
+  }
+
   const moved = advance(state, 'analyze');
   if ('err' in moved) {
     return moved.err;
   }
 
+  if (session !== undefined) {
+    session.experiment = { decisiveEvidence: parsed.data.decisiveEvidence };
+    commit(ctx, session, 'analyze', moved.next, 'Decisive test designed.');
+    return withState({ experiment: parsed.data, sessionId: session.id }, moved.next);
+  }
   return withState({ experiment: parsed.data }, moved.next);
 }
 
@@ -256,6 +510,7 @@ export function opExperiment(input: ExperimentInput): OpResult {
 export interface AnalyzeInput {
   verdict: 'yes' | 'no';
   evidenceCited?: string[] | undefined;
+  sessionId?: string | undefined;
   cycleState?: CycleState | undefined;
 }
 
@@ -263,9 +518,16 @@ export interface AnalyzeInput {
  * Compare the data to the prediction. A 'no' takes the mandatory No branch to
  * Review. A 'yes' is NOT final — Review is mandatory even on a yes — so it stays
  * in Analysis and reports `reviewRequired` (DESIGN.md §3).
+ *
+ * Consensus is a signal, not evidence: an analysis whose every cited item is an
+ * appeal to authority is refused, and a mixed one is answered with the challenge.
  */
-export function opAnalyze(input: AnalyzeInput): OpResult {
-  const state: CycleState = input.cycleState ?? 'analysis';
+export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
+  const resolved = resolveState(input.sessionId, ctx, input.cycleState, 'analysis');
+  if ('err' in resolved) {
+    return resolved.err;
+  }
+  const { session, state } = resolved;
 
   const parsed = AnalysisSchema.safeParse({
     verdict: input.verdict,
@@ -279,12 +541,39 @@ export function opAnalyze(input: AnalyzeInput): OpResult {
     );
   }
 
+  const evidenceCheck = assessEvidenceList(parsed.data.evidenceCited);
+  if (!evidenceCheck.ok) {
+    return errorResult(
+      evidenceCheck.reason,
+      'analysis:evidence-vague',
+      'Cite the observation or measurement itself, not a label for it.',
+    );
+  }
+
+  const appeals = parsed.data.evidenceCited.filter(isConsensusAppeal);
+  if (appeals.length === parsed.data.evidenceCited.length) {
+    return errorResult(
+      'Consensus is a signal, not evidence: every cited item is an appeal to authority.',
+      'analysis:consensus-is-not-evidence',
+      `${CONSENSUS_CHALLENGE} Cite that experiment's observation instead.`,
+    );
+  }
+  const consensusNote: Record<string, unknown> =
+    appeals.length > 0 ? { consensusCitedAsEvidence: appeals, challenge: CONSENSUS_CHALLENGE } : {};
+  const lockedAt = session?.hypothesis?.lockedAt;
+  const provenance: Record<string, unknown> =
+    lockedAt !== undefined ? { predictionLockedAt: lockedAt } : {};
+
   if (parsed.data.verdict === 'no') {
     const moved = advance(state, 'refute');
     if ('err' in moved) {
       return moved.err;
     }
-    return withState({ analysis: parsed.data }, moved.next);
+    if (session !== undefined) {
+      session.analysis = { ...parsed.data, at: new Date().toISOString() };
+      commit(ctx, session, 'refute', moved.next, 'Data disagreed with the prediction (No branch).');
+    }
+    return withState({ analysis: parsed.data, ...consensusNote, ...provenance }, moved.next);
   }
 
   // verdict === 'yes' — do NOT finalize; Review is mandatory (DESIGN.md §3).
@@ -295,6 +584,10 @@ export function opAnalyze(input: AnalyzeInput): OpResult {
       'Run analyze from the analysis state reached after the experiment.',
     );
   }
+  if (session !== undefined) {
+    session.analysis = { ...parsed.data, at: new Date().toISOString() };
+    commit(ctx, session, 'analyze-yes', state, 'Data agreed with the prediction; review required.');
+  }
   return okResult({
     analysis: parsed.data,
     reviewRequired: true,
@@ -302,6 +595,8 @@ export function opAnalyze(input: AnalyzeInput): OpResult {
     cycleState: state,
     legalNext: legalEvents(state),
     note: 'Yes is not final: run review (outcome: confirm) to record a Theory.',
+    ...consensusNote,
+    ...provenance,
   });
 }
 
@@ -311,24 +606,113 @@ export interface ReviewInput {
   q2Hypothesis: string;
   q3Theory: string;
   outcome: 'revise' | 'confirm';
+  sessionId?: string | undefined;
   cycleState?: CycleState | undefined;
 }
 
-/**
- * The mandatory review checkpoint. All three questions must be answered. Use
- * 'revise' to loop back to Hypothesis (the No branch) or 'confirm' (only after a
- * yes verdict) to finalize a Theory.
- */
-export function opReview(input: ReviewInput): OpResult {
-  const { outcome } = input;
-  const state: CycleState = input.cycleState ?? (outcome === 'confirm' ? 'analysis' : 'review');
+/** Plain-text rendering of a locked hypothesis for the notebook and corpus. */
+function renderHypothesis(h: LockedHypothesis): string {
+  const falsifiers = h.falsificationConditions.map((c) => c.description).join('; ');
+  return `${h.statement} — predicts: ${h.predicts}. Falsified if: ${falsifiers}.`;
+}
 
-  const answers = [input.q1Methods, input.q2Hypothesis, input.q3Theory];
-  if (answers.some((a) => a.trim().length === 0)) {
+/** Record a refuted hypothesis in the notebook: kept legible, struck through, dated. */
+function recordRefutation(ctx: CycleContext | undefined, session: SessionRecord, input: ReviewInput): string | undefined {
+  if (ctx?.notebook === undefined || session.hypothesis === undefined) {
+    return undefined;
+  }
+  const item = ctx.notebook.record({ kind: 'hypothesis', text: renderHypothesis(session.hypothesis) });
+  const evidence = session.analysis?.evidenceCited.join('; ') ?? 'data disagreed with the prediction';
+  ctx.notebook.strikeThrough(
+    item.id,
+    `Refuted by: ${evidence}. Methods: ${input.q1Methods.trim()} Hypothesis: ${input.q2Hypothesis.trim()} Theory: ${input.q3Theory.trim()}`,
+  );
+  return item.id;
+}
+
+/** Record a theory that survived its test: notebook first, corpus best-effort. */
+function recordTheory(ctx: CycleContext | undefined, session: SessionRecord): Record<string, unknown> {
+  const hypothesis = session.hypothesis;
+  if (hypothesis === undefined) {
+    return {};
+  }
+  const text = renderHypothesis(hypothesis);
+  const recorded: Record<string, unknown> = {};
+  if (ctx?.notebook !== undefined) {
+    recorded.notebookId = ctx.notebook.record({ kind: 'theory', text }).id;
+  }
+  if (ctx?.corpus !== undefined) {
+    // Best-effort fan-out: a corpus failure must never block or fail the cycle.
+    // The client queues unsent writes locally, so an offline brain loses nothing.
+    ctx.corpus
+      .save({
+        content: `Survived test: ${text}`,
+        source: 'falsify-cycle',
+        metadata: {
+          tier: 'survived-test',
+          falsifiable: true,
+          falsified_if: hypothesis.falsificationConditions.map((c) => c.description).join('; '),
+          revisions_survived: hypothesis.revision,
+          session: session.id,
+        },
+      })
+      .catch(() => undefined);
+    recorded.corpus = 'save-attempted';
+  }
+  return recorded;
+}
+
+/**
+ * The mandatory review checkpoint. All three questions must be answered with a
+ * real answer. Use 'revise' to loop back to Hypothesis (the No branch) or
+ * 'confirm' to finalize a Theory.
+ *
+ * Within a session, 'confirm' is refused unless a 'yes' verdict was actually
+ * recorded, and the outcome is written to the notebook (a refuted hypothesis is
+ * struck through; a surviving theory is kept). Without a session the confirm is
+ * accepted on the caller's word and flagged `verified: false`; it is not recorded.
+ */
+export function opReview(input: ReviewInput, ctx?: CycleContext): OpResult {
+  const { outcome } = input;
+  const resolved = resolveState(
+    input.sessionId,
+    ctx,
+    input.cycleState,
+    outcome === 'confirm' ? 'analysis' : 'review',
+  );
+  if ('err' in resolved) {
+    return resolved.err;
+  }
+  const { session, state } = resolved;
+
+  const questions: [string, string][] = [
+    ['q1Methods', input.q1Methods],
+    ['q2Hypothesis', input.q2Hypothesis],
+    ['q3Theory', input.q3Theory],
+  ];
+  if (questions.some(([, a]) => a.trim().length === 0)) {
     return errorResult(
       'All three review questions must be answered, in order.',
       'review:three-questions-required',
       'Provide non-empty q1Methods, q2Hypothesis, and q3Theory before revising or confirming.',
+    );
+  }
+  for (const [label, answer] of questions) {
+    const assessed = assessReviewAnswer(label, answer);
+    if (!assessed.ok) {
+      return errorResult(
+        assessed.reason,
+        'review:substantive-answers-required',
+        'Answer q1 (were the methods sound?), q2 (was the hypothesis well formed?) and q3 (is the theory wrong?) with what you actually checked.',
+      );
+    }
+  }
+
+  if (outcome === 'confirm' && session !== undefined && session.analysis?.verdict !== 'yes') {
+    return errorResult(
+      'No yes verdict is recorded for this inquiry, so there is nothing to confirm.',
+      'review:yes-verdict-required',
+      'Run falsify_analyze with verdict "yes" and its evidence first, then confirm.',
     );
   }
 
@@ -338,17 +722,41 @@ export function opReview(input: ReviewInput): OpResult {
     return moved.err;
   }
 
-  return withState(
-    {
-      review: {
-        q1Methods: input.q1Methods,
-        q2Hypothesis: input.q2Hypothesis,
-        q3Theory: input.q3Theory,
-      },
-      outcome,
+  const payload: Record<string, unknown> = {
+    review: {
+      q1Methods: input.q1Methods,
+      q2Hypothesis: input.q2Hypothesis,
+      q3Theory: input.q3Theory,
     },
-    moved.next,
-  );
+    outcome,
+  };
+
+  if (session === undefined) {
+    if (outcome === 'confirm') {
+      payload.verified = false;
+      payload.note =
+        'Confirmed without a session: no yes verdict could be checked and nothing was recorded. Use the sessionId from falsify_intake for a verified, recorded Theory.';
+    }
+    return withState(payload, moved.next);
+  }
+
+  if (outcome === 'revise') {
+    const notebookId = recordRefutation(ctx, session, input);
+    if (notebookId !== undefined) {
+      payload.recorded = { notebookId, struck: true };
+    }
+    if (session.hypothesis !== undefined) {
+      session.refuted.push(session.hypothesis);
+    }
+    session.pendingRevision = true;
+    payload.nextStep = 'Revise the hypothesis: pass revisionNote and keep it at least as falsifiable.';
+  } else {
+    payload.verified = true;
+    payload.recorded = recordTheory(ctx, session);
+  }
+  commit(ctx, session, event, moved.next, outcome === 'confirm' ? 'Theory confirmed after review.' : 'Refuted; revising.');
+  payload.sessionId = session.id;
+  return withState(payload, moved.next);
 }
 
 /** Recall input. */

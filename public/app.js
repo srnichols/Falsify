@@ -16,8 +16,15 @@ const notebookForm = document.getElementById('notebookForm');
 const notebookText = document.getElementById('notebookText');
 const notebookList = document.getElementById('notebookList');
 
-/** The cycle state threaded back to the server on every step. */
+/** The cycle state, as last reported by the server (the session is authoritative). */
 let cycleState = 'intake';
+/** The server-side session for the current inquiry, issued at Intake. */
+let sessionId;
+
+/** Identify the inquiry: the session once we have one, else the bare state. */
+function ids() {
+  return sessionId ? { sessionId } : { cycleState };
+}
 
 async function api(path, body) {
   const res = await fetch(path, {
@@ -73,9 +80,19 @@ function renderCard(json) {
     add('Consensus challenge', escapeHtml(json.challenge));
   }
   if (Array.isArray(json.quantFlags) && json.quantFlags.length > 0) {
-    const flags = json.quantFlags.map((f) => `<li>${escapeHtml(f.claim ?? JSON.stringify(f))}</li>`).join('');
+    const flags = json.quantFlags.map((f) => `<li>${escapeHtml(f.principle ?? JSON.stringify(f))}</li>`).join('');
     add('Quantitative lens', `<ul>${flags}</ul>`);
   }
+  if (Array.isArray(json.knowledgeMatches) && json.knowledgeMatches.length > 0) {
+    const matches = json.knowledgeMatches
+      .map((m) => `<li><strong>${escapeHtml(m.tier)}</strong>: ${escapeHtml(m.title)}<br /><em>${escapeHtml(m.directive)}</em></li>`)
+      .join('');
+    add('Knowledge this touches', `<ul>${matches}</ul>`);
+  }
+  if (json.claimGuidance) add('Claim type', escapeHtml(json.claimGuidance));
+  if (json.lockedAt) add('Prediction locked', escapeHtml(json.lockedAt));
+  if (json.predictionLockedAt) add('Prediction was locked', escapeHtml(json.predictionLockedAt));
+  if (json.consensusCitedAsEvidence) add('Consensus is not evidence', escapeHtml(json.challenge));
   if (json.experiment) {
     const ev = (json.experiment.decisiveEvidence ?? []).map((e) => `<li>${escapeHtml(e)}</li>`).join('');
     add('Decisive evidence', `<ul>${ev}</ul>`);
@@ -88,6 +105,9 @@ function renderCard(json) {
   }
   if (json.review) {
     add('Outcome', escapeHtml(json.outcome));
+    if (json.verified === true) add('Recorded', 'Verified against the session and written to the notebook.');
+    if (json.verified === false) add('Unverified', escapeHtml(json.note));
+    if (json.nextStep) add('Next', escapeHtml(json.nextStep));
   }
   if (json.cycleState) add('Cycle state', escapeHtml(json.cycleState));
   if (Array.isArray(json.legalNext)) add('Legal next moves', json.legalNext.map(escapeHtml).join(', ') || '(none — terminal)');
@@ -116,14 +136,18 @@ const FORMS = {
     fields: [
       { name: 'statement', label: 'Hypothesis', type: 'text' },
       { name: 'predicts', label: 'Predicts', type: 'text' },
-      { name: 'falsificationConditions', label: 'Would be wrong if (one per line)', type: 'textarea' },
+      { name: 'falsificationConditions', label: 'Would be wrong if (one per line, describe an observation)', type: 'textarea' },
+      { name: 'claimType', label: 'Claim type (optional)', type: 'select', options: ['', 'universal', 'existential', 'probabilistic', 'causal'] },
+      { name: 'revisionNote', label: 'After a refutation: what changed, and why?', type: 'text' },
     ],
     submit: (v) =>
       api('/api/hypothesize', {
         statement: v.statement,
         predicts: v.predicts,
         falsificationConditions: lines(v.falsificationConditions).map((description) => ({ description })),
-        cycleState,
+        ...(v.claimType ? { claimType: v.claimType } : {}),
+        ...(v.revisionNote ? { revisionNote: v.revisionNote } : {}),
+        ...ids(),
       }),
   },
   experiment: {
@@ -136,7 +160,7 @@ const FORMS = {
       api('/api/experiment', {
         decisiveEvidence: lines(v.decisiveEvidence),
         couldFail: v.couldFail === true,
-        cycleState,
+        ...ids(),
       }),
   },
   analysis: {
@@ -146,7 +170,7 @@ const FORMS = {
       { name: 'evidenceCited', label: 'Evidence cited (one per line)', type: 'textarea' },
     ],
     submit: (v) =>
-      api('/api/analyze', { verdict: v.verdict, evidenceCited: lines(v.evidenceCited), cycleState }),
+      api('/api/analyze', { verdict: v.verdict, evidenceCited: lines(v.evidenceCited), ...ids() }),
   },
   review: {
     title: 'Review — the three questions, in order',
@@ -162,7 +186,7 @@ const FORMS = {
         q2Hypothesis: v.q2Hypothesis,
         q3Theory: v.q3Theory,
         outcome: v.outcome,
-        cycleState,
+        ...ids(),
       }),
   },
   theory: {
@@ -205,8 +229,10 @@ function renderStepForm() {
       return;
     }
     renderCard(json);
+    if (json.sessionId) sessionId = json.sessionId;
     setState(json.cycleState ?? cycleState);
     renderStepForm();
+    await loadNotebook();
   });
 }
 

@@ -9,6 +9,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CycleStateSchema } from '../../domain/schemas.js';
 import { opIntake, CONSENSUS_CHALLENGE } from '../../cycle/operations.js';
+import type { CycleContext } from '../../cycle/context.js';
 import { toCallToolResult } from '../result.js';
 
 /** Re-exported for callers/tests that assert the consensus challenge text. */
@@ -21,7 +22,7 @@ const inputShape = {
 } as const;
 
 /** Register `falsify_intake` on the server. */
-export function registerIntake(server: McpServer): void {
+export function registerIntake(server: McpServer, ctx?: CycleContext): void {
   server.registerTool(
     'falsify_intake',
     {
@@ -29,10 +30,12 @@ export function registerIntake(server: McpServer): void {
         'Decide whether a question is falsifiable (Popper\u2019s line). Flags normative, ' +
         'definitional, or consensus-appeal phrasings. A consensus appeal is answered with a ' +
         'demand for the experiment, never deference. On a falsifiable claim the cycle advances ' +
-        'to Hypothesis; otherwise it is flagged as outside the scientific method.',
+        'to Hypothesis and a sessionId is returned: pass it to every later falsify_* call so the ' +
+        'cycle is tracked and enforced server-side. Otherwise the question is flagged as outside ' +
+        'the scientific method.',
       inputSchema: inputShape,
     },
     (args) =>
-      toCallToolResult(opIntake({ question: args.question, cycleState: args.cycleState })),
+      toCallToolResult(opIntake({ question: args.question, cycleState: args.cycleState }, ctx)),
   );
 }

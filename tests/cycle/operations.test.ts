@@ -128,16 +128,33 @@ describe('opReview', () => {
 
   it('revise loops back to hypothesis', () => {
     const p = okPayload(
-      opReview({ q1Methods: 'sound', q2Hypothesis: 'too broad', q3Theory: 'intact', outcome: 'revise' }),
+      opReview({
+        q1Methods: 'protocol was sound',
+        q2Hypothesis: 'claim was too broad',
+        q3Theory: 'theory still intact',
+        outcome: 'revise',
+      }),
     );
     expect(p.cycleState).toBe('hypothesis');
   });
 
-  it('confirm finalizes a theory', () => {
+  it('confirm finalizes a theory, but flags it unverified without a session', () => {
     const p = okPayload(
-      opReview({ q1Methods: 'sound', q2Hypothesis: 'held', q3Theory: 'intact', outcome: 'confirm' }),
+      opReview({
+        q1Methods: 'protocol was sound',
+        q2Hypothesis: 'claim held up',
+        q3Theory: 'theory still intact',
+        outcome: 'confirm',
+      }),
     );
     expect(p.cycleState).toBe('theory');
+    expect(p.verified).toBe(false);
+  });
+
+  it('rejects placeholder answers', () => {
+    const r = opReview({ q1Methods: 'n/a', q2Hypothesis: 'fine', q3Theory: 'ok', outcome: 'revise' });
+    expect(r.kind).toBe('error');
+    if (r.kind === 'error') expect(r.rule).toBe('review:substantive-answers-required');
   });
 });
 

@@ -17,20 +17,25 @@ import { registerExperiment } from './tools/experiment.js';
 import { registerAnalyze } from './tools/analyze.js';
 import { registerReview } from './tools/review.js';
 import { registerRecall } from './tools/recall.js';
+import { SessionStore } from '../cycle/session.js';
+import type { CycleContext } from '../cycle/context.js';
+import { createDefaultContext } from '../cycle/defaultContext.js';
 
 /**
  * Build a configured Falsify MCP server with all `falsify_*` tools registered.
  * Dependencies (memory, knowledge lens) are injected for testability and default
- * to live resources only when actually used.
+ * to live resources only when actually used. Sessions default to an in-memory
+ * store so cycle state is always server-authoritative.
  */
 export function createFalsifyServer(deps: FalsifyServerDeps = {}): McpServer {
   const server = new McpServer({ name: 'falsify', version: VERSION });
+  const ctx: CycleContext = { ...deps, sessions: deps.sessions ?? new SessionStore() };
 
-  registerIntake(server);
-  registerHypothesize(server, deps);
-  registerExperiment(server);
-  registerAnalyze(server);
-  registerReview(server);
+  registerIntake(server, ctx);
+  registerHypothesize(server, deps, ctx);
+  registerExperiment(server, ctx);
+  registerAnalyze(server, ctx);
+  registerReview(server, ctx);
   registerRecall(server, deps);
 
   return server;
@@ -39,7 +44,7 @@ export function createFalsifyServer(deps: FalsifyServerDeps = {}): McpServer {
 /** Start the server over stdio. Only invoked when this module is the entrypoint. */
 async function main(): Promise<void> {
   const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
-  const server = createFalsifyServer();
+  const server = createFalsifyServer(createDefaultContext());
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
