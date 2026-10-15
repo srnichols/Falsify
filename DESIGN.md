@@ -126,6 +126,9 @@ lives in the transport-free core (`src/cycle/operations.ts`):
   `falsify_verify_source` whose title relates to the claim; otherwise the item is scored
   as unreplicated, loses the exemption, and is reported as `replicationNotCredited`.
   That confirms the replication paper exists and is on topic, not that it replicated.
+  A "yes" whose every cited DOI resolves to an off-topic paper, with no verified relevant
+  source behind it, is held at `tentative` at Review (a real paper on the wrong subject
+  supports nothing).
   The disclosures are still self-reported: they make omission a recorded choice, not an
   impossible one.
 - **Pre-registration.** The hypothesis is locked (timestamped) before the

@@ -877,6 +877,16 @@ const EPISTEMIC_BY_STRENGTH: Record<'strong' | 'moderate' | 'weak', EpistemicSta
 
 const PROCESS_NOT_PROOF =
   'Completing the cycle records that the process was followed. It does not establish that the claim is true, and every input was supplied by the caller.';
+/**
+ * True when the evidence cites DOIs but every one of them resolves to a paper whose title
+ * shares nothing with the claim, and no cited source was verified as relevant: the
+ * "source" then supports nothing. Items with no DOI do not rescue it; they are assertions.
+ */
+function hasOnlyOffTopicSources(evidence: readonly { doi?: string | undefined; sourceVerified?: boolean | undefined; sourceTopicMismatch?: boolean | undefined; kind?: string | undefined }[]): boolean {
+  const cited = evidence.filter((e) => e.kind !== 'consensus' && e.doi !== undefined);
+  return cited.length > 0 && cited.every((e) => e.sourceTopicMismatch === true) && !evidence.some((e) => e.sourceVerified === true);
+}
+
 /** Mirror assessment as a result payload: the comparison, not a verdict. */
 function mirrorPayload(m: MirrorAssessment): Record<string, unknown> {
   if (!m.linked) {
@@ -1068,6 +1078,11 @@ export function opReview(input: ReviewInput, ctx?: CycleContext): OpResult {
     if (capReason !== undefined && status === 'supported') {
       status = 'provisional';
       payload.statusCap = `Held at provisional rather than supported. ${capReason}`;
+    }
+    const sourceless = hasOnlyOffTopicSources(session.analysis?.evidence ?? []);
+    if (sourceless && status !== 'tentative') {
+      status = 'tentative';
+      payload.statusCap = `${typeof payload.statusCap === 'string' ? `${payload.statusCap} ` : ''}Held at tentative: every DOI this "yes" cites points to a paper whose title has nothing to do with the claim, and no verified, relevant source supports it. Cite the work that reports the observation.`;
     }
     payload.cycleVerified = true;
     payload.epistemicStatus = status;
