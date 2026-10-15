@@ -39,6 +39,12 @@ export const EvidenceSchema = z.object({
   effectSize: z.number().optional(),
   effectMetric: z.enum(['r', 'd']).optional(),
   pValue: z.number().min(0).max(1).optional(),
+  /**
+   * How many outcomes, subgroups or comparisons were examined to obtain this result.
+   * Required with a p-value in a session: a p-value is only meaningful alongside the
+   * number of chances there were to get one.
+   */
+  outcomesTested: z.number().int().positive().optional(),
   /** True when an independent party reproduced the result. */
   replicated: z.boolean().optional(),
 });
@@ -123,19 +129,35 @@ function effectAsR(item: Evidence): number | undefined {
 }
 
 /**
+ * A p-value corrected for how many chances there were to find one: the outcomes
+ * tested for this result, times the hypotheses already tried and refuted in the
+ * inquiry (the garden of forking paths). A Bonferroni correction: simple, and
+ * conservative on purpose.
+ */
+export function adjustedPValue(p: number, outcomesTested: number | undefined, attempts: number): number {
+  return Math.min(1, p * (outcomesTested ?? 1) * Math.max(1, attempts));
+}
+
+/**
  * Statistical support in [0, 1] from the strongest item that reports a p-value: the
  * probability, from a model fitted to real replication outcomes, that a result with
- * these statistics replicates; 0.9 if it already has. Zero when no item reports a
- * p-value. Absence is not support, and neither is a big sample on its own.
+ * these statistics replicates; 0.9 if it already has. The p-value is first adjusted
+ * for multiplicity. Zero when no item reports a p-value. Absence is not support, and
+ * neither is a big sample on its own.
+ *
+ * @param attempts hypotheses tried in this inquiry, including this one (1 if none refuted).
  */
-export function statisticalSupport(items: readonly ResolvedEvidence[]): number {
+export function statisticalSupport(items: readonly ResolvedEvidence[], attempts = 1): number {
   let best = 0;
   for (const item of items) {
     if (item.kind === 'consensus' || item.pValue === undefined) continue;
     const support =
       item.replicated === true
         ? REPLICATED_SUPPORT
-        : replicationProbability({ pValue: item.pValue, effectR: effectAsR(item) });
+        : replicationProbability({
+            pValue: adjustedPValue(item.pValue, item.outcomesTested, attempts),
+            effectR: effectAsR(item),
+          });
     best = Math.max(best, support);
   }
   return best;

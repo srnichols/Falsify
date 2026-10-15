@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { resolveDataDir } from '../config.js';
 import type { CycleState } from '../domain/types.js';
 import type { EvidenceStrength, ResolvedEvidence } from '../domain/evidence.js';
+import type { EvidenceSearch } from '../rules/integrity.js';
 
 /** Default on-disk location for sessions, mirroring `.falsify/notebook`. */
 export const DEFAULT_SESSION_DIR = join(resolveDataDir(), 'sessions');
@@ -65,6 +66,10 @@ export interface SessionRecord {
     evidenceCited: string[];
     at: string;
     evidence?: ResolvedEvidence[];
+    /** What was searched and what contradicts the claim, as disclosed with the verdict. */
+    evidenceSearch?: EvidenceSearch;
+    /** Hypotheses tried when p-values were adjusted. */
+    attempts?: number;
     /** The claim score at the time of analysis, kept so a recorded theory states how well it was supported. */
     score?: { score: number; nonConsensusScore: number; evidenceStrength: EvidenceStrength };
   };

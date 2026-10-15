@@ -53,6 +53,10 @@ export interface ScoreInput {
   experimentEvidence: readonly string[];
   evidence: readonly ResolvedEvidence[];
   knowledgeRefs: readonly ResolvedKnowledgeRef[];
+  /** Hypotheses tried in this inquiry including this one; p-values are adjusted for it. Defaults to 1. */
+  attempts?: number | undefined;
+  /** Known null or contrary results; any cap the strength at "moderate". */
+  contraryFound?: number | undefined;
 }
 
 /** A claim's score together with the signals behind it. */
@@ -66,6 +70,11 @@ export interface ClaimScoreReport {
   evidenceStrength: EvidenceStrength;
   /** True when the claim conflicts with a Bedrock or Established entry. */
   conflictsWithKnowledge: boolean;
+}
+
+/** Known contrary results cap the strength a claim can have: it cannot be "strong" with unrefuted objections. */
+function capForContrary(strength: EvidenceStrength, contraryFound: number): EvidenceStrength {
+  return contraryFound > 0 && strength === 'strong' ? 'moderate' : strength;
 }
 
 /**
@@ -88,7 +97,7 @@ export function scoreClaim(input: ScoreInput, weights: ScoreWeights = DEFAULT_WE
     establishedSupport: tierSupport(input.knowledgeRefs, 'established'),
     directEvidence,
     falsifiabilityQuality: falsifiabilityQuality(input.hypothesis, input.experimentEvidence),
-    statisticalSupport: statisticalSupport(input.evidence),
+    statisticalSupport: statisticalSupport(input.evidence, input.attempts ?? 1),
     institutionalConsensus: input.evidence.length === 0 ? 0 : consensusItems / input.evidence.length,
   };
 
@@ -99,9 +108,12 @@ export function scoreClaim(input: ScoreInput, weights: ScoreWeights = DEFAULT_WE
     nonConsensusScore: Number(nonConsensus.toFixed(3)),
     consensusContribution: Number((total - nonConsensus).toFixed(3)),
     signals,
-    evidenceStrength: strengthLabel(
-      directEvidence,
-      observed.some((e) => e.replicated === true),
+    evidenceStrength: capForContrary(
+      strengthLabel(
+        directEvidence,
+        observed.some((e) => e.replicated === true),
+      ),
+      input.contraryFound ?? 0,
     ),
     conflictsWithKnowledge: input.knowledgeRefs.some((r) => r.relation === 'conflicts'),
   };

@@ -14,6 +14,12 @@ import type { CycleContext } from '../../cycle/context.js';
 import { EvidenceSchema } from '../../domain/evidence.js';
 import { toCallToolResult } from '../result.js';
 
+const EvidenceSearchSchema = z.object({
+  description: z.string(),
+  contraryFound: z.number().int().nonnegative(),
+  contraryNote: z.string().optional(),
+});
+
 /** The validated input shape for `falsify_analyze`. */
 const inputShape = {
   verdict: z.enum(['yes', 'no']),
@@ -22,6 +28,8 @@ const inputShape = {
   knowledgeRefs: z
     .array(z.object({ id: z.string().min(1), relation: z.enum(['supports', 'conflicts']) }))
     .optional(),
+  evidenceSearch: EvidenceSearchSchema.optional(),
+  nullHypothesisClaim: z.boolean().optional(),
   sessionId: z.string().optional(),
   cycleState: CycleStateSchema.optional(),
 } as const;
@@ -34,8 +42,14 @@ export function registerAnalyze(server: McpServer, ctx?: CycleContext): void {
       description:
         'Compare the data to the prediction: verdict yes or no, citing the observations it rests ' +
         'on. Use evidenceCited for plain observations or evidence for structured items (kind, source, ' +
-        'sampleSize, effectSize, pValue, replicated) \u2014 structured evidence is what earns a strong ' +
-        'claimScore. Appeals to consensus are not evidence and are refused. knowledgeRefs links the ' +
+        'doi, sampleSize, effectSize, pValue, outcomesTested, replicated) \u2014 structured evidence is ' +
+        'what earns a strong claimScore. Any p-value needs outcomesTested: how many outcomes or ' +
+        'comparisons you examined to get it. A "yes" in a session also needs evidenceSearch ' +
+        '({description: what you searched and how, contraryFound: how many null or contrary results ' +
+        'are known, contraryNote: what they are and why the claim stands}) and must still clear ' +
+        'p < 0.05 after correcting for outcomes tested and hypotheses already tried, unless it rests ' +
+        'on a replication or the hypothesis itself asserts no effect (nullHypothesisClaim). ' +
+        'Appeals to consensus are not evidence and are refused. knowledgeRefs links the ' +
         'claim to Bedrock/Established entries it supports or conflicts with (ids from falsify_hypothesize); ' +
         'a yes that conflicts with one needs a sourced experiment or statistical result. A "no" takes ' +
         'the mandatory No branch to Review. A "yes" is NOT final \u2014 Review is mandatory even on a yes, ' +
@@ -52,6 +66,8 @@ export function registerAnalyze(server: McpServer, ctx?: CycleContext): void {
               evidenceCited: args.evidenceCited,
               evidence: args.evidence,
               knowledgeRefs: args.knowledgeRefs,
+              evidenceSearch: args.evidenceSearch,
+              nullHypothesisClaim: args.nullHypothesisClaim,
               sessionId: args.sessionId,
               cycleState: args.cycleState,
             },

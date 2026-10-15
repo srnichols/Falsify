@@ -19,6 +19,7 @@ const inputShape = {
   q2Hypothesis: z.string(),
   q3Theory: z.string(),
   outcome: z.enum(['revise', 'confirm']),
+  acceptTentative: z.boolean().optional(),
   sessionId: z.string().optional(),
   cycleState: CycleStateSchema.optional(),
 } as const;
@@ -33,7 +34,10 @@ export function registerReview(server: McpServer, ctx?: CycleContext): void {
         'sound? 2) was the hypothesis wrong? 3) is the underlying theory wrong? Each needs a real ' +
         'answer, not a placeholder. Use outcome "revise" to loop back to Hypothesis (the No branch; the ' +
         'refuted hypothesis is struck through in the notebook), or outcome "confirm" to finalize a ' +
-        'Theory \u2014 which, with a sessionId, requires a recorded yes verdict and is then recorded.',
+        'Theory \u2014 which, with a sessionId, requires a recorded yes verdict and is then recorded with ' +
+        'an epistemicStatus (supported, provisional or tentative). Evidence rated "weak" is refused unless ' +
+        'you pass acceptTentative. Completing the cycle records that the process was followed; it does ' +
+        'not prove the claim.',
       inputSchema: inputShape,
     },
     (args) =>
@@ -44,6 +48,7 @@ export function registerReview(server: McpServer, ctx?: CycleContext): void {
             q2Hypothesis: args.q2Hypothesis,
             q3Theory: args.q3Theory,
             outcome: args.outcome,
+            acceptTentative: args.acceptTentative,
             sessionId: args.sessionId,
             cycleState: args.cycleState,
           },

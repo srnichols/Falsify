@@ -108,7 +108,21 @@ lives in the transport-free core (`src/cycle/operations.ts`):
 - **Sessions.** `falsify_intake` returns a `sessionId`. The server keeps the cycle
   state, so a caller cannot skip a step or lie about where it is; a `cycleState`
   that contradicts the session is refused. Without a session the cycle still runs
-  statelessly, but a `confirm` is flagged `verified: false` and is not recorded.
+  statelessly, but a `confirm` is flagged `cycleVerified: false` and is not recorded.
+  Even in a session, `cycleVerified: true` records that the process was followed, not that
+  the claim is true: every confirm carries an `epistemicStatus` (`supported` = replicated,
+  `provisional` = a sourced unreplicated result, `tentative` = weak evidence) and a note.
+  Weak evidence is refused at Review unless the caller passes `acceptTentative`.
+- **Multiplicity and disclosure.** A p-value must say how many outcomes were examined
+  (`outcomesTested`), and is Bonferroni-adjusted by that count and by the hypotheses
+  already refuted in the inquiry, so a forked-paths or serial-hypothesis "yes" that
+  clears p < 0.05 only by luck is refused. A session "yes" must also disclose what was
+  searched and what contrary or null results exist (`evidenceSearch`); disclosed
+  contrary results must be explained and cap the strength at "moderate". A yes whose
+  evidence reads as a null result is flagged. A replication, or a hypothesis that
+  itself asserts no effect (`nullHypothesisClaim`), is exempt from the adjustment. The
+  disclosures are still self-reported: they make omission a recorded choice, not an
+  impossible one.
 - **Pre-registration.** The hypothesis is locked (timestamped) before the
   experiment and analysis. Analysis reports when the prediction was locked.
 - **"Yes" needs a recorded yes.** `confirm` is refused unless a yes verdict was
@@ -206,7 +220,7 @@ claim_score =
 > | Signal | Derived from |
 > |---|---|
 > | `directEvidence` | the best non-consensus evidence item (kind, source, sample size, replication); an unreplicated item is discounted, and "strong" needs a replicated one |
-> | `statisticalSupport` | the probability, from a model fitted to real replication outcomes (below), that a result with this p-value and effect size replicates; 0.9 once replicated; zero with no p-value. Sample size earns nothing |
+> | `statisticalSupport` | the probability, from a model fitted to real replication outcomes (below), that a result with this p-value (multiplicity-adjusted) and effect size replicates; 0.9 once replicated; zero with no p-value. Sample size earns nothing |
 > | `falsifiabilityQuality` | observable falsifiers, numeric thresholds, claim type, a comparison in the test |
 > | `bedrockSupport` / `establishedSupport` | `knowledgeRefs` the analyst links (ids must exist; a conflict zeroes the tier) |
 > | `institutionalConsensus` | the share of cited items that were appeals to authority |

@@ -14,6 +14,7 @@ import type { CycleContext } from '../../src/cycle/context.js';
 import { SessionStore } from '../../src/cycle/session.js';
 import { NotebookStore } from '../../src/memory/notebook.js';
 import type { BrainMemory, MemoryWriter, SaveResult } from '../../src/memory/openbrainClient.js';
+import { CLEAN_YES } from '../helpers/evidence.js';
 
 const ANSWERS = {
   q1Methods: 'The protocol was blinded and sound.',
@@ -170,11 +171,13 @@ describe('cycle sessions', () => {
   it('records a verified theory in the notebook and the corpus after a real yes', () => {
     const sessionId = start();
     throughExperiment(sessionId);
-    ok(opAnalyze({ verdict: 'yes', evidenceCited: ['reaction time fell versus placebo'], sessionId }, ctx));
+    ok(opAnalyze({ ...CLEAN_YES, sessionId }, ctx));
     const p = ok(opReview({ ...ANSWERS, outcome: 'confirm', sessionId }, ctx));
 
     expect(p.cycleState).toBe('theory');
-    expect(p.verified).toBe(true);
+    expect(p.cycleVerified).toBe(true);
+    expect(p.epistemicStatus).toBe('provisional');
+    expect(String(p.note)).toMatch(/does not establish/i);
     expect(ctx.notebook?.list().map((i) => i.kind)).toEqual(['theory']);
     expect(saved).toHaveLength(1);
     expect(saved[0]?.source).toBe('falsify-cycle');
@@ -186,7 +189,7 @@ describe('cycle sessions', () => {
     ctx.corpus = { save: async () => Promise.reject(new Error('brain offline')) };
     const sessionId = start();
     throughExperiment(sessionId);
-    ok(opAnalyze({ verdict: 'yes', evidenceCited: ['reaction time fell versus placebo'], sessionId }, ctx));
+    ok(opAnalyze({ ...CLEAN_YES, sessionId }, ctx));
     const p = ok(opReview({ ...ANSWERS, outcome: 'confirm', sessionId }, ctx));
     expect(p.cycleState).toBe('theory');
     await Promise.resolve();
@@ -225,7 +228,7 @@ describe('guidance for hosts that forget the session', () => {
     const exp = ok(opExperiment({ couldFail: true, decisiveEvidence: ['blinded placebo-controlled test'], sessionId }, ctx));
     expect(exp.next).toEqual({ tool: 'falsify_analyze', sessionId });
 
-    const yes = ok(opAnalyze({ verdict: 'yes', evidenceCited: ['reaction time fell versus placebo'], sessionId }, ctx));
+    const yes = ok(opAnalyze({ ...CLEAN_YES, sessionId }, ctx));
     expect(yes.next).toEqual({ tool: 'falsify_review', sessionId });
     expect(yes.sessionId).toBe(sessionId);
 

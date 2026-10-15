@@ -4,6 +4,7 @@ import type { OpResult } from '../../src/cycle/operations.js';
 import type { CycleContext } from '../../src/cycle/context.js';
 import { SessionStore } from '../../src/cycle/session.js';
 import type { BrainMemory, MemoryWriter } from '../../src/memory/openbrainClient.js';
+import { SEARCH } from '../helpers/evidence.js';
 
 function ok(result: OpResult): Record<string, unknown> {
   if (result.kind !== 'ok') throw new Error(`expected ok, got ${result.rule}: ${result.error}`);
@@ -60,9 +61,11 @@ describe('scored analysis', () => {
               source: 'Trial A',
               sampleSize: 400,
               pValue: 0.004,
+              outcomesTested: 1,
               replicated: true,
             },
           ],
+          evidenceSearch: SEARCH,
           sessionId,
         },
         ctx,
@@ -78,7 +81,7 @@ describe('scored analysis', () => {
 
   it('labels plain-text evidence weak or moderate rather than strong', () => {
     const { ctx, sessionId } = setup('Caffeine lowers reaction time');
-    const p = ok(opAnalyze({ verdict: 'yes', evidenceCited: ['reaction time fell after the dose'], sessionId }, ctx));
+    const p = ok(opAnalyze({ verdict: 'yes', evidenceCited: ['reaction time fell after the dose'], evidenceSearch: SEARCH, sessionId }, ctx));
     expect((p.claimScore as { evidenceStrength: string }).evidenceStrength).not.toBe('strong');
   });
 
@@ -137,6 +140,7 @@ describe('knowledge references', () => {
           verdict: 'yes',
           evidence: [{ observation: 'calorimetry showed output above input in a sealed run', kind: 'experiment', source: 'Lab notebook 12', replicated: true }],
           knowledgeRefs: [{ id: 'bedrock.energy.conservation', relation: 'conflicts' }],
+          evidenceSearch: SEARCH,
           sessionId,
         },
         ctx,

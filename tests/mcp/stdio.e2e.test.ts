@@ -116,14 +116,15 @@ describe.skipIf(!built)('falsify-mcp over stdio', () => {
 
     const analysis = await call(second, 'falsify_analyze', {
       verdict: 'yes',
-      evidence: [{ observation: 'randomized trial showed faster responses', kind: 'experiment', source: 'Trial A', sampleSize: 400, pValue: 0.004 }],
+      evidence: [{ observation: 'randomized trial showed faster responses', kind: 'experiment', source: 'Trial A', sampleSize: 400, pValue: 0.004, outcomesTested: 1 }],
+      evidenceSearch: { description: 'Searched PubMed and the trial registry for caffeine trials', contraryFound: 0 },
       sessionId,
     });
     expect((analysis.claimScore as { evidenceStrength: string }).evidenceStrength).toBe('moderate');
 
     const review = await call(second, 'falsify_review', { ...REVIEW, outcome: 'confirm', sessionId });
     expect(review.cycleState).toBe('theory');
-    expect(review.verified).toBe(true);
+    expect(review.cycleVerified).toBe(true);
 
     expect(readdirSync(join(dataDir, 'sessions'))).toContain(`${sessionId}.json`);
     const notebook = readFileSync(join(dataDir, 'notebook', 'falsify.jsonl'), 'utf8');

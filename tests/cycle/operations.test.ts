@@ -148,7 +148,7 @@ describe('opReview', () => {
       }),
     );
     expect(p.cycleState).toBe('theory');
-    expect(p.verified).toBe(false);
+    expect(p.cycleVerified).toBe(false);
   });
 
   it('rejects placeholder answers', () => {

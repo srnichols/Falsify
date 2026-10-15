@@ -86,6 +86,10 @@ const analyzeBody = z.object({
   knowledgeRefs: z
     .array(z.object({ id: z.string().min(1), relation: z.enum(['supports', 'conflicts']) }))
     .optional(),
+  evidenceSearch: z
+    .object({ description: z.string(), contraryFound: z.number().int().nonnegative(), contraryNote: z.string().optional() })
+    .optional(),
+  nullHypothesisClaim: z.boolean().optional(),
   sessionId: z.string().optional(),
   cycleState: CycleStateSchema.optional(),
 });
@@ -95,6 +99,7 @@ const reviewBody = z.object({
   q2Hypothesis: z.string(),
   q3Theory: z.string(),
   outcome: z.enum(['revise', 'confirm']),
+  acceptTentative: z.boolean().optional(),
   sessionId: z.string().optional(),
   cycleState: CycleStateSchema.optional(),
 });

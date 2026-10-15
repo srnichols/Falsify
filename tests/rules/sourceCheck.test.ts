@@ -8,6 +8,7 @@ import type { OpResult } from '../../src/cycle/operations.js';
 import { opVerifySource } from '../../src/cycle/verify.js';
 import type { CycleContext } from '../../src/cycle/context.js';
 import { SessionStore } from '../../src/cycle/session.js';
+import { SEARCH } from '../helpers/evidence.js';
 
 const CROSSREF_OK = {
   message: {
@@ -101,12 +102,12 @@ describe('verified sources in scoring', () => {
     ok(opExperiment({ couldFail: true, decisiveEvidence: ['blinded placebo-controlled test'], sessionId }, ctx));
 
     const evidence = [{ observation: 'randomized trial showed faster responses', kind: 'experiment' as const, doi: '10.1103/PhysRevLett.116.061102', sampleSize: 400 }];
-    const before = ok(opAnalyze({ verdict: 'yes', evidence, sessionId }, ctx));
+    const before = ok(opAnalyze({ verdict: 'yes', evidence, evidenceSearch: SEARCH, sessionId }, ctx));
     expect((before.sourceCheck as { verified: number; unverified: string[] })).toMatchObject({ verified: 0 });
     expect(String((before.sourceCheck as { note: string }).note)).toMatch(/falsify_verify_source/);
 
     await opVerifySource({ doi: '10.1103/PhysRevLett.116.061102', sessionId }, ctx);
-    const after = ok(opAnalyze({ verdict: 'yes', evidence, sessionId }, ctx));
+    const after = ok(opAnalyze({ verdict: 'yes', evidence, evidenceSearch: SEARCH, sessionId }, ctx));
     expect((after.sourceCheck as { verified: number }).verified).toBe(1);
     const gain = (after.claimScore as { nonConsensusScore: number }).nonConsensusScore - (before.claimScore as { nonConsensusScore: number }).nonConsensusScore;
     expect(gain).toBeGreaterThan(0);
@@ -123,7 +124,7 @@ describe('verified sources in scoring', () => {
     ok(opExperiment({ couldFail: true, decisiveEvidence: ['blinded placebo-controlled test'], sessionId }, ctx));
     await opVerifySource({ doi: '10.1103/PhysRevLett.116.061102', sessionId }, ctx);
 
-    const p = ok(opAnalyze({ verdict: 'yes', evidence: [{ observation: 'randomized trial showed faster responses', kind: 'experiment', doi: '10.1103/PhysRevLett.116.061102', sampleSize: 400 }], sessionId }, ctx));
+    const p = ok(opAnalyze({ verdict: 'yes', evidence: [{ observation: 'randomized trial showed faster responses', kind: 'experiment',     doi: '10.1103/PhysRevLett.116.061102', sampleSize: 400 }], evidenceSearch: SEARCH, sessionId }, ctx));
     const check = p.sourceCheck as { verified: number; possiblyUnrelated: string[]; mismatchNote: string };
     expect(check.verified).toBe(0);
     expect(check.possiblyUnrelated).toEqual(['10.1103/PhysRevLett.116.061102']);

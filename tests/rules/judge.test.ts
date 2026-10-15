@@ -15,6 +15,7 @@ import type { OpResult } from '../../src/cycle/operations.js';
 import { opVerifySource } from '../../src/cycle/verify.js';
 import type { CycleContext } from '../../src/cycle/context.js';
 import { SessionStore } from '../../src/cycle/session.js';
+import { SEARCH } from '../helpers/evidence.js';
 import { evaluateJudge } from '../../src/cli/calibrateJudge.js';
 
 const fake = (reply: string | ((system: string, user: string) => string)): Judge => ({
@@ -129,7 +130,7 @@ describe('advisory hooks add advice and change nothing else', () => {
     const sessionId = ok(opIntake({ question: 'Does a 200mg caffeine dose lower reaction time?' }, ctx)).sessionId as string;
     ok(opHypothesize({ statement: 'Caffeine lowers reaction time', predicts: 'faster responses', falsificationConditions: [{ description: 'no drop in reaction time versus placebo' }], sessionId }, [], ctx));
     ok(opExperiment({ couldFail: true, decisiveEvidence: ['blinded placebo-controlled test'], sessionId }, ctx));
-    const analysis = opAnalyze({ verdict: 'yes', evidenceCited: ['reaction time fell versus placebo', 'the leading luminaries all hold this view'], sessionId }, ctx);
+    const analysis = opAnalyze({ verdict: 'yes', evidenceCited: ['reaction time fell versus placebo', 'the leading luminaries all hold this view'], evidenceSearch: SEARCH, sessionId }, ctx);
     const advised = ok(await adviseAnalysis(analysis, ctx));
     expect(advised.possibleConsensusAppeals).toEqual([{ observation: 'the leading luminaries all hold this view', reason: 'authority' }]);
     expect(advised.consensusCitedAsEvidence).toBeUndefined();

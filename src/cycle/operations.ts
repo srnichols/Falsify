@@ -32,6 +32,8 @@ import type { KnowledgeRelation, ResolvedKnowledgeRef } from '../rules/signals.j
 import { normalizeDoi, normalizeEvidence } from '../domain/evidence.js';
 import type { Evidence } from '../domain/evidence.js';
 import { titleRelatesTo } from '../rules/sourceCheck.js';
+import { assessIntegrity } from '../rules/integrity.js';
+import type { EvidenceSearch } from '../rules/integrity.js';
 import { loadAllKnowledge } from '../knowledge/loader.js';
 import type { CycleContext } from './context.js';
 import type { LockedHypothesis, SessionRecord } from './session.js';
@@ -558,6 +560,10 @@ export interface AnalyzeInput {
   knowledgeRefs?: KnowledgeRefInput[] | undefined;
   sessionId?: string | undefined;
   cycleState?: CycleState | undefined;
+  /** What was searched and what contradicts the claim. Required for a "yes" in a session. */
+  evidenceSearch?: EvidenceSearch | undefined;
+  /** The hypothesis itself asserts no effect, so a non-significant result supports it. */
+  nullHypothesisClaim?: boolean | undefined;
 }
 
 /** Look up the analyst's knowledge references; only Bedrock and Established carry support weight. */
@@ -666,6 +672,13 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
   if (!Array.isArray(refs)) {
     return refs;
   }
+  if (parsed.data.verdict === 'yes' && !legalEvents(state).includes('confirm')) {
+    return errorResult(
+      `A 'yes' verdict is only meaningful from the Analysis state (got '${state}').`,
+      'cycle:illegal-transition',
+      'Run analyze from the analysis state reached after the experiment.',
+    );
+  }
   const conflicts = refs.some((r) => r.relation === 'conflicts');
   if (
     parsed.data.verdict === 'yes' &&
@@ -679,8 +692,26 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
     );
   }
 
-  const consensusNote: Record<string, unknown> =
-    appeals.length > 0 ? { consensusCitedAsEvidence: appeals, challenge: CONSENSUS_CHALLENGE } : {};
+  const integrity = assessIntegrity({
+    verdict: parsed.data.verdict,
+    items,
+    evidenceSearch: input.evidenceSearch,
+    nullHypothesisClaim: input.nullHypothesisClaim,
+    refutedAttempts: session?.refuted.length ?? 0,
+    strict: session !== undefined,
+  });
+  if (integrity.refusal !== undefined) {
+    return errorResult(integrity.refusal.error, integrity.refusal.rule, integrity.refusal.guidance);
+  }
+
+  const consensusNote: Record<string, unknown> = {
+    ...(appeals.length > 0 ? { consensusCitedAsEvidence: appeals, challenge: CONSENSUS_CHALLENGE } : {}),
+    ...integrity.flags,
+    ...(integrity.multiplicity !== undefined ? { multiplicity: integrity.multiplicity } : {}),
+    ...(integrity.contraryCap
+      ? { contraryEvidenceNote: 'Contrary results were disclosed, so this claim cannot be rated "strong" however good the supporting evidence.' }
+      : {}),
+  };
   const lockedAt = session?.hypothesis?.lockedAt;
   const provenance: Record<string, unknown> =
     lockedAt !== undefined ? { predictionLockedAt: lockedAt } : {};
@@ -692,6 +723,8 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
             experimentEvidence: session.experiment?.decisiveEvidence ?? [],
             evidence: items,
             knowledgeRefs: refs,
+            attempts: (session.refuted.length ?? 0) + 1,
+            contraryFound: input.evidenceSearch?.contraryFound ?? 0,
           },
           ctx?.weights,
         )
@@ -735,6 +768,8 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
       ...parsed.data,
       at: new Date().toISOString(),
       evidence: items,
+      ...(input.evidenceSearch !== undefined ? { evidenceSearch: input.evidenceSearch } : {}),
+      ...(integrity.multiplicity !== undefined ? { attempts: integrity.multiplicity.attempts } : {}),
       ...(report !== undefined
         ? { score: { score: report.score, nonConsensusScore: report.nonConsensusScore, evidenceStrength: report.evidenceStrength } }
         : {}),
@@ -757,13 +792,6 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
   }
 
   // verdict === 'yes' — do NOT finalize; Review is mandatory (DESIGN.md §3).
-  if (!legalEvents(state).includes('confirm')) {
-    return errorResult(
-      `A 'yes' verdict is only meaningful from the Analysis state (got '${state}').`,
-      'cycle:illegal-transition',
-      'Run analyze from the analysis state reached after the experiment.',
-    );
-  }
   if (session !== undefined) {
     recordAnalysis();
     commit(ctx, session, 'analyze-yes', state, 'Data agreed with the prediction; review required.');
@@ -792,8 +820,21 @@ export interface ReviewInput {
   outcome: 'revise' | 'confirm';
   sessionId?: string | undefined;
   cycleState?: CycleState | undefined;
+  /** Confirm a theory whose evidence is only "weak", recorded as tentative rather than refused. */
+  acceptTentative?: boolean | undefined;
 }
 
+/** How much weight a recorded theory deserves, from its evidence strength. */
+type EpistemicStatus = 'supported' | 'provisional' | 'tentative';
+
+const EPISTEMIC_BY_STRENGTH: Record<'strong' | 'moderate' | 'weak', EpistemicStatus> = {
+  strong: 'supported',
+  moderate: 'provisional',
+  weak: 'tentative',
+};
+
+const PROCESS_NOT_PROOF =
+  'Completing the cycle records that the process was followed. It does not establish that the claim is true, and every input was supplied by the caller.';
 /** Plain-text rendering of a locked hypothesis for the notebook and corpus. */
 function renderHypothesis(h: LockedHypothesis): string {
   const falsifiers = h.falsificationConditions.map((c) => c.description.trim().replace(/[.\s]+$/, '')).join('; ');
@@ -815,7 +856,11 @@ function recordRefutation(ctx: CycleContext | undefined, session: SessionRecord,
 }
 
 /** Record a theory that survived its test: notebook first, corpus best-effort. */
-function recordTheory(ctx: CycleContext | undefined, session: SessionRecord): Record<string, unknown> {
+function recordTheory(
+  ctx: CycleContext | undefined,
+  session: SessionRecord,
+  status: EpistemicStatus,
+): Record<string, unknown> {
   const hypothesis = session.hypothesis;
   if (hypothesis === undefined) {
     return {};
@@ -823,20 +868,25 @@ function recordTheory(ctx: CycleContext | undefined, session: SessionRecord): Re
   const text = renderHypothesis(hypothesis);
   const recorded: Record<string, unknown> = {};
   if (ctx?.notebook !== undefined) {
-    recorded.notebookId = ctx.notebook.record({ kind: 'theory', text }).id;
+    recorded.notebookId = ctx.notebook.record({ kind: 'theory', text: `${text} [${status}; a process record, not proof]` }).id;
   }
   if (ctx?.corpus !== undefined) {
     // Best-effort fan-out: a corpus failure must never block or fail the cycle.
     // The client queues unsent writes locally, so an offline brain loses nothing.
     ctx.corpus
       .save({
-        content: `Survived test: ${text}`,
+        content: `Survived test (${status}): ${text}`,
         source: 'falsify-cycle',
         metadata: {
           tier: 'survived-test',
+          epistemic_status: status,
           falsifiable: true,
           falsified_if: hypothesis.falsificationConditions.map((c) => c.description).join('; '),
           revisions_survived: hypothesis.revision,
+          hypotheses_tried: session.refuted.length + 1,
+          ...(session.analysis?.evidenceSearch !== undefined
+            ? { contrary_evidence_found: session.analysis.evidenceSearch.contraryFound }
+            : {}),
           ...(session.analysis?.score !== undefined
             ? {
                 evidence_strength: session.analysis.score.evidenceStrength,
@@ -860,7 +910,10 @@ function recordTheory(ctx: CycleContext | undefined, session: SessionRecord): Re
  * Within a session, 'confirm' is refused unless a 'yes' verdict was actually
  * recorded, and the outcome is written to the notebook (a refuted hypothesis is
  * struck through; a surviving theory is kept). Without a session the confirm is
- * accepted on the caller's word and flagged `verified: false`; it is not recorded.
+ * accepted on the caller's word and flagged `cycleVerified: false`; it is not recorded.
+ * A confirm whose evidence is rated "weak" is refused unless `acceptTentative` says
+ * to record it as tentative. A recorded theory carries an `epistemicStatus` and the
+ * reminder that finishing the cycle is a process record, not proof.
  */
 export function opReview(input: ReviewInput, ctx?: CycleContext): OpResult {
   const { outcome } = input;
@@ -905,6 +958,14 @@ export function opReview(input: ReviewInput, ctx?: CycleContext): OpResult {
       'Run falsify_analyze with verdict "yes" and its evidence first, then confirm.',
     );
   }
+  const strength = session?.analysis?.score?.evidenceStrength ?? 'weak';
+  if (outcome === 'confirm' && session !== undefined && strength === 'weak' && input.acceptTentative !== true) {
+    return errorResult(
+      'The evidence behind this "yes" is rated weak, which is not enough to confirm a theory.',
+      'review:evidence-too-weak',
+      'Gather stronger evidence (a sourced experiment, a replication) and run falsify_analyze again, or pass acceptTentative: true to record it explicitly as tentative.',
+    );
+  }
 
   const event: CycleEvent = outcome === 'confirm' ? 'confirm' : 'revise';
   const moved = advance(state, event);
@@ -923,9 +984,10 @@ export function opReview(input: ReviewInput, ctx?: CycleContext): OpResult {
 
   if (session === undefined) {
     if (outcome === 'confirm') {
-      payload.verified = false;
+      payload.cycleVerified = false;
       payload.note =
-        'Confirmed without a session: no yes verdict could be checked and nothing was recorded. Use the sessionId from falsify_intake for a verified, recorded Theory.';
+        'Confirmed without a session: no yes verdict could be checked and nothing was recorded. Use the sessionId from falsify_intake for a recorded Theory. ' +
+        PROCESS_NOT_PROOF;
     }
     return withState(payload, moved.next);
   }
@@ -941,8 +1003,11 @@ export function opReview(input: ReviewInput, ctx?: CycleContext): OpResult {
     session.pendingRevision = true;
     payload.nextStep = 'Revise the hypothesis: pass revisionNote and keep it at least as falsifiable.';
   } else {
-    payload.verified = true;
-    payload.recorded = recordTheory(ctx, session);
+    const status = EPISTEMIC_BY_STRENGTH[strength];
+    payload.cycleVerified = true;
+    payload.epistemicStatus = status;
+    payload.note = PROCESS_NOT_PROOF;
+    payload.recorded = recordTheory(ctx, session, status);
   }
   commit(ctx, session, event, moved.next, outcome === 'confirm' ? 'Theory confirmed after review.' : 'Refuted; revising.');
   payload.sessionId = session.id;
