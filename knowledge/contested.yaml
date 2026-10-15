@@ -547,3 +547,162 @@ entries:
         falsifiability_status: scientific
         evidence_pointers: ["reappraisal of the Mariel natural experiment (Borjas 2017, doi:10.1177/0019793917692945)", "sub-group wage analyses"]
     engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.paleontology.cambrian_body_plans
+    keywords: ["Cambrian explosion", "sudden appearance of animal phyla", "origin of body plans", "Precambrian ancestors", "Darwin's dilemma"]
+    question: "How did the major animal body plans arise around the Cambrian, and are known evolutionary mechanisms sufficient to produce them in the time available?"
+    domain: biology/paleontology
+    note: >-
+      The fossil pattern (many body plans appearing within a geologically short
+      interval) is agreed. What is contested is the cause and the timescale.
+      Each position below makes a claim that can be tested, but none can be
+      scored until it states how much change was needed and how fast known
+      mechanisms can deliver it.
+    positions:
+      - label: "a long, poorly fossilized Precambrian prelude"
+        claim: >-
+          The major animal lineages diverged well before the Cambrian, leaving
+          few fossils because early animals were small and soft-bodied, so the
+          fossil record overstates how abrupt the diversification was.
+        falsifiable: true
+        falsified_if: >-
+          Well-dated Precambrian deposits that preserve small soft-bodied
+          animals elsewhere repeatedly show none of the predicted lineages, and
+          molecular clocks calibrated with new fossil constraints place the
+          divergences inside the Cambrian rather than before it.
+        falsifiability_status: scientific
+        evidence_pointers: ["molecular-clock divergence estimates", "Ediacaran fossils and trace fossils", "Erwin et al. 2011, Science, doi:10.1126/science.1206375", "Budd & Jensen 2000, Biological Reviews, doi:10.1111/j.1469-185x.1999.tb00046.x"]
+      - label: "rapid diversification within known mechanisms"
+        claim: >-
+          The diversification really was fast, but it is accounted for by known
+          processes: changes in developmental regulatory networks, new ecological
+          opportunities, and environmental change acting together.
+        falsifiable: true
+        falsified_if: >-
+          Quantitative models using measured mutation rates, population sizes and
+          selection strengths show the observed morphological disparity cannot
+          arise in the dated interval, or developmental genetic experiments show
+          that the regulatory changes the model needs are not viable.
+        falsifiability_status: scientific
+        evidence_pointers: ["Marshall 2006, Annu Rev Earth Planet Sci, doi:10.1146/annurev.earth.33.031504.103001", "Erwin & Davidson 2002, Development, doi:10.1242/dev.129.13.3021", "regulatory-network evolution experiments"]
+      - label: "known mechanisms are insufficient in the time available"
+        claim: >-
+          The origin of new body plans requires more new functional information
+          than mutation and selection can generate in the time the fossil record
+          allows, so the explanation is incomplete or needs a further cause.
+        falsifiable: depends
+        falsified_if: >-
+          Depends on stating how much change a body plan requires and the rate at
+          which known mechanisms can supply it. Once both are stated, it is
+          refuted by models or experiments showing that change of that size
+          arises within the dated interval at measured rates. With no stated
+          threshold it cannot be tested.
+        falsifiability_status: conditional
+        evidence_pointers: ["Meyer 2013, Darwin's Doubt (book, no DOI)", "population-genetic waiting-time arguments", "critiques of those arguments"]
+        note: >-
+          Reported with the same standard as the other positions: it is not
+          scored as wrong, and not as established. It becomes a scientific
+          hypothesis when it commits to a number.
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.biochemistry.functional_protein_rarity
+    keywords: ["protein folds are rare", "functional sequences in sequence space", "can evolution find new proteins", "needle in a haystack proteins", "origin of new protein folds"]
+    question: "How rare are functional protein sequences and folds, and can mutation and selection reach new ones?"
+    domain: biology/biochemistry
+    note: >-
+      Measured fractions of functional sequences span many orders of magnitude
+      depending on the function, the length, and how the library is built.
+      Estimates from one enzyme domain do not automatically carry to others.
+    positions:
+      - label: "new folds are too rare for undirected search"
+        claim: >-
+          Functional sequences for a new fold are so scarce in sequence space that
+          mutation and selection cannot find one within the available time and
+          population sizes.
+        falsifiable: true
+        falsified_if: >-
+          Unbiased random-library screens measure functional fractions far above
+          the claimed scarcity for the fold in question, or laboratory evolution
+          converts one fold into another through a series of functional
+          intermediates.
+        falsifiability_status: scientific
+        evidence_pointers: ["Axe 2004, J Mol Biol, doi:10.1016/j.jmb.2004.06.058", "scaling of one-domain estimates to whole proteomes"]
+      - label: "rare, but reachable through connected functional networks"
+        claim: >-
+          Functional sequences are rare but not isolated: they form connected
+          networks, and selection moves through them from existing functions to
+          new ones, so rarity alone does not prevent discovery.
+        falsifiable: true
+        falsified_if: >-
+          Repeated laboratory evolution from unrelated functional starting points
+          fails to find connecting paths to new functions, while the same
+          libraries are shown to contain the target function at accessible
+          frequencies.
+        falsifiability_status: scientific
+        evidence_pointers: ["Keefe & Szostak 2001, Nature, doi:10.1038/35070613", "Taylor et al. 2001, PNAS, doi:10.1073/pnas.191159298", "Romero & Arnold 2009, Nat Rev Mol Cell Biol, doi:10.1038/nrm2805", "Blount et al. 2008, PNAS, doi:10.1073/pnas.0803151105"]
+      - label: "current measurements cannot decide the question"
+        claim: >-
+          Existing estimates come from a few domains and assay formats, so they
+          neither establish that new folds are unreachable nor that they are
+          routinely reachable.
+        falsifiable: true
+        falsified_if: >-
+          A design that samples sequence space without bias across several
+          unrelated folds yields stable estimates that other laboratories
+          reproduce.
+        falsifiability_status: scientific
+        evidence_pointers: ["limits of single-domain mutational studies", "assay-dependent functional fractions"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.biology.information_in_dna
+    keywords: ["information in DNA", "genetic information", "specified complexity", "does evolution create information", "functional information"]
+    question: "Can mutation and selection generate the functional information in DNA, or does it require an intelligent source?"
+    domain: biology/genetics
+    note: >-
+      The answer depends on what "information" means. Shannon information,
+      algorithmic complexity and functional (or specified) information are
+      different quantities, and a claim about one does not carry over to another.
+      Settle the definition before weighing the evidence.
+    positions:
+      - label: "functional information can increase by mutation and selection"
+        claim: >-
+          Selection acting on heritable variation raises the functional
+          information of a population, in digital systems and in biological ones,
+          without an intelligent source supplying it.
+        falsifiable: true
+        falsified_if: >-
+          Measured functional information in evolving populations does not rise
+          under selection unless it was already built into the fitness function,
+          or the reported increases are shown to come entirely from the
+          experimenter's choice of target.
+        falsifiability_status: scientific
+        evidence_pointers: ["Adami, Ofria & Collier 2000, PNAS, doi:10.1073/pnas.97.9.4463", "Schneider 2000, Nucleic Acids Res, doi:10.1093/nar/28.14.2794", "Hazen et al. 2007, PNAS, doi:10.1073/pnas.0701744104"]
+      - label: "functional information of this size requires an intelligent source"
+        claim: >-
+          Specified, functional sequence information of the size found in living
+          cells has only ever been observed to come from an intelligent source,
+          so mutation and selection cannot account for its origin.
+        falsifiable: depends
+        falsified_if: >-
+          Depends on defining "specified" independently of the outcome. Once it
+          is, the claim is refuted by a documented case in which functional
+          sequence information of a stated size arises by unguided chemistry or
+          selection, with the specification not supplied by the experimenter.
+        falsifiability_status: conditional
+        evidence_pointers: ["Durston et al. 2007, Theor Biol Med Model, doi:10.1186/1742-4682-4-47", "Meyer 2009, Signature in the Cell (book, no DOI)", "critiques of specification measures"]
+        note: >-
+          Held to the same standard as the position above: it is a scientific
+          hypothesis only if it commits to a definition and a threshold that an
+          observation could contradict.
+      - label: "the question is ill-posed until 'information' is defined"
+        claim: >-
+          "Information" in biology is partly a metaphor for chemistry, so claims
+          that it can or cannot arise naturally are not testable until a single
+          measurable quantity is named.
+        falsifiable: false
+        falsifiability_status: definitional-outside-method
+        note: >-
+          A prerequisite, not a rival hypothesis. It is reported but not scored,
+          and it is not a reason to dismiss either position above once they pick
+          a definition.
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"

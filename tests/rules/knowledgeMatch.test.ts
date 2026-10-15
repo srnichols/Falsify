@@ -68,4 +68,25 @@ describe('matchKnowledge', () => {
       'A 200mg oral caffeine dose lowers mean reaction time in healthy adults compared with placebo, with faster responses after the dose';
     expect(matchKnowledge(index, claim)).toEqual([]);
   });
+
+  it('finds the design-debate entries from either side of each question', () => {
+    const top = (claim: string): string | undefined => matchKnowledge(index, claim, { limit: 1 })[0]?.id;
+    const cambrian = 'contested.paleontology.cambrian_body_plans';
+    const folds = 'contested.biochemistry.functional_protein_rarity';
+    const info = 'contested.biology.information_in_dna';
+
+    expect(top('Does the Cambrian explosion show that Darwinian mechanisms cannot produce new body plans in the time available?')).toBe(cambrian);
+    expect(top('Does the fossil record of the Cambrian show that gradual common descent can account for new body plans?')).toBe(cambrian);
+    expect(top('Functional protein folds are too rare in sequence space for unguided mutation to find new ones')).toBe(folds);
+    expect(top('Could a random mutation search find a functional protein fold among all possible sequences within the age of the Earth?')).toBe(folds);
+    expect(top('Does evolution create new genetic information?')).toBe(info);
+    expect(top('Is specified complexity a reliable empirical indicator of intelligent design?')).toBe(info);
+  });
+
+  it('presents every position of a contested entry, with the same falsifiability standard on each', () => {
+    const entry = matchKnowledge(index, 'Does the Cambrian explosion show new body plans', { limit: 1 })[0];
+    const positions = (entry?.details.positions ?? []) as { label: string; falsifiability_status: string }[];
+    expect(positions.length).toBeGreaterThanOrEqual(3);
+    expect(entry?.directive).toMatch(/never pick a winner/);
+  });
 });
