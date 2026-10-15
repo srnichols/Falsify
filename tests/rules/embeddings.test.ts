@@ -63,6 +63,8 @@ describe('EmbeddingMatcher', () => {
     expect(top?.tier).toBe('established');
     expect(top?.via).toBe('embedding');
     expect(top?.directive).toMatch(/Established theory/);
+    expect(top?.directive).toMatch(/not from how many people accept it/);
+    expect(top?.details).toHaveProperty('rests_on');
   });
 
   it('applies the threshold and the limit', async () => {

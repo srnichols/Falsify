@@ -166,9 +166,10 @@ function directiveFor(tier: Tier, entry: KnowledgeEntry): { directive: string; d
     return {
       directive: bedrock
         ? 'This touches a Bedrock law. A lower tier cannot override it; a contrary claim must either fall outside its domain of validity or bring decisive, reproducible contrary evidence.'
-        : 'This touches Established theory. It can be challenged only with decisive contrary evidence; name that evidence.',
+        : 'This touches Established theory, whose standing comes from the tests it has survived, not from how many people accept it. Read what it rests on and what would overturn it (below), then hold the entry and any claim that contests it to the same standard: name the observation that would decide between them.',
       details: {
         falsified_if: entry.falsified_if,
+        ...(entry.confirmations !== undefined ? { rests_on: entry.confirmations } : {}),
         ...(entry.domain_of_validity !== undefined ? { domain_of_validity: entry.domain_of_validity } : {}),
       },
     };

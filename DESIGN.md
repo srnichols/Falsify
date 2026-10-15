@@ -173,7 +173,7 @@ lives in the transport-free core (`src/cycle/operations.ts`):
 | Tier | Original name | What it holds | Default weight | Override rule |
 |---|---|---|---|---|
 | **Bedrock** | L1 | Established scientific laws & observed/natural laws (physics, thermodynamics, conservation laws). | **Highest** | Cannot be overridden by a lower tier. |
-| **Established** | L2 | Well-supported theory, not yet "law," largely undisputed (e.g. much of relativity). | **High** | Can be challenged only with decisive contrary evidence. |
+| **Established** | L2 | Well-supported theory, not yet "law," largely undisputed (e.g. much of relativity). | **High** | Its standing comes from the tests it has survived, never from how many accept it. The match shows what it rests on and what would overturn it; the entry and any claim contesting it are held to the same standard (name the deciding observation). A *yes* that conflicts with it still needs a sourced experiment or statistical result. |
 | **Contested** | L3 | Best explanation at present; *multiple legitimate sides* (e.g. competing origins models). | **Medium, split** | Present **all** sides, each with falsifiability status. Never pick a winner. |
 | **Quantitative** | L4 | Math, statistics, probability, base rates. | **Cross-cutting** | **Always applied** to every tier; can't be skipped. |
 
