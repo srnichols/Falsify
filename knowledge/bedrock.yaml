@@ -43,6 +43,11 @@ entries:
       total entropy without external work.
     status: unrefuted
     confidence: high
+    domain_of_validity: >-
+      A statistical law for macroscopic isolated systems. Small systems show
+      transient fluctuations that lower entropy (fluctuation theorems), and an
+      open system can lower its own entropy locally by exporting entropy to its
+      surroundings; neither contradicts the law for the isolated total.
     sources: ["Second law of thermodynamics", "Clausius 1865", "Boltzmann"]
 
   - id: bedrock.momentum.conservation
@@ -56,6 +61,11 @@ entries:
       A closed system changes total momentum with no external force acting.
     status: unrefuted
     confidence: high
+    domain_of_validity: >-
+      Holds for a closed system with no net external force, in classical,
+      relativistic (with relativistic momentum) and quantum mechanics. It
+      follows from translation symmetry of space, so it is not guaranteed in
+      spacetimes that lack that symmetry, such as an expanding universe.
     sources: ["Newton's laws", "Noether's theorem (spatial translation symmetry)"]
 
   - id: bedrock.charge.conservation
@@ -70,7 +80,12 @@ entries:
       experiment.
     status: unrefuted
     confidence: high
-    sources: ["Maxwell's equations (continuity equation)"]
+    domain_of_validity: >-
+      Conservation of net charge, which is a local law: charged particles can be
+      created or destroyed, but only in combinations whose total charge is
+      unchanged (e.g. pair production). No violation has been observed.
+    sources:
+      ["Maxwell's equations (continuity equation)", "Griffiths, Introduction to Electrodynamics (charge conservation and the continuity equation)"]
 
   - id: bedrock.lightspeed.invariance
     statement: >-
@@ -84,6 +99,11 @@ entries:
       between inertial frames.
     status: unrefuted
     confidence: high
+    domain_of_validity: >-
+      The vacuum speed of light as measured locally in inertial frames. It says
+      nothing about light in a material medium (which is slower), about
+      non-inertial frames, or about the recession speed of distant galaxies in
+      an expanding universe.
     sources: ["Michelson-Morley 1887", "foundation of special relativity"]
 
   - id: bedrock.chem.definite_proportions
@@ -101,7 +121,8 @@ entries:
     domain_of_validity: >-
       Holds for stoichiometric compounds; non-stoichiometric (berthollide)
       solids are a known, bounded exception.
-    sources: ["Proust's law of definite proportions"]
+    sources:
+      ["Proust's law of definite proportions", "Greenwood & Earnshaw, Chemistry of the Elements (non-stoichiometric compounds)"]
 
   - id: bedrock.chem.multiple_proportions
     statement: >-
@@ -136,6 +157,10 @@ entries:
       acting.
     status: unrefuted
     confidence: high
+    domain_of_validity: >-
+      Holds for a closed system with no net external torque. In quantum
+      mechanics the conserved quantity is the total angular momentum (orbital
+      plus spin), not the orbital part alone.
     sources: ["Newtonian mechanics", "Noether's theorem (rotational symmetry)"]
 
   - id: bedrock.mass.conservation
@@ -154,7 +179,8 @@ entries:
       Holds for chemical reactions. In nuclear reactions and at relativistic
       energies, mass and energy interconvert (E=mc^2) and only total
       mass-energy is conserved.
-    sources: ["Lavoisier (conservation of mass)"]
+    sources:
+      ["Lavoisier (conservation of mass)", "Lavoisier 1789, Traité élémentaire de chimie"]
 
   - id: bedrock.equivalence.principle
     statement: >-
@@ -205,6 +231,11 @@ entries:
       the bound h-bar/2 permits.
     status: unrefuted
     confidence: high
+    domain_of_validity: >-
+      A statement about conjugate (non-commuting) observables of a quantum state:
+      the spreads over identically prepared systems cannot both be made small. It
+      is not merely the disturbance caused by measuring, which is a separate
+      effect.
     sources: ["Heisenberg 1927", "Fourier-conjugate structure of quantum states"]
 
   - id: bedrock.thermo.zeroth_law
@@ -219,7 +250,11 @@ entries:
       A reproducible violation of the transitivity of thermal equilibrium.
     status: unrefuted
     confidence: high
-    sources: ["Zeroth law of thermodynamics"]
+    domain_of_validity: >-
+      Defined for systems in thermal equilibrium that can exchange heat. It does
+      not define a temperature for systems far from equilibrium, and very small
+      or quantum systems need care about what temperature means.
+    sources: ["Zeroth law of thermodynamics", "Callen, Thermodynamics and an Introduction to Thermostatistics"]
 
   - id: bedrock.dna.base_pairing
     statement: >-
@@ -276,7 +311,7 @@ entries:
       Stated for undisturbed deposition. Tectonic folding, overthrusts, and
       intrusions can invert or interleave layers — these are detectable
       disturbances, not exceptions to the rule.
-    sources: ["Steno 1669 (law of superposition)"]
+    sources: ["Steno 1669 (law of superposition)", "Lyell, Principles of Geology (1830-33)"]
 
   - id: bedrock.physics.landauer
     statement: >-

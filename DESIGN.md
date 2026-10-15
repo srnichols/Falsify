@@ -229,8 +229,8 @@ by a model and never at run time.**
 - Bedrock and Established entries are expected to be independently sourced (2+),
   to state their `domain_of_validity`, and to carry a falsifier that names an
   observation. `npm run knowledge -- lint` reports entries that fall short as
-  *advisories* (they do not fail the lint). The corpus currently carries a backlog of
-  such advisories; closing it is curation work, not code.
+  *advisories* (they do not fail the lint). The shipped corpus has none, and a test
+  keeps it that way: a new Bedrock/Established entry has to arrive complete.
 - Contested is for questions with several legitimate positions; an entry sits there
   because the positions are all live, and the engine presents all of them.
 

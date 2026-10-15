@@ -24,7 +24,12 @@ entries:
       inertial frames.
     status: well-supported
     confirmations: ["time dilation in particle lifetimes", "GPS clock corrections"]
-    sources: ["Einstein 1905"]
+    domain_of_validity: >-
+      Inertial frames in flat spacetime, i.e. where gravity can be neglected.
+      Gravity and accelerated reference frames over large regions need general
+      relativity.
+    sources:
+      ["Einstein 1905, Zur Elektrodynamik bewegter Körper, Annalen der Physik 17", "Ives & Stilwell 1938, time dilation of moving atomic clocks, J. Opt. Soc. Am. 28"]
 
   - id: established.relativity.general
     statement: >-
@@ -38,7 +43,12 @@ entries:
     status: well-supported
     confirmations:
       ["light bending (1919)", "gravitational waves (LIGO 2015)", "black-hole imaging"]
-    sources: ["Einstein 1915"]
+    domain_of_validity: >-
+      Tested from the laboratory and solar system out to strong-field binary
+      mergers. It is expected to need extension at singularities and at the
+      Planck scale, and has not been reconciled with quantum mechanics.
+    sources:
+      ["Einstein 1915", "Dyson, Eddington & Davidson 1920, eclipse measurement of light deflection", "Abbott et al. 2016, GW150914, Phys. Rev. Lett. 116, 061102"]
 
   - id: established.quantum.mechanics
     statement: >-
@@ -55,7 +65,12 @@ entries:
     note: >-
       The mathematical framework is established and undisputed; its *interpretation*
       is genuinely contested — see contested.yaml (quantum interpretations).
-    sources: ["Born, Heisenberg, Schrodinger, Dirac"]
+    domain_of_validity: >-
+      Non-relativistic quantum mechanics is exact enough for atoms, molecules and
+      condensed matter; relativistic regimes need quantum field theory. Gravity is
+      not included, and the interpretation of the formalism is contested.
+    sources:
+      ["Born, Heisenberg, Schrodinger, Dirac", "Aspect, Dalibard & Roger 1982, Bell-inequality test with time-varying analyzers, Phys. Rev. Lett. 49, 1804"]
 
   - id: established.geology.plate_tectonics
     statement: >-
@@ -69,6 +84,10 @@ entries:
       striping absent.
     status: well-supported
     confirmations: ["seafloor spreading", "GPS-measured plate motion", "magnetic striping"]
+    domain_of_validity: >-
+      Well tested for the modern Earth and much of its recent geological history.
+      Whether and how plate tectonics operated on the early Earth is actively
+      debated.
     sources: ["Wegener (continental drift)", "1960s seafloor-spreading synthesis"]
 
   - id: established.biology.germ_theory
@@ -82,6 +101,11 @@ entries:
       and no other identifiable cause.
     status: well-supported
     confirmations: ["Koch's postulates", "antibiotics", "vaccination"]
+    domain_of_validity: >-
+      Concerns infectious disease caused by microorganisms. It does not claim that
+      all disease is infectious (genetic, metabolic and degenerative diseases are
+      not), and Koch's postulates cannot always be satisfied (viruses,
+      asymptomatic carriers, polymicrobial disease).
     sources: ["Pasteur", "Koch"]
 
   - id: established.cosmology.big_bang
@@ -97,6 +121,10 @@ entries:
     status: well-supported
     confirmations:
       ["cosmic microwave background", "Hubble expansion", "light-element abundances"]
+    domain_of_validity: >-
+      Describes the expansion and cooling of the universe from a hot, dense early
+      state. It does not describe a cause or an origin of that state, and the very
+      earliest moments lie beyond what has been tested.
     sources: ["Lemaitre", "Penzias & Wilson 1965"]
 
   - id: established.biology.evolution_natural_selection
@@ -118,6 +146,11 @@ entries:
       This is the scientific theory, which is itself well-supported and
       falsifiable. The broader *origins* question as framed in public debate is
       handled separately under contested.yaml, by project rule.
+    domain_of_validity: >-
+      Explains descent with modification and adaptation through selection on
+      heritable variation. It does not address the origin of life, and the relative
+      importance of selection, drift and other mechanisms for particular traits is
+      an active research question.
     sources: ["Darwin 1859", "modern evolutionary synthesis"]
 
   - id: established.biology.cell_theory
@@ -132,6 +165,10 @@ entries:
       arising de novo from non-cellular matter under ordinary conditions.
     status: well-supported
     confirmations: ["microscopy across all known life", "cell division observed directly"]
+    domain_of_validity: >-
+      Describes cellular life. Viruses and prions are non-cellular edge cases that
+      the theory does not cover, and a few tissues (e.g. syncytia) blur the
+      boundary of what counts as a single cell.
     sources: ["Schleiden & Schwann 1839", "Virchow 1855"]
 
   - id: established.biology.central_dogma
@@ -150,7 +187,7 @@ entries:
     domain_of_validity: >-
       Reverse transcription (RNA -> DNA) is a known, bounded part of the dogma,
       not a violation of it; the barred step is protein -> sequence.
-    sources: ["Crick 1958, 1970"]
+    sources: ["Crick 1958, 1970", "Baltimore 1970, RNA-dependent DNA polymerase in virions, Nature 226"]
 
   - id: established.chemistry.atomic_theory
     statement: >-
@@ -164,6 +201,10 @@ entries:
       or that elements combine in continuously variable atomic ratios.
     status: well-supported
     confirmations: ["Brownian motion (Einstein/Perrin)", "direct atomic imaging", "the periodic table"]
+    domain_of_validity: >-
+      Matter is made of atoms of discrete elements. Dalton's original claims that
+      atoms are indivisible and that all atoms of an element are identical were
+      revised: atoms have subatomic structure and elements have isotopes.
     sources: ["Dalton 1808", "Perrin 1908"]
 
   - id: established.biology.chemiosmosis_atp_synthesis
@@ -205,7 +246,7 @@ entries:
       An excellent approximation at low mass and low speed. Superseded by general
       relativity near large masses and high velocities (Mercury's perihelion,
       light bending, GPS).
-    sources: ["Newton 1687"]
+    sources: ["Newton 1687", "Cavendish 1798, torsion-balance experiment"]
 
   - id: established.physics.mass_energy_equivalence
     statement: >-
@@ -219,7 +260,12 @@ entries:
     status: well-supported
     confirmations:
       ["nuclear binding energy / fission & fusion yields", "particle-antiparticle annihilation", "mass defect measurements"]
-    sources: ["Einstein 1905"]
+    domain_of_validity: >-
+      The rest-energy relation for a system's invariant mass. "Mass turns into
+      energy" is loose wording: in a closed system the invariant mass is what
+      is conserved, and binding energy contributes to it.
+    sources:
+      ["Einstein 1905, Ist die Trägheit eines Körpers von seinem Energieinhalt abhängig?", "Cockcroft & Walton 1932, Proc. R. Soc. A 137"]
 
   - id: established.physics.standard_model
     statement: >-
@@ -257,7 +303,7 @@ entries:
       An empirical, material-specific approximation, not a fundamental law. It
       fails for non-ohmic devices (diodes, semiconductors, plasmas, filaments)
       and for ohmic materials at extreme fields or temperatures.
-    sources: ["Ohm 1827"]
+    sources: ["Ohm 1827", "Griffiths, Introduction to Electrodynamics (Ohm's law)"]
 
   - id: established.physics.kirchhoffs_current_law
     statement: >-
@@ -469,7 +515,7 @@ entries:
       Holds only below the elastic limit; beyond it materials yield, deform
       plastically, and the linear relation breaks down. A first-order
       approximation, not a universal law.
-    sources: ["Hooke 1678"]
+    sources: ["Hooke 1678", "Landau & Lifshitz, Theory of Elasticity"]
 
   - id: established.physics.law_of_the_lever
     statement: >-
@@ -638,7 +684,7 @@ entries:
       Exact for an idealized two-body system; perturbed by other masses and by
       general relativity (e.g. Mercury's perihelion precession). Derivable from
       Newtonian gravitation.
-    sources: ["Kepler 1609, 1619"]
+    sources: ["Kepler 1609, 1619", "Newton 1687, Principia (derivation from universal gravitation)"]
 
   - id: established.geology.uniformitarianism
     statement: >-
@@ -694,6 +740,10 @@ entries:
       circular DNA or no phylogenetic link to bacteria.
     status: well-supported
     confirmations: ["organelles have their own circular DNA and ribosomes", "double membranes", "bacterial phylogeny of organelle genes"]
+    domain_of_validity: >-
+      Well supported for mitochondria and plastids. The origin of other cell
+      structures, and the identity of the host lineage, remain under active
+      research.
     sources: ["Mereschkowski 1905", "Margulis 1967"]
 
   - id: established.cs.shannon_information
@@ -711,7 +761,11 @@ entries:
       capacity.
     status: well-supported
     confirmations: ["modern data compression approaching entropy", "error-correcting codes approaching capacity (LDPC, polar codes)"]
-    sources: ["Shannon 1948"]
+    domain_of_validity: >-
+      Gives limits for communication over a channel with a defined probabilistic
+      model. It is not a theory of meaning: Shannon explicitly set semantics
+      aside.
+    sources: ["Shannon 1948", "Cover & Thomas, Elements of Information Theory"]
 
   - id: established.cs.computability_limits
     statement: >-

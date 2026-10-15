@@ -126,6 +126,15 @@ entries:
   return dir;
 }
 
+describe('the shipped corpus', () => {
+  it('has earned every Bedrock and Established entry its tier (no admission advisories)', () => {
+    const summary = lintKnowledge();
+
+    expect(summary.issues).toEqual([]);
+    expect(summary.warnings.map((w) => w.message)).toEqual([]);
+  });
+});
+
 describe('knowledge maintenance', () => {
   it('returns a valid tier-specific template for contested entries', () => {
     const template = getKnowledgeTemplate('contested');
