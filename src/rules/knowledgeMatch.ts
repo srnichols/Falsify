@@ -25,7 +25,14 @@ export interface KnowledgeMatch {
   details: Record<string, unknown>;
   /** How the entry was found; absent on plain lexical results from {@link matchKnowledge}. */
   via?: 'lexical' | 'semantic' | 'embedding' | 'both';
+  /**
+   * Whether the claim asserts what the entry says, denies it, or cannot be told apart
+   * by negation alone. A negation heuristic, not understanding: "unclear" is common.
+   */
+  stance?: Stance;
 }
+
+export type Stance = 'asserts' | 'denies' | 'unclear';
 
 interface IndexedEntry {
   tier: Tier;
@@ -236,5 +243,51 @@ export function matchKnowledge(index: KnowledgeIndex, text: string, options: Mat
       details,
     });
   }
-  return matches.sort((a, b) => b.score - a.score).slice(0, limit);
+  return matches.sort((a, b) => b.score - a.score).slice(0, limit).map((m) => withStance(text, m));
+}
+
+const NEGATION = /\b(?:not|no|never|cannot|neither|nor|without|none|nothing|nobody)\b|n['\u2019]t\b/gi;
+const CONTRAST = /\b(?:but|however|although|though|except|unless)\b/i;
+
+/** Whether the text negates (an odd number of negation words). */
+function isNegated(text: string): boolean {
+  return (text.match(NEGATION)?.length ?? 0) % 2 === 1;
+}
+
+/**
+ * Work out whether a claim asserts or denies the entry it matched, from negation alone,
+ * and stop telling a claim that denies a refuted idea that it resembles that idea.
+ *
+ * A claim that denies an entry written affirmatively is `denies`; a claim that
+ * negates the same way as the entry is `asserts`. An affirmative claim against a
+ * negatively worded entry is `unclear` ("conserved" versus "cannot be created"), as is
+ * any claim with a contrast clause, and `unclear` keeps the tier's original directive
+ * so the heuristic can only soften the guidance where it is confident.
+ */
+export function withStance(claimText: string, match: KnowledgeMatch): KnowledgeMatch {
+  if (match.stance !== undefined) return match;
+  const claimNegated = isNegated(claimText);
+  const entryNegated = isNegated(match.title);
+  let stance: Stance;
+  if (CONTRAST.test(claimText)) stance = 'unclear';
+  else if (claimNegated && !entryNegated) stance = 'denies';
+  else if (claimNegated === entryNegated) stance = 'asserts';
+  else stance = 'unclear';
+
+  if (stance === 'denies' && match.tier === 'refuted') {
+    return {
+      ...match,
+      stance,
+      directive:
+        'This claim denies an idea that was already refuted, so it agrees with the record rather than reviving it. That match is not support: the denial still needs its own test.',
+    };
+  }
+  if (stance === 'asserts' && (match.tier === 'bedrock' || match.tier === 'established')) {
+    return {
+      ...match,
+      stance,
+      directive: `This agrees with a ${match.tier === 'bedrock' ? 'Bedrock' : 'Established'} entry. Agreement is not a test: it still needs its own observation that could fail, and the match is not evidence.`,
+    };
+  }
+  return { ...match, stance };
 }

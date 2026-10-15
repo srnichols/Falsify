@@ -136,6 +136,11 @@ lives in the transport-free core (`src/cycle/operations.ts`):
   deliberately conservative lexical checks; they catch placeholders, not weak science.
 - **Consensus is not evidence.** An analysis whose cited evidence is only appeals to
   authority is refused; a mixed one is answered with the challenge above.
+- **Stance, not just topic.** Each knowledge match carries a `stance` (`asserts`,
+  `denies`, `unclear`) from a negation heuristic, so "vaccines do not cause autism" is
+  not told it resembles the refuted claim that they do. Where the heuristic cannot tell
+  (an affirmative claim against a negatively worded entry, a contrast clause) the
+  original, stricter directive stands. It sees negation only, not antonyms.
 - **Claim types.** A *probabilistic* claim must state a numeric threshold; a *causal*
   claim's test must include a comparison; an *existential* claim notes that failing to
   find it once is not a refutation.

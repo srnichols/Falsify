@@ -26,7 +26,7 @@ describe('matchKnowledgeSemantic', () => {
     expect(found?.via).toBe('semantic');
     expect(found?.tier).toBe('established');
     expect(found?.score).toBe(0.88);
-    expect(found?.directive).toMatch(/Established theory/);
+    expect(found?.directive).toMatch(/Established/);
     expect(result.semantic).toBe('used');
   });
 

@@ -13,7 +13,7 @@
 
 import type { MemoryReader } from '../memory/openbrainClient.js';
 import type { EmbeddingMatcher } from './embeddings.js';
-import { matchFromId, matchKnowledge } from './knowledgeMatch.js';
+import { matchFromId, matchKnowledge, withStance } from './knowledgeMatch.js';
 import type { KnowledgeIndex, KnowledgeMatch } from './knowledgeMatch.js';
 
 /** Outcome of the semantic half of a lookup. */
@@ -113,6 +113,9 @@ export async function matchKnowledgeSemantic(
     }
   }
 
-  const matches = [...merged.values()].sort((a, b) => b.score - a.score).slice(0, limit);
+  const matches = [...merged.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((m) => withStance(text, m));
   return { matches, semantic };
 }
