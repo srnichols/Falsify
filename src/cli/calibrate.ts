@@ -9,11 +9,13 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { argv } from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { CalibrationFileSchema, evaluateCalibration } from '../rules/calibration.js';
+import { CalibrationFileSchema, evaluateCalibration, weightSensitivity } from '../rules/calibration.js';
 import { loadWeights } from '../rules/weights.js';
 
 function main(): void {
-  const file = resolve(process.cwd(), argv[2] ?? 'calibration/cases.json');
+  const args = argv.slice(2);
+  const sensitivity = args.includes('--sensitivity');
+  const file = resolve(process.cwd(), args.find((a) => !a.startsWith('--')) ?? 'calibration/cases.json');
   const { note, cases } = CalibrationFileSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
   const weights = loadWeights();
   const result = evaluateCalibration(cases, weights);
@@ -28,7 +30,19 @@ function main(): void {
     console.log('Misordered pairs:');
     for (const m of result.misordered) console.log(`  - ${m}`);
   }
+  if (sensitivity) printSensitivity(cases);
   console.log(`\nNote: ${note}`);
+}
+
+function printSensitivity(cases: Parameters<typeof weightSensitivity>[0]): void {
+  const s = weightSensitivity(cases);
+  const pct = (x: number): string => `${(x * 100).toFixed(0)}%`;
+  console.log(`\nWeight sensitivity over ${s.samples} random weightings (consensus kept smallest):`);
+  console.log(`  accuracy  min ${pct(s.min)}  median ${pct(s.median)}  max ${pct(s.max)}  (shipped weights: ${pct(s.baseline)})`);
+  console.log(`  ${pct(s.shareAtLeastBaseline)} of random weightings did at least as well as the shipped ones`);
+  console.log('  statistics weight / evidence weight -> accuracy');
+  for (const r of s.ratioSweep) console.log(`    ${String(r.mathPerEvidence).padStart(5)}x  ${pct(r.accuracy)}`);
+  console.log('  The cases vary only evidence and statistics, so the other weights are untested by this set.');
 }
 
 if (argv[1] && fileURLToPath(import.meta.url) === argv[1]) {

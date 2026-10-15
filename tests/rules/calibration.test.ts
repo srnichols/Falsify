@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { CalibrationFileSchema, evaluateCalibration } from '../../src/rules/calibration.js';
+import { CalibrationFileSchema, evaluateCalibration, weightSensitivity } from '../../src/rules/calibration.js';
 
 const { cases } = CalibrationFileSchema.parse(
   JSON.parse(readFileSync(resolve(process.cwd(), 'calibration', 'cases.json'), 'utf8')),
@@ -45,5 +45,14 @@ describe('claim-score calibration against labelled cases', () => {
     expect(cases.filter((c) => c.outcome === 'held-up').length).toBeGreaterThanOrEqual(4);
     expect(cases.filter((c) => c.outcome === 'refuted').length).toBeGreaterThanOrEqual(4);
     expect(cases.every((c) => c.basis.length > 10)).toBe(true);
+  });
+
+  it('does not hinge on the exact weights: the result survives random reweighting', () => {
+    const s = weightSensitivity(cases, { samples: 200, seed: 7 });
+    expect(s.samples).toBe(200);
+    expect(s.min).toBeGreaterThanOrEqual(0.85);
+    expect(s.median).toBeGreaterThanOrEqual(0.9);
+    expect(s.ratioSweep.length).toBeGreaterThan(3);
+    expect(weightSensitivity(cases, { samples: 200, seed: 7 })).toEqual(s);
   });
 });

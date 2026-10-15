@@ -98,3 +98,79 @@ export function evaluateCalibration(
   }
   return { cases: calibrated, pairwiseAccuracy: pairs === 0 ? 0 : correct / pairs, misordered };
 }
+
+export interface WeightSensitivity {
+  /** How many random weightings were tried. */
+  samples: number;
+  /** Pairwise accuracy under the shipped weights. */
+  baseline: number;
+  min: number;
+  median: number;
+  max: number;
+  /** Share of random weightings that did at least as well as the shipped ones. */
+  shareAtLeastBaseline: number;
+  /** Accuracy as the weight on statistical support is varied against direct evidence. */
+  ratioSweep: { mathPerEvidence: number; accuracy: number }[];
+}
+
+/** A small, seedable generator so a sensitivity run can be repeated exactly. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * How much the calibration result depends on the hand-set weights. Draws random
+ * weightings (each weight uniform in [0.1, 1.5], consensus kept strictly smallest, as
+ * the engine requires) and sweeps the statistical-to-evidence ratio. If accuracy is
+ * high across most of the space, the ordering of the cases does not hinge on the exact
+ * numbers; if it collapses, the numbers are doing more work than they have earned.
+ * Only the signals the cases vary (evidence and statistics) can move the result: the
+ * cases hold the hypothesis and knowledge links fixed, so the other weights are untested here.
+ */
+export function weightSensitivity(
+  cases: readonly CalibrationCase[],
+  options: { samples?: number; seed?: number } = {},
+): WeightSensitivity {
+  const samples = options.samples ?? 500;
+  const random = mulberry32(options.seed ?? 1);
+  const baseline = evaluateCalibration(cases, DEFAULT_WEIGHTS).pairwiseAccuracy;
+  const draw = (): number => 0.1 + 1.4 * random();
+
+  const accuracies: number[] = [];
+  for (let i = 0; i < samples; i++) {
+    const weights: ScoreWeights = {
+      bedrock: draw(),
+      established: draw(),
+      evidence: draw(),
+      falsifiability: draw(),
+      math: draw(),
+      consensus: 0,
+    };
+    weights.consensus = Math.min(weights.bedrock, weights.established, weights.evidence, weights.falsifiability, weights.math) * 0.5;
+    accuracies.push(evaluateCalibration(cases, weights).pairwiseAccuracy);
+  }
+  accuracies.sort((a, b) => a - b);
+
+  const ratios = [0.25, 0.5, 1, 2, 4, 8];
+  const ratioSweep = ratios.map((mathPerEvidence) => ({
+    mathPerEvidence,
+    accuracy: evaluateCalibration(cases, { ...DEFAULT_WEIGHTS, evidence: 0.7, math: 0.7 * mathPerEvidence, consensus: 0.01 }).pairwiseAccuracy,
+  }));
+
+  return {
+    samples,
+    baseline,
+    min: accuracies[0] ?? 0,
+    median: accuracies[Math.floor(accuracies.length / 2)] ?? 0,
+    max: accuracies[accuracies.length - 1] ?? 0,
+    shareAtLeastBaseline: accuracies.filter((a) => a >= baseline - 1e-9).length / samples,
+    ratioSweep,
+  };
+}

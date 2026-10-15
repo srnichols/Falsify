@@ -448,6 +448,16 @@ picks — because the whole point is to surface disagreement, not bury it.
       earned one change (unreplicated results are discounted and cannot be "strong"). The
       remaining weights (evidence, falsifiability, tier support) have no equivalent
       outcome data; they would need many resolved inquiries.
+      `npm run calibrate -- --sensitivity` measures how much that matters: over 500 random
+      weightings (each in [0.1, 1.5], consensus kept smallest) accuracy on the 12 cases
+      stays between 94% and 100% (median 97%), and the shipped weights are not the best
+      of them (weighting statistics at half the evidence weight scores 100%). Two honest
+      readings: the ordering of these cases is driven by the evidence-quality function and
+      the replication model, not by the weights; and for the same reason the cases cannot
+      choose between weightings, so the numbers stay priors. Falsifiability, Bedrock and
+      Established weights cannot be probed at all by this set (it holds them fixed). Nothing
+      here was tuned to the cases; a better score on 12 author-labelled cases is not
+      grounds to change a weight.
 - [x] **"Evidence" sourcing:** how does the agent obtain *data* (papers, datasets,
       user-supplied observations)? *Resolved to the extent Falsify can:* the caller
       supplies structured evidence, and a cited DOI can be confirmed to exist

@@ -113,8 +113,10 @@ function renderCard(json) {
   }
   if (json.review) {
     add('Outcome', escapeHtml(json.outcome));
-    if (json.verified === true) add('Recorded', 'Verified against the session and written to the notebook.');
-    if (json.verified === false) add('Unverified', escapeHtml(json.note));
+    if (json.cycleVerified === true) {
+      add('Recorded', `Cycle followed and written to the notebook as ${escapeHtml(json.epistemicStatus)}. ${escapeHtml(json.note)}`);
+    }
+    if (json.cycleVerified === false) add('Not recorded', escapeHtml(json.note));
     if (json.nextStep) add('Next', escapeHtml(json.nextStep));
   }
   if (json.cycleState) add('Cycle state', escapeHtml(json.cycleState));
@@ -176,9 +178,25 @@ const FORMS = {
     fields: [
       { name: 'verdict', label: 'Verdict', type: 'select', options: ['yes', 'no'] },
       { name: 'evidenceCited', label: 'Evidence cited (one per line)', type: 'textarea' },
+      { name: 'searchDescription', label: 'For a yes: what did you search, and how?', type: 'text' },
+      { name: 'contraryFound', label: 'Null or contrary results known (a number)', type: 'text' },
+      { name: 'contraryNote', label: 'If any: what are they, and why does the claim stand?', type: 'text' },
     ],
     submit: (v) =>
-      api('/api/analyze', { verdict: v.verdict, evidenceCited: lines(v.evidenceCited), ...ids() }),
+      api('/api/analyze', {
+        verdict: v.verdict,
+        evidenceCited: lines(v.evidenceCited),
+        ...(v.searchDescription
+          ? {
+              evidenceSearch: {
+                description: v.searchDescription,
+                contraryFound: Math.max(0, Number.parseInt(v.contraryFound, 10) || 0),
+                ...(v.contraryNote ? { contraryNote: v.contraryNote } : {}),
+              },
+            }
+          : {}),
+        ...ids(),
+      }),
   },
   review: {
     title: 'Review — the three questions, in order',
@@ -187,6 +205,7 @@ const FORMS = {
       { name: 'q2Hypothesis', label: '2) Was the hypothesis wrong?', type: 'text' },
       { name: 'q3Theory', label: '3) Is the theory wrong?', type: 'text' },
       { name: 'outcome', label: 'Outcome', type: 'select', options: ['revise', 'confirm'] },
+      { name: 'acceptTentative', label: 'Accept a tentative status if the evidence is weak', type: 'checkbox' },
     ],
     submit: (v) =>
       api('/api/review', {
@@ -194,6 +213,7 @@ const FORMS = {
         q2Hypothesis: v.q2Hypothesis,
         q3Theory: v.q3Theory,
         outcome: v.outcome,
+        ...(v.acceptTentative === true ? { acceptTentative: true } : {}),
         ...ids(),
       }),
   },
