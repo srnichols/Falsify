@@ -31,6 +31,8 @@ import {
 import { buildSeedMemories, syncSeed, type SeedSyncSummary } from './seedSync.js';
 
 const TEMP_PREFIX = 'falsify-knowledge-';
+/** Quantitative entries have always been id'd `quant.*`; the corpus and OpenBrain mirror depend on it. */
+const QUANTITATIVE_ID_ALIAS = 'quant.';
 
 export type KnowledgeLintIssueCode =
   | 'duplicate-id'
@@ -281,7 +283,8 @@ export function lintKnowledge(knowledgeDir: string = DEFAULT_KNOWLEDGE_DIR): Kno
 
   for (const { tier, entry } of allEntries(knowledge)) {
     const expectedPrefix = `${tier}.`;
-    if (!entry.id.startsWith(expectedPrefix)) {
+    const acceptedPrefixes = tier === 'quantitative' ? [expectedPrefix, QUANTITATIVE_ID_ALIAS] : [expectedPrefix];
+    if (!acceptedPrefixes.some((prefix) => entry.id.startsWith(prefix))) {
       issues.push({
         code: 'tier-id-prefix-mismatch',
         id: entry.id,

@@ -6,7 +6,7 @@
 > science is settled."
 
 **Status:** Design draft — iterate freely. Nothing here is final.
-**Last updated:** 2026-06-15
+**Last updated:** 2026-10-14
 
 ---
 
@@ -99,6 +99,40 @@ flowchart TD
   three questions even when the answer is Yes (cheap insurance against fooling
   ourselves).
 
+### How the cycle is enforced
+
+Falsify does not generate answers; it validates what the calling agent submits, so
+the rules have to hold even if the caller is careless or tries to cheat. Enforcement
+lives in the transport-free core (`src/cycle/operations.ts`):
+
+- **Sessions.** `falsify_intake` returns a `sessionId`. The server keeps the cycle
+  state, so a caller cannot skip a step or lie about where it is; a `cycleState`
+  that contradicts the session is refused. Without a session the cycle still runs
+  statelessly, but a `confirm` is flagged `verified: false` and is not recorded.
+- **Pre-registration.** The hypothesis is locked (timestamped) before the
+  experiment and analysis. Analysis reports when the prediction was locked.
+- **"Yes" needs a recorded yes.** `confirm` is refused unless a yes verdict was
+  actually recorded in the session, and only then is a Theory recorded.
+- **No rescuing a refuted claim.** A revision must carry a `revisionNote` saying what
+  changed and why, and may not drop falsification conditions the refuted version had
+  (no making a claim easier to survive).
+- **Substance, not just presence.** Falsification conditions must describe an
+  observation ("no drop in reaction time versus placebo"), not restate "if it's
+  wrong". Review answers and evidence must be real text, not "n/a". These are
+  deliberately conservative lexical checks; they catch placeholders, not weak science.
+- **Consensus is not evidence.** An analysis whose cited evidence is only appeals to
+  authority is refused; a mixed one is answered with the challenge above.
+- **Claim types.** A *probabilistic* claim must state a numeric threshold; a *causal*
+  claim's test must include a comparison; an *existential* claim notes that failing to
+  find it once is not a refutation.
+- **The tiers are consulted.** At hypothesis time the claim is matched (offline,
+  lexically) against every tier: refuted lookalikes, the Bedrock/Established burden of
+  proof, and the full set of Contested positions. A lexical match shows *relevance*,
+  not contradiction; it cannot prove a claim conflicts with a law.
+- **Outcomes are kept.** A refuted hypothesis is written to the notebook and struck
+  through, dated; a surviving theory goes to the notebook and, best-effort, to the
+  Corpus (tagged `tier: survived-test`, never a higher tier than it earned).
+
 ---
 
 ## 4. Rules Engine (knowledge hierarchy)
@@ -153,6 +187,13 @@ claim_score =
 > **Why down-weight, not ban:** rejecting consensus reflexively is itself a bias.
 > The honest move is to demand the receipts — *which experiment, and could it have
 > failed?* — not to assume the consensus is wrong.
+
+> **Implementation status:** `claimScore` / `compareClaims` (`src/rules/claimScore.ts`)
+> are implemented and tested, and structurally bar consensus from deciding a verdict.
+> The cycle does **not** call them yet: nothing in a run produces the per-claim signal
+> strengths they need. Wiring them in requires structured evidence (see §7), so today
+> the consensus commitment is enforced by `analysis:consensus-is-not-evidence`, not by
+> the score.
 
 ### Knowledge storage — two stores, one truth
 
@@ -272,17 +313,26 @@ fan the prompt to multiple models *in parallel*, then **extract the disagreement
 and present competing hypotheses with their evidence. **No auto-winner.** The human
 picks — because the whole point is to surface disagreement, not bury it.
 
+> **Status: not implemented.** Falsify's tools never call a model, so there is no
+> fan-out. The host agent can already do this itself; what is missing is a tool that
+> accepts several models' competing hypotheses and extracts their disagreement.
+
 ---
 
 ## 7. Open Design Questions (to iterate)
 
 - [ ] **Weights:** starting values for `w_*` in §4. Ordering is fixed; numbers TBD.
 - [ ] **"Evidence" sourcing:** how does the agent obtain *data* (papers, datasets,
-      user-supplied observations)? Retrieval strategy + provenance.
+      user-supplied observations)? Retrieval strategy + provenance. Today evidence is
+      a list of free-text observations; structured evidence (source, sample size,
+      effect size) is what `claimScore` would need.
 - [ ] **Falsifiability classifier:** how do we reliably detect an unfalsifiable
-      claim? (Heuristics + model judgment + a checklist.)
+      claim? (Heuristics + model judgment + a checklist.) *Partly done:* intake uses
+      narrow lexical patterns and falsification conditions get substance checks; both
+      are heuristics and will miss unfalsifiable claims phrased without the keywords.
 - [ ] **Consensus detection:** how to detect a "settled science" appeal in a
-      question or a source, and trigger the challenge response.
+      question or a source, and trigger the challenge response. *Partly done:* appeals
+      are detected in the question and in cited evidence.
 - [x] **Tech stack:** ~~UI, providers, local vs hosted, rules-engine impl.~~
       **Decided** — Node + TypeScript, MCP-core + web UI, OpenBrain backend, built
       with Plan Forge. See §9.

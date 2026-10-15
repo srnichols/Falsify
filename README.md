@@ -58,8 +58,19 @@ This workspace already includes a local MCP registration at
 them under the same top-level `servers` object rather than replacing the file.
 
 `OPENBRAIN_KEY` is optional and only enables `falsify_recall` (semantic recall from
-the OpenBrain corpus); the reasoning tools work without it. The key is read from the
-environment and is never stored in the repo.
+the OpenBrain corpus) and writing surviving theories to the corpus; the reasoning
+tools work without it. The key is read from the environment and is never stored in
+the repo.
+
+### How a run is enforced
+
+`falsify_intake` returns a `sessionId`; pass it to every later call. The server then
+tracks the cycle itself, so you cannot skip a step, confirm a theory that never had a
+recorded "yes", or revise a refuted hypothesis without saying what changed (and
+without keeping every earlier falsification condition). Refuted hypotheses are
+written to the notebook and struck through; theories that survive are recorded in the
+notebook and, if `OPENBRAIN_KEY` is set, the corpus. Session state and the notebook
+live under `.falsify/` (git-ignored). See [DESIGN.md](./DESIGN.md) §3.
 
 ## Run the Falsify web UI
 
@@ -76,8 +87,10 @@ npm run web
 ```
 
 Then open the printed URL (default <http://127.0.0.1:4319>). The server binds to
-`127.0.0.1` only — it is a single-user local tool, with no authentication. Override
-the port with `FALSIFY_WEB_PORT`:
+`127.0.0.1` only — it is a single-user local tool, with no authentication. It answers
+only to `localhost`/`127.0.0.1` host names and rejects cross-origin and non-JSON
+writes, so a web page you happen to visit cannot drive it (DNS rebinding / CSRF).
+Override the port with `FALSIFY_WEB_PORT`:
 
 ```bash
 FALSIFY_WEB_PORT=8080 npm run web
