@@ -113,7 +113,12 @@ another project, copy the instructions file and the skill folder into that proje
 the questions in `calibration/inquiry-questions.json` through a Copilot CLI agent with and
 without the guidance and scores each run from the server's own session records. It
 spends real model credits and its samples are small, so read it as a sketch, not a
-measurement.
+measurement. One full run (8 questions, one model, one run per cell): the opposite
+framing was completed in 7 of 8 guided runs and 0 of 8 unguided; web searches 35 versus 2;
+sources verified 26 versus 13; search descriptions averaged about 51 words versus 15;
+contrary results reported and invented replication claims were about equal (9 versus 9,
+and none). Guided runs cost roughly twice as much because they run two inquiries. The one
+guided run that skipped the mirror recorded a "no" for a thin search and said so.
 
 ## Run the Falsify web UI
 
