@@ -24,13 +24,15 @@ export interface KnowledgeMatch {
   /** Tier-specific context for the caller (falsifiers, positions, lessons). */
   details: Record<string, unknown>;
   /** How the entry was found; absent on plain lexical results from {@link matchKnowledge}. */
-  via?: 'lexical' | 'semantic' | 'both';
+  via?: 'lexical' | 'semantic' | 'embedding' | 'both';
 }
 
 interface IndexedEntry {
   tier: Tier;
   entry: KnowledgeEntry;
   title: string;
+  /** The searchable text the tokens (and any embedding) are built from. */
+  text: string;
   tokens: Set<string>;
 }
 
@@ -106,7 +108,7 @@ export function buildKnowledgeIndex(knowledge: Record<Tier, KnowledgeFile>): Kno
     for (const entry of file.entries) {
       const described = describe(entry);
       if (described) {
-        entries.push({ tier, entry, title: described.title, tokens: tokenize(described.text) });
+        entries.push({ tier, entry, title: described.title, text: described.text, tokens: tokenize(described.text) });
       }
     }
   }
@@ -182,7 +184,7 @@ export function matchFromId(
   index: KnowledgeIndex,
   id: string,
   score: number,
-  via: 'lexical' | 'semantic' | 'both',
+  via: 'lexical' | 'semantic' | 'embedding' | 'both',
 ): KnowledgeMatch | undefined {
   const indexed = index.entries.find((e) => e.entry.id === id);
   if (indexed === undefined) return undefined;

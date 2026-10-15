@@ -12,6 +12,7 @@
  */
 
 import type { MemoryReader } from '../memory/openbrainClient.js';
+import type { EmbeddingMatcher } from './embeddings.js';
 import { matchFromId, matchKnowledge } from './knowledgeMatch.js';
 import type { KnowledgeIndex, KnowledgeMatch } from './knowledgeMatch.js';
 
@@ -61,7 +62,7 @@ export async function matchKnowledgeSemantic(
   index: KnowledgeIndex,
   reader: MemoryReader | undefined,
   text: string,
-  options: { limit?: number } = {},
+  options: { limit?: number; embeddings?: EmbeddingMatcher | undefined } = {},
 ): Promise<SemanticMatchResult> {
   const limit = options.limit ?? 5;
   const merged = new Map<string, KnowledgeMatch>();
@@ -69,29 +70,46 @@ export async function matchKnowledgeSemantic(
     merged.set(match.id, { ...match, via: 'lexical' });
   }
 
+  /** Add a semantic candidate; one found more than one way keeps its best score. */
+  const add = (found: KnowledgeMatch): void => {
+    const existing = merged.get(found.id);
+    merged.set(
+      found.id,
+      existing === undefined ? found : { ...existing, score: Math.max(existing.score, found.score), via: 'both' },
+    );
+  };
+
   let semantic: SemanticStatus = 'unavailable';
+  const settle = (found: boolean): void => {
+    if (found) semantic = 'used';
+    else if (semantic === 'unavailable') semantic = 'no-hits';
+  };
+
+  if (options.embeddings !== undefined) {
+    try {
+      const matches = await options.embeddings.match(text, limit * 2);
+      matches.forEach(add);
+      settle(matches.length > 0);
+    } catch {
+      // An unreachable embedding endpoint degrades to the other matchers.
+    }
+  }
+
   if (reader !== undefined) {
     try {
       const hits = await reader.recall({ query: text, limit: limit * 2 });
-      semantic = 'no-hits';
+      settle(false);
       hits.forEach((hit, rank) => {
         const id = SOURCE_ID_PATTERN.exec(hitText(hit))?.[1];
         if (id === undefined) return;
-        const score = hitSimilarity(hit) ?? rankScore(rank);
-        const existing = merged.get(id);
-        if (existing !== undefined) {
-          merged.set(id, { ...existing, score: Math.max(existing.score, score), via: 'both' });
-          semantic = 'used';
-          return;
-        }
-        const found = matchFromId(index, id, score, 'semantic');
+        const found = matchFromId(index, id, hitSimilarity(hit) ?? rankScore(rank), 'semantic');
         if (found !== undefined) {
-          merged.set(id, found);
-          semantic = 'used';
+          add(found);
+          settle(true);
         }
       });
     } catch {
-      semantic = 'unavailable';
+      // Recall failing leaves whatever the other matchers found.
     }
   }
 

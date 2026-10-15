@@ -80,7 +80,14 @@ carries a `sessionWarning`. If your host keeps dropping the session, set
 `FALSIFY_REQUIRE_SESSION=1` in the server's environment and any step after intake
 without one is refused with `session:required`. The claim-score weights can be retuned
 with `FALSIFY_WEIGHTS` (for example `{"evidence":0.9,"consensus":0.05}`); a setting that
-stops consensus being the smallest weight is rejected at startup. After
+stops consensus being the smallest weight is rejected at startup. For paraphrase-proof
+knowledge matching, point `FALSIFY_EMBEDDINGS_URL` at any OpenAI-compatible embeddings
+endpoint (a local Ollama, `http://127.0.0.1:11434/v1`, with `nomic-embed-text` keeps
+claims on your machine; set `FALSIFY_EMBEDDINGS_MODEL`, `FALSIFY_EMBEDDINGS_KEY` and
+`FALSIFY_EMBEDDINGS_THRESHOLD` as needed). It is off by default, so nothing is sent
+anywhere unless you set it. `npm run calibrate` scores the labelled cases in
+`calibration/cases.json` and reports how well the claim score separates results that
+held up from results that were refuted. After
 rebuilding, reload the `falsify` server in your MCP host (in VS Code, restart it from
 the MCP servers list) so it picks up new tools; a running server keeps the old build.
 See [DESIGN.md](./DESIGN.md) §3.

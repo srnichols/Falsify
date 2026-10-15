@@ -12,6 +12,7 @@ import type { MemoryReader, MemoryWriter } from '../memory/openbrainClient.js';
 import type { KnowledgeIndex } from '../rules/knowledgeMatch.js';
 import type { ScoreWeights } from '../rules/claimScore.js';
 import type { SourceCheck } from '../rules/sourceCheck.js';
+import type { EmbeddingMatcher } from '../rules/embeddings.js';
 
 export interface CycleContext {
   /** Server-side session store; makes cycle state authoritative. */
@@ -22,6 +23,8 @@ export interface CycleContext {
   corpus?: MemoryWriter;
   /** Corpus tier reader: semantic recall, used by `falsify_related`. */
   memory?: MemoryReader;
+  /** Embedding-based matcher (any OpenAI-compatible endpoint); see `FALSIFY_EMBEDDINGS_URL`. */
+  embeddings?: EmbeddingMatcher;
   /** Refuse any step after intake that does not carry a sessionId (`FALSIFY_REQUIRE_SESSION=1`). */
   requireSession?: boolean;
   /** Looks up a DOI for `falsify_verify_source`. Defaults to Crossref; injected in tests. */

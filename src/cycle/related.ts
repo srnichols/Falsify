@@ -34,6 +34,7 @@ export async function opRelated(input: RelatedInput, ctx?: CycleContext): Promis
   }
 
   const { matches, semantic } = await matchKnowledgeSemantic(index, ctx?.memory, input.claim, {
+    embeddings: ctx?.embeddings,
     ...(input.limit !== undefined ? { limit: input.limit } : {}),
   });
   return okResult({

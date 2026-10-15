@@ -129,9 +129,14 @@ lives in the transport-free core (`src/cycle/operations.ts`):
   lexically) against every tier: refuted lookalikes, the Bedrock/Established burden of
   proof, and the full set of Contested positions. A lexical match shows *relevance*,
   not contradiction; it cannot prove a claim conflicts with a law. `falsify_related`
-  adds semantic recall from the Corpus (when `OPENBRAIN_KEY` is set) to find paraphrases
-  the wording match misses; recall only nominates entries, and each is resolved against
-  the local YAML (see "Who decides the tier", §4).
+  adds meaning-based matching to find paraphrases the wording match misses, from up to
+  two sources: embeddings from any OpenAI-compatible endpoint (`FALSIFY_EMBEDDINGS_URL`;
+  a local Ollama with `nomic-embed-text` keeps claims on your machine) and semantic
+  recall from the Corpus (`OPENBRAIN_KEY`). Both only nominate entries; each is
+  resolved against the local YAML (see "Who decides the tier", §4). Nothing is sent
+  anywhere unless you set one of them. Embedding scores are model-dependent and
+  compressed (nomic ranks the right entry first but often at 0.65-0.8, with noise just
+  below), so the default threshold is 0.65 and `FALSIFY_EMBEDDINGS_THRESHOLD` retunes it.
 - **Claims are scored from the record.** Each analysis returns a `claimScore` built from
   structured evidence and the Bedrock/Established entries the analyst links (see §4).
 - **Outcomes are kept.** A refuted hypothesis is written to the notebook and struck
@@ -371,7 +376,9 @@ picks — because the whole point is to surface disagreement, not bury it.
 > would discriminate), per-position evidence strength, and any Contested entry the
 > question matches. It returns `winner: null` always, and when the positions agree it
 > warns that agreement among models is a consensus signal, not an experiment. The
-> agreement measure is lexical, so treat the discriminating tests, not the percentages,
+> agreement measure is lexical unless every position states its `outcome`
+> (`{variable, direction}`), in which case agreement is judged from what is predicted
+> rather than guessed from wording; treat the discriminating tests, not the percentages,
 > as the output that matters. `compareClaims` is deliberately unused here: ranking
 > rival positions is exactly what this tool refuses to do.
 
