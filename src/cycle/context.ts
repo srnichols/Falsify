@@ -13,6 +13,7 @@ import type { KnowledgeIndex } from '../rules/knowledgeMatch.js';
 import type { ScoreWeights } from '../rules/claimScore.js';
 import type { SourceCheck } from '../rules/sourceCheck.js';
 import type { EmbeddingMatcher } from '../rules/embeddings.js';
+import type { Judge } from '../rules/judge.js';
 
 export interface CycleContext {
   /** Server-side session store; makes cycle state authoritative. */
@@ -25,6 +26,8 @@ export interface CycleContext {
   memory?: MemoryReader;
   /** Embedding-based matcher (any OpenAI-compatible endpoint); see `FALSIFY_EMBEDDINGS_URL`. */
   embeddings?: EmbeddingMatcher;
+  /** Advisory judge model (any OpenAI-compatible chat endpoint); see `FALSIFY_JUDGE_URL`. Never changes a verdict. */
+  judge?: Judge;
   /** Refuse any step after intake that does not carry a sessionId (`FALSIFY_REQUIRE_SESSION=1`). */
   requireSession?: boolean;
   /** Looks up a DOI for `falsify_verify_source`. Defaults to Crossref; injected in tests. */

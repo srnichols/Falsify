@@ -9,6 +9,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CycleStateSchema } from '../../domain/schemas.js';
 import { opIntake, CONSENSUS_CHALLENGE } from '../../cycle/operations.js';
+import { adviseIntake } from '../../cycle/advice.js';
 import type { CycleContext } from '../../cycle/context.js';
 import { toCallToolResult } from '../result.js';
 
@@ -35,7 +36,9 @@ export function registerIntake(server: McpServer, ctx?: CycleContext): void {
         'the scientific method.',
       inputSchema: inputShape,
     },
-    (args) =>
-      toCallToolResult(opIntake({ question: args.question, cycleState: args.cycleState }, ctx)),
+    async (args) =>
+      toCallToolResult(
+        await adviseIntake(args.question, opIntake({ question: args.question, cycleState: args.cycleState }, ctx), ctx),
+      ),
   );
 }

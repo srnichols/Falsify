@@ -27,6 +27,8 @@ export interface VerifiedSource {
   venue: string | undefined;
   year: number | undefined;
   authors: string[];
+  /** The abstract, when the registries publish one. Many (especially older) papers have none. */
+  abstract?: string | undefined;
 }
 
 export type SourceCheck =
@@ -34,10 +36,31 @@ export type SourceCheck =
   | { verified: false; doi?: string; reason: 'malformed' | 'not-found' | 'unreachable' };
 
 const CROSSREF_WORKS = 'https://api.crossref.org/works/';
+const OPENALEX_WORKS = 'https://api.openalex.org/works/doi:';
 const TIMEOUT_MS = 8_000;
+
+/** Reduce a JATS/HTML abstract to plain text. */
+function plainText(markup: string): string {
+  return markup
+    .replace(/<jats:title>.*?<\/jats:title>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Rebuild an abstract from OpenAlex's inverted index ({word: [positions]}). */
+function fromInvertedIndex(index: unknown): string | undefined {
+  if (index === null || typeof index !== 'object') return undefined;
+  const words: [number, string][] = [];
+  for (const [word, positions] of Object.entries(index as Record<string, unknown>)) {
+    if (Array.isArray(positions)) for (const p of positions) if (typeof p === 'number') words.push([p, word]);
+  }
+  return words.length === 0 ? undefined : words.sort((a, b) => a[0] - b[0]).map((w) => w[1]).join(' ');
+}
 
 interface CrossrefMessage {
   title?: unknown;
+  abstract?: unknown;
   'container-title'?: unknown;
   issued?: { 'date-parts'?: unknown };
   author?: unknown;
@@ -92,6 +115,11 @@ export async function checkDoi(
           .filter((f): f is string => typeof f === 'string')
           .slice(0, 3)
       : [];
+    const abstractFromCrossref = typeof message.abstract === 'string' ? plainText(message.abstract) : undefined;
+    const abstract =
+      abstractFromCrossref !== undefined && abstractFromCrossref !== ''
+        ? abstractFromCrossref
+        : await openAlexAbstract(doi, fetchImpl, controller.signal);
     return {
       verified: true,
       doi,
@@ -99,10 +127,25 @@ export async function checkDoi(
       venue: firstString(message['container-title']),
       year: typeof year === 'number' ? year : undefined,
       authors,
+      ...(abstract !== undefined ? { abstract } : {}),
     };
   } catch {
     return { verified: false, doi, reason: 'unreachable' };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/** Best effort: a failure here only means no abstract, never an unverified source. */
+async function openAlexAbstract(doi: string, fetchImpl: SourceFetch, signal: AbortSignal): Promise<string | undefined> {
+  try {
+    const res = await fetchImpl(`${OPENALEX_WORKS}${encodeURIComponent(doi)}?select=abstract_inverted_index`, {
+      headers: { accept: 'application/json', 'user-agent': 'falsify (source verification)' },
+      signal,
+    });
+    if (!res.ok) return undefined;
+    return fromInvertedIndex(((await res.json()) as { abstract_inverted_index?: unknown }).abstract_inverted_index);
+  } catch {
+    return undefined;
   }
 }

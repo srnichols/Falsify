@@ -14,6 +14,7 @@ import { toCallToolResult } from '../result.js';
 const inputShape = {
   doi: z.string().min(1, 'a DOI is required'),
   sessionId: z.string().optional(),
+  observation: z.string().optional(),
 } as const;
 
 /** Register `falsify_verify_source` on the server. */
@@ -26,9 +27,14 @@ export function registerVerifySource(server: McpServer, ctx?: CycleContext): voi
         'Crossref registry; only the DOI is sent). Returns its title, venue and year so you can see ' +
         'it is the work you mean. With a sessionId, evidence that carries this DOI earns full source ' +
         'credit in falsify_analyze instead of the small credit for a typed-in source. It confirms the ' +
-        'work exists, not that it supports your claim.',
+        'work exists, not that it supports your claim. Pass `observation` (what you cite the paper ' +
+        'for) and, if the server has a judge model configured, an advisory check of the abstract ' +
+        'against it is added; it never changes the score.',
       inputSchema: inputShape,
     },
-    async (args) => toCallToolResult(await opVerifySource({ doi: args.doi, sessionId: args.sessionId }, ctx)),
+    async (args) =>
+      toCallToolResult(
+        await opVerifySource({ doi: args.doi, sessionId: args.sessionId, observation: args.observation }, ctx),
+      ),
   );
 }

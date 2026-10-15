@@ -55,7 +55,10 @@ export interface SessionRecord {
   /** Hypotheses refuted by earlier loops, oldest first. */
   refuted: LockedHypothesis[];
   /** DOIs confirmed to exist (via `falsify_verify_source`), keyed by normalized DOI. */
-  verifiedSources?: Record<string, { title: string; venue?: string; year?: number; checkedAt: string }>;
+  verifiedSources?: Record<
+    string,
+    { title: string; venue?: string; year?: number; support?: 'yes' | 'no' | 'unclear'; checkedAt: string }
+  >;
   experiment?: { decisiveEvidence: string[] };
   analysis?: {
     verdict: 'yes' | 'no';

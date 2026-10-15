@@ -87,7 +87,13 @@ claims on your machine; set `FALSIFY_EMBEDDINGS_MODEL`, `FALSIFY_EMBEDDINGS_KEY`
 `FALSIFY_EMBEDDINGS_THRESHOLD` as needed). It is off by default, so nothing is sent
 anywhere unless you set it. `npm run calibrate` scores the labelled cases in
 `calibration/cases.json` and reports how well the claim score separates results that
-held up from results that were refuted. After
+held up from results that were refuted; `npm run calibrate:replication` refits the
+statistical-support model to the real Reproducibility Project: Psychology outcomes. For
+an advisory second opinion on falsifiability, appeals to authority and whether a cited
+paper's abstract reports your observation, set `FALSIFY_JUDGE_URL` (and
+`FALSIFY_JUDGE_MODEL`, default `qwen2.5:32b`) to an OpenAI-compatible chat endpoint such as
+a local Ollama; it never changes a verdict or score, and `npm run calibrate:judge` measures
+how good a given model actually is before you trust it. After
 rebuilding, reload the `falsify` server in your MCP host (in VS Code, restart it from
 the MCP servers list) so it picks up new tools; a running server keeps the old build.
 See [DESIGN.md](./DESIGN.md) §3.

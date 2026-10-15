@@ -701,9 +701,22 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
   if (doiItems.length > 0) {
     const unverified = doiItems.filter((i) => i.sourceVerified !== true && i.sourceTopicMismatch !== true).map((i) => i.doi);
     const mismatched = doiItems.filter((i) => i.sourceTopicMismatch === true).map((i) => i.doi);
+    const unsupported = doiItems
+      .filter((i) => {
+        const doi = i.doi !== undefined ? normalizeDoi(i.doi) : undefined;
+        return doi !== undefined && session?.verifiedSources?.[doi]?.support === 'no';
+      })
+      .map((i) => i.doi);
     scoring.sourceCheck = {
       verified: doiItems.filter((i) => i.sourceVerified === true).length,
       unverified,
+      ...(unsupported.length > 0
+        ? {
+            judgeSaysUnsupported: unsupported,
+            judgeNote:
+              "Advisory: when you verified these DOIs, a language model read the abstract and did not find the observation you cite them for. It can be wrong and it did not change the score; check the paper.",
+          }
+        : {}),
       ...(mismatched.length > 0
         ? {
             possiblyUnrelated: mismatched,

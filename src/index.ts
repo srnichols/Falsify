@@ -24,6 +24,7 @@ export * from './rules/sourceCheck.js';
 export * from './rules/embeddings.js';
 export * from './rules/calibration.js';
 export * from './rules/replicationModel.js';
+export * from './rules/judge.js';
 export * from './rules/substance.js';
 export * from './domain/evidence.js';
 export * from './cycle/session.js';

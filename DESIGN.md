@@ -229,6 +229,23 @@ claim_score =
 > confirms the work exists (only the DOI is sent), the session records it, and the item
 > then earns full source credit. This confirms the work is real, not that it says what
 > the evidence claims.
+>
+> **An optional judge model, strictly advisory.** Falsify's own checks are keyword and
+> structure rules: transparent, deterministic, and blind to anything phrased in a way
+> they did not anticipate. Set `FALSIFY_JUDGE_URL` to any OpenAI-compatible chat
+> endpoint (a local Ollama keeps everything on your machine; `FALSIFY_JUDGE_MODEL`
+> defaults to `qwen2.5:32b`) and three checks gain a second opinion: whether a question
+> is falsifiable (`judgeAdvice` at intake, with `judgeDisagrees` when it contradicts the
+> keyword verdict), whether cited evidence reads as an appeal to authority
+> (`possibleConsensusAppeals` at analysis), and whether a paper's abstract reports the
+> observation you cite it for (`supportAdvice` from `falsify_verify_source`, given an
+> `observation`). Three rules bound it: it is off by default and nothing is sent unless
+> set; it only ever adds advice and never changes a verdict, a score, a refusal or the
+> cycle state; and a claim about a paper must come with a quote that is actually in the
+> abstract (a near-verbatim match, 70% of the quote in one unbroken run), or it is
+> discarded as invented. `npm run calibrate:judge` measures it on
+> `calibration/judge-cases.json`, next to the keyword baseline, because models differ
+> wildly: on that set a 3B model was worse than no judge at all.
 
 ### Who decides the tier
 
@@ -407,14 +424,21 @@ picks — because the whole point is to surface disagreement, not bury it.
       user-supplied observations)? *Resolved to the extent Falsify can:* the caller
       supplies structured evidence, and a cited DOI can be confirmed to exist
       (`falsify_verify_source`) for full source credit. Falsify does not retrieve data
-      itself, and cannot confirm that a real paper supports the claim made from it.
-- [ ] **Falsifiability classifier:** how do we reliably detect an unfalsifiable
-      claim? (Heuristics + model judgment + a checklist.) *Partly done:* intake uses
-      narrow lexical patterns and falsification conditions get substance checks; both
-      are heuristics and will miss unfalsifiable claims phrased without the keywords.
-- [ ] **Consensus detection:** how to detect a "settled science" appeal in a
-      question or a source, and trigger the challenge response. *Partly done:* appeals
-      are detected in the question and in cited evidence.
+      itself. Whether a real paper *supports* the claim cannot be settled by a tool; with
+      an optional judge model it gets an advisory reading of the abstract (below).
+- [x] **Falsifiability classifier:** how do we reliably detect an unfalsifiable
+      claim? *Improved, not solved.* The deterministic rules (narrow lexical patterns,
+      substance checks) stay the baseline and score only **54%** on a labelled set built
+      to include phrasings they were not written for, because they pass anything
+      without a trigger word. An optional judge model (`FALSIFY_JUDGE_URL`) adds
+      advice: a 32B local model got 24/24 on that set, a 27B one 23/24, and a 3B one
+      **46%, worse than the keywords**, which is why `npm run calibrate:judge` exists.
+      The set is small (24 claims, labelled by the author), so read these as "clearly
+      useful at that size", not as a measured error rate.
+- [x] **Consensus detection:** how to detect a "settled science" appeal. *Improved,
+      not solved.* Keywords catch 63% of a labelled set that includes unusual wording;
+      the same 32B judge got 16/16, and flags cited evidence that reads as an appeal
+      without reclassifying it.
 - [x] **Tech stack:** ~~UI, providers, local vs hosted, rules-engine impl.~~
       **Decided** — Node + TypeScript, MCP-core + web UI, OpenBrain backend, built
       with Plan Forge. See §9.

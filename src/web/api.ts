@@ -32,6 +32,7 @@ import { SessionStore } from '../cycle/session.js';
 import { opRelated } from '../cycle/related.js';
 import { opDissent } from '../cycle/dissent.js';
 import { opVerifySource } from '../cycle/verify.js';
+import { adviseAnalysis, adviseIntake } from '../cycle/advice.js';
 import { DissentPositionSchema } from '../mcp/tools/dissent.js';
 import type { MemoryReader } from '../memory/openbrainClient.js';
 import { NotebookStore } from '../memory/notebook.js';
@@ -115,6 +116,7 @@ const dissentBody = z.object({
 const verifySourceBody = z.object({
   doi: z.string().min(1),
   sessionId: z.string().optional(),
+  observation: z.string().optional(),
 });
 
 const recallBody = z.object({
@@ -190,7 +192,7 @@ export async function handleRequest(
   switch (route) {
     case 'POST /api/intake': {
       const p = parse(intakeBody, body);
-      return 'response' in p ? p.response : fromOp(opIntake(p.value, ctx));
+      return 'response' in p ? p.response : fromOp(await adviseIntake(p.value.question, opIntake(p.value, ctx), ctx));
     }
     case 'POST /api/hypothesize': {
       const p = parse(hypothesizeBody, body);
@@ -202,7 +204,7 @@ export async function handleRequest(
     }
     case 'POST /api/analyze': {
       const p = parse(analyzeBody, body);
-      return 'response' in p ? p.response : fromOp(opAnalyze(p.value, ctx));
+      return 'response' in p ? p.response : fromOp(await adviseAnalysis(opAnalyze(p.value, ctx), ctx));
     }
     case 'POST /api/review': {
       const p = parse(reviewBody, body);

@@ -8,6 +8,7 @@
 
 import { normalizeDoi } from '../domain/evidence.js';
 import { checkDoi, titleRelatesTo } from '../rules/sourceCheck.js';
+import { judgeSupport } from '../rules/judge.js';
 import type { CycleContext } from './context.js';
 import { errorResult, okResult } from './operations.js';
 import type { OpResult } from './operations.js';
@@ -15,6 +16,8 @@ import type { OpResult } from './operations.js';
 export interface VerifySourceInput {
   doi: string;
   sessionId?: string | undefined;
+  /** The observation you cite this work for. With a judge configured, its abstract is checked against it. */
+  observation?: string | undefined;
 }
 
 export async function opVerifySource(input: VerifySourceInput, ctx?: CycleContext): Promise<OpResult> {
@@ -52,6 +55,28 @@ export async function opVerifySource(input: VerifySourceInput, ctx?: CycleContex
     });
   }
 
+  // Advisory only: a model reading the abstract against the observation you cite it for.
+  let supportAdvice: Record<string, unknown> | undefined;
+  let support: 'yes' | 'no' | 'unclear' | undefined;
+  if (ctx?.judge !== undefined && input.observation !== undefined) {
+    if (check.abstract === undefined) {
+      support = 'unclear';
+      supportAdvice = {
+        supports: 'unclear',
+        reason: 'No abstract is published for this work, so there was nothing to check the observation against.',
+        model: ctx.judge.model,
+      };
+    } else {
+      const judgment = await judgeSupport(ctx.judge, input.observation, check.abstract);
+      support = judgment.supports;
+      supportAdvice = {
+        ...judgment,
+        model: ctx.judge.model,
+        note: "Advisory: a language model's reading of the abstract, which can be wrong. It never changes the score.",
+      };
+    }
+  }
+
   if (session !== undefined && ctx?.sessions !== undefined) {
     session.verifiedSources = {
       ...session.verifiedSources,
@@ -59,6 +84,7 @@ export async function opVerifySource(input: VerifySourceInput, ctx?: CycleContex
         title: check.title,
         ...(check.venue !== undefined ? { venue: check.venue } : {}),
         ...(check.year !== undefined ? { year: check.year } : {}),
+        ...(support !== undefined ? { support } : {}),
         checkedAt: new Date().toISOString(),
       },
     };
@@ -73,7 +99,9 @@ export async function opVerifySource(input: VerifySourceInput, ctx?: CycleContex
     venue: check.venue,
     year: check.year,
     authors: check.authors,
+    hasAbstract: check.abstract !== undefined,
     ...(session !== undefined ? { sessionId: session.id, recordedInSession: true } : {}),
+    ...(supportAdvice !== undefined ? { supportAdvice } : {}),
     ...(claimText !== undefined && !titleRelatesTo(check.title, claimText)
       ? { warning: 'This title shares no terms with your hypothesis. If it is the work you meant, name the shared subject in the evidence observation; otherwise cite the work that reports this observation.' }
       : {}),

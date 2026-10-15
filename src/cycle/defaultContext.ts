@@ -11,6 +11,8 @@ import { loadConfig, resolveDataDir } from '../config.js';
 import { loadAllKnowledge } from '../knowledge/loader.js';
 import { NotebookStore } from '../memory/notebook.js';
 import { EmbeddingMatcher, createOpenAiEmbedder } from '../rules/embeddings.js';
+import { createOpenAiJudge } from '../rules/judge.js';
+import type { Judge } from '../rules/judge.js';
 import { buildKnowledgeIndex } from '../rules/knowledgeMatch.js';
 import { loadWeights } from '../rules/weights.js';
 import { OpenBrainMcpClient } from '../memory/openbrainMcpClient.js';
@@ -37,7 +39,26 @@ export function createDefaultContext(): CycleContext {
   if (embeddings !== undefined) {
     ctx.embeddings = embeddings;
   }
+  const judge = createJudgeFromEnv();
+  if (judge !== undefined) {
+    ctx.judge = judge;
+  }
   return ctx;
+}
+
+/**
+ * An advisory judge model, if `FALSIFY_JUDGE_URL` names an OpenAI-compatible chat
+ * endpoint (for example a local Ollama at `http://127.0.0.1:11434/v1`). Off by
+ * default: nothing is sent anywhere unless you set it. See `rules/judge.ts`.
+ */
+export function createJudgeFromEnv(env: NodeJS.ProcessEnv = process.env): Judge | undefined {
+  const baseUrl = env.FALSIFY_JUDGE_URL;
+  if (baseUrl === undefined || baseUrl === '') return undefined;
+  return createOpenAiJudge({
+    baseUrl,
+    model: env.FALSIFY_JUDGE_MODEL ?? 'qwen2.5:32b',
+    apiKey: env.FALSIFY_JUDGE_KEY,
+  });
 }
 
 /**

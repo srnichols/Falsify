@@ -9,6 +9,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CycleStateSchema } from '../../domain/schemas.js';
 import { opAnalyze } from '../../cycle/operations.js';
+import { adviseAnalysis } from '../../cycle/advice.js';
 import type { CycleContext } from '../../cycle/context.js';
 import { EvidenceSchema } from '../../domain/evidence.js';
 import { toCallToolResult } from '../result.js';
@@ -42,17 +43,20 @@ export function registerAnalyze(server: McpServer, ctx?: CycleContext): void {
         'finalize a Theory. Pass the sessionId from falsify_intake.',
       inputSchema: inputShape,
     },
-    (args) =>
+    async (args) =>
       toCallToolResult(
-        opAnalyze(
-          {
-            verdict: args.verdict,
-            evidenceCited: args.evidenceCited,
-            evidence: args.evidence,
-            knowledgeRefs: args.knowledgeRefs,
-            sessionId: args.sessionId,
-            cycleState: args.cycleState,
-          },
+        await adviseAnalysis(
+          opAnalyze(
+            {
+              verdict: args.verdict,
+              evidenceCited: args.evidenceCited,
+              evidence: args.evidence,
+              knowledgeRefs: args.knowledgeRefs,
+              sessionId: args.sessionId,
+              cycleState: args.cycleState,
+            },
+            ctx,
+          ),
           ctx,
         ),
       ),
