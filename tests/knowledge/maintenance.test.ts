@@ -308,12 +308,25 @@ entries:
       }
     }
     const total = [...counts.values()].reduce((a, b) => a + b, 0);
-    expect(Math.max(...counts.values()) / total).toBeLessThanOrEqual(0.4);
-    expect(counts.get('social-science') ?? 0).toBeGreaterThanOrEqual(12);
-    expect(counts.get('medicine') ?? 0).toBeGreaterThanOrEqual(12);
-    expect(counts.get('economics') ?? 0).toBeGreaterThanOrEqual(5);
-    expect(counts.get('neuroscience') ?? 0).toBeGreaterThanOrEqual(3);
-    expect(counts.get('climate') ?? 0).toBeGreaterThanOrEqual(2);
+    expect(Math.max(...counts.values()) / total).toBeLessThanOrEqual(0.32);
+    expect(counts.get('social-science') ?? 0).toBeGreaterThanOrEqual(18);
+    expect(counts.get('medicine') ?? 0).toBeGreaterThanOrEqual(16);
+    expect(counts.get('economics') ?? 0).toBeGreaterThanOrEqual(6);
+    expect(counts.get('neuroscience') ?? 0).toBeGreaterThanOrEqual(4);
+    expect(counts.get('climate') ?? 0).toBeGreaterThanOrEqual(4);
+  });
+
+  it('holds every contested position to the same standard: a falsifier, or an honest statement that none exists', () => {
+    const missing: string[] = [];
+    for (const entry of loadAllKnowledge().contested.entries) {
+      if (!('positions' in entry)) continue;
+      expect(entry.positions.length, `${entry.id} needs at least two positions`).toBeGreaterThanOrEqual(2);
+      for (const position of entry.positions) {
+        const saysNoTestExists = /outside-method|equivalent/.test(position.falsifiability_status);
+        if (position.falsified_if === undefined && !saysNoTestExists) missing.push(`${entry.id}: ${position.label}`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
 
   it('reports duplicate ids and tier/id prefix mismatches', () => {

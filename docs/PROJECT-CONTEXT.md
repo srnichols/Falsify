@@ -164,7 +164,7 @@ only serve as the engine's exhibit of what a successful falsification looks like
   - [x] **Outcome tracking** (`cycle/outcome.ts`, `memory/outcomes.ts`): `falsify_outcome` and `npm run calibrate:outcomes`.
   - [x] **Calibration** (`rules/calibration.ts`, `replicationModel.ts`): 12 historical cases, a replication model fitted to the Reproducibility Project, `--sensitivity` over random weightings. Weights remain priors.
   - [x] **Optional advisory judge model** (`rules/judge.ts`): measured, never changes a verdict.
-  - [x] **Corpus**: 182 entries across 5 tiers with Crossref-verified sources, broadened into medicine, social science, economics, climate and neuroscience, plus contested entries on the Cambrian explosion, protein-fold rarity and information in DNA; a domain-balance lint.
+  - [x] **Corpus**: 211 entries across 5 tiers with Crossref-verified sources, broadened into medicine, social science, economics, climate, neuroscience, ecology, energy, linguistics and archaeology, plus contested entries on the Cambrian explosion, protein-fold rarity and information in DNA; a domain-balance lint.
   - [x] **Agent guidance** (`.github/`): `falsify-inquiry` instructions and skill, a Falsify Reviewer agent, a `/falsify-inquiry` prompt; `npm run eval:inquiry` measures their effect.
   - [x] **Server resolves `knowledge/` and `public/` from the package** (`src/paths.ts`), not the working directory, so a host starting it in another project works.
 - [ ] Knowledge seed expansion (more entries per tier, via PR)
@@ -334,7 +334,7 @@ only serve as the engine's exhibit of what a successful falsification looks like
   eslint 10, vitest 5), reviewed the system for gaps, then built the rules that make the cycle harder to
   game: server-held sessions, multiplicity and search disclosure, `epistemicStatus` instead of "verified",
   Crossref source checks and verified replication DOIs, mirrored opposite framings, outcome tracking,
-  stance-aware matching, a broadened corpus (182 entries), an advisory judge model, calibration against
+  stance-aware matching, a broadened corpus (211 entries), an advisory judge model, calibration against
   real replication data (weights remain priors), agent guidance with a Falsify Reviewer, and an evaluation
   harness. One full run of the harness showed the guidance made agents run the opposite framing in 7 of 8
   questions instead of 0 of 8 (one model, one run per cell: a sketch, not a measurement). Added

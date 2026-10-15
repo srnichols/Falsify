@@ -844,3 +844,419 @@ entries:
         falsifiability_status: scientific
         evidence_pointers: ["marker specificity", "post-mortem interval and fixation effects"]
     engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.energy.high_renewable_grid_feasibility
+    keywords: ["100 percent renewable energy", "can wind and solar power the grid", "renewables only grid", "deep decarbonization cost", "do we need nuclear power"]
+    question: "Can a reliable, low-cost power grid run on 100 percent wind, water and solar, or do firm low-carbon sources lower the cost of deep decarbonization?"
+    domain: energy/electricity-systems
+    note: >-
+      This is a published dispute between author groups in the same journal. It turns on
+      modelling assumptions, such as how much hydropower and storage can be expanded and
+      how flexible demand is. All three positions are projections from models, so none is
+      an experiment; each can be tested by comparing independent models and, later,
+      against outcomes.
+    positions:
+      - label: "100 percent wind, water and solar is feasible at low cost"
+        claim: >-
+          A grid supplied entirely by wind, water and solar, with storage and flexible
+          demand, can meet all energy needs reliably at low cost.
+        falsifiable: true
+        falsified_if: >-
+          Independent hourly grid models with realistic limits on hydropower, storage
+          and transmission show the proposal cannot meet demand reliably, or only at
+          costs well above alternatives.
+        falsifiability_status: scientific
+        evidence_pointers: ["Jacobson et al. 2015, PNAS, doi:10.1073/pnas.1510028112"]
+      - label: "the proposal rests on assumptions that are not shown to be realistic"
+        claim: >-
+          An evaluation found that the proposal depends on assumptions, especially about
+          hydropower and storage, that are not shown to be achievable, so its reliability
+          and cost are not demonstrated.
+        falsifiable: true
+        falsified_if: >-
+          The disputed assumptions are shown to be achievable, and independent modelling
+          reproduces the claimed reliability and cost.
+        falsifiability_status: scientific
+        evidence_pointers: ["Clack et al. 2017, PNAS, doi:10.1073/pnas.1610381114"]
+      - label: "firm low-carbon sources lower the cost of deep decarbonization"
+        claim: >-
+          Adding firm low-carbon electricity (such as nuclear, geothermal, or fossil
+          generation with carbon capture) to variable renewables reduces the cost of deep
+          decarbonization in modelled systems.
+        falsifiable: true
+        falsified_if: >-
+          Comparable models show no cost reduction from adding firm sources, or show that
+          storage and demand flexibility alone reach the same cost.
+        falsifiability_status: scientific
+        evidence_pointers: ["Sepulveda et al. 2018, Joule, doi:10.1016/j.joule.2018.08.006"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.criminology.right_to_carry_laws
+    keywords: ["concealed carry laws", "right-to-carry and crime", "do gun laws reduce violent crime", "more guns less crime", "gun policy effects"]
+    question: "Do right-to-carry concealed handgun laws raise or lower violent crime?"
+    domain: social-science/criminology
+    note: >-
+      The question is empirical and the data are observational: states adopt laws at
+      different times for reasons that may also affect crime. Results depend on the
+      model, period and comparison states, and the reviews that exist are cautious.
+    positions:
+      - label: "the laws reduce violent crime"
+        claim: >-
+          Allowing more people to carry concealed handguns deters violent crime.
+        falsifiable: true
+        falsified_if: >-
+          Analyses that control for pre-existing trends and use appropriate comparison
+          states consistently find no reduction, or an increase, in violent crime after
+          adoption.
+        falsifiability_status: scientific
+        evidence_pointers: ["Lott & Mustard 1997, J Legal Studies, doi:10.1086/467988"]
+      - label: "the laws increase violent crime"
+        claim: >-
+          Right-to-carry laws are followed by higher rates of violent crime than
+          comparable states without them.
+        falsifiable: true
+        falsified_if: >-
+          Panel and synthetic-control analyses with adequate controls consistently find
+          no increase, or a decrease, after adoption.
+        falsifiability_status: scientific
+        evidence_pointers: ["Donohue et al. 2019, J Empirical Legal Studies, doi:10.1111/jels.12219"]
+      - label: "the evidence cannot establish an effect in either direction"
+        claim: >-
+          Estimates change with the model, period and comparison states chosen, so the
+          data do not establish a reliable effect either way.
+        falsifiable: true
+        falsified_if: >-
+          Independent analyses using pre-specified methods converge on the same estimate
+          across periods and comparison groups.
+        falsifiability_status: scientific
+        evidence_pointers: ["National Research Council 2005, Firearms and Violence: A Critical Review (report, no DOI)", "sensitivity of results to model specification"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.nutrition.saturated_fat_cardiovascular_disease
+    keywords: ["saturated fat and heart disease", "does butter cause heart disease", "dietary fat guidelines", "saturated fat cardiovascular risk"]
+    question: "Does reducing saturated fat intake lower cardiovascular disease, and does what replaces it matter?"
+    domain: medicine/nutrition
+    note: >-
+      Trials and cohort studies are not measuring the same thing: trials change diets
+      for a limited time, and cohorts compare habitual intake. What a person eats in
+      place of saturated fat, and the food it comes from, may matter more than the
+      nutrient label.
+    positions:
+      - label: "reducing saturated fat lowers cardiovascular events"
+        claim: >-
+          Lowering saturated fat intake, especially when it is replaced with
+          polyunsaturated fat, reduces cardiovascular events.
+        falsifiable: true
+        falsified_if: >-
+          Randomized trials of adequate length and quality find no reduction in
+          cardiovascular events when saturated fat is reduced, including trials that
+          replace it with polyunsaturated fat.
+        falsifiability_status: scientific
+        evidence_pointers: ["Hooper et al. 2020, Cochrane Database Syst Rev, doi:10.1002/14651858.CD011737.pub3", "Sacks et al. 2017, Circulation, doi:10.1161/CIR.0000000000000510"]
+      - label: "no significant association in cohort studies"
+        claim: >-
+          Prospective cohort studies do not show a significant association between
+          saturated fat intake and cardiovascular disease.
+        falsifiable: true
+        falsified_if: >-
+          Prospective cohorts with good dietary measurement and control for confounding
+          find a consistent association between saturated fat intake and cardiovascular
+          disease.
+        falsifiability_status: scientific
+        evidence_pointers: ["Siri-Tarino et al. 2010, Am J Clin Nutr, doi:10.3945/ajcn.2009.27725"]
+      - label: "the replacement and the food source decide the effect"
+        claim: >-
+          Saturated fat as a single exposure is the wrong unit: the effect depends on
+          what replaces it (polyunsaturated fat or refined carbohydrate) and on the
+          food it comes from.
+        falsifiable: true
+        falsified_if: >-
+          Trials and cohorts that vary the replacement nutrient and the food source find
+          the same effect regardless.
+        falsifiability_status: scientific
+        evidence_pointers: ["substitution analyses in cohort studies", "differences between dairy, meat and plant sources"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.medicine.statins_low_risk_primary_prevention
+    keywords: ["should healthy people take statins", "statins for primary prevention", "statins low risk", "cholesterol drugs side effects"]
+    question: "Do the benefits of statins outweigh their harms in people at low risk of cardiovascular disease?"
+    domain: medicine/cardiology
+    note: >-
+      The relative reduction in events from statins is not much disputed. What is
+      disputed is the absolute benefit at low baseline risk, how completely harms are
+      counted, and who holds the trial data.
+    positions:
+      - label: "benefits outweigh known harms even at low risk"
+        claim: >-
+          In people at low risk of vascular disease, lowering LDL cholesterol with statins
+          reduces major vascular events by more than the known harms.
+        falsifiable: true
+        falsified_if: >-
+          Patient-level data show that harms such as symptoms and new-onset diabetes
+          outweigh the absolute reduction in events in this group, or the reductions are
+          not reproduced.
+        falsifiability_status: scientific
+        evidence_pointers: ["Cholesterol Treatment Trialists' Collaboration 2012, Lancet, doi:10.1016/S0140-6736(12)60367-5"]
+      - label: "the absolute benefit is small and harms may be under-counted"
+        claim: >-
+          At low baseline risk the absolute benefit is small, harms may be incompletely
+          counted, and the balance is therefore uncertain.
+        falsifiable: true
+        falsified_if: >-
+          An independent re-analysis of patient-level data shows harms are rare and the
+          absolute benefit is large enough to outweigh them.
+        falsifiability_status: scientific
+        evidence_pointers: ["Abramson et al. 2013, BMJ, doi:10.1136/bmj.f6123"]
+      - label: "the balance depends on the person's risk and values"
+        claim: >-
+          No single answer fits everyone: the decision depends on a person's absolute
+          risk and on how they weigh a small benefit against possible harms.
+        falsifiable: false
+        falsifiability_status: normative-outside-method
+        note: >-
+          A decision principle, not a hypothesis about the data. It is reported but not
+          scored, and it does not decide between the two positions above.
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.biology.human_genome_functional_fraction
+    keywords: ["how much of the genome is functional", "junk DNA", "ENCODE 80 percent", "non-coding DNA function", "percentage of functional DNA"]
+    question: "What fraction of the human genome is functional?"
+    domain: biology/genomics
+    note: >-
+      The numbers differ mainly because the word "function" is used in different ways:
+      biochemical activity, evolutionary constraint, or causal role. Settle the
+      definition before comparing the figures.
+    positions:
+      - label: "most of the genome shows biochemical activity, so much of it is functional"
+        claim: >-
+          A large majority of the genome participates in at least one biochemical
+          event, so a large share of it is plausibly functional.
+        falsifiable: true
+        falsified_if: >-
+          Tests of whether the activity is needed (deletion, or conservation across
+          species) show that most active regions can be removed without effect.
+        falsifiability_status: scientific
+        evidence_pointers: ["ENCODE Project Consortium 2012, Nature, doi:10.1038/nature11247"]
+      - label: "only a minority is functional in the sense of being under selection"
+        claim: >-
+          If function means a selected effect, only a small minority of the genome is
+          functional, and biochemical activity is not evidence of function.
+        falsifiable: true
+        falsified_if: >-
+          Methods that detect selection find a much larger fraction under constraint, or
+          deletions of the remainder show fitness effects.
+        falsifiability_status: scientific
+        evidence_pointers: ["Graur et al. 2013, Genome Biol Evol, doi:10.1093/gbe/evt028"]
+      - label: "the answer depends on the definition of function"
+        claim: >-
+          The competing figures are measuring different things, so they do not
+          contradict one another until a single definition is chosen.
+        falsifiable: depends
+        falsified_if: >-
+          Depends on stating the definition. If different definitions are shown to give
+          concordant fractions, the claim that they differ fails.
+        falsifiability_status: conditional
+        evidence_pointers: ["Kellis et al. 2014, PNAS, doi:10.1073/pnas.1318948111"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.ecology.yellowstone_wolf_trophic_cascade
+    keywords: ["wolves in Yellowstone", "trophic cascade", "wolf reintroduction effects", "wolves saved Yellowstone", "wolves rivers"]
+    question: "Did reintroducing wolves to Yellowstone set off a trophic cascade that restored vegetation and streams?"
+    domain: biology/ecology
+    note: >-
+      Wolves returned together with changes in climate, other predators, elk numbers and
+      hydrology, and there was no replicated control, so separating the wolves' effect
+      from the rest is the whole difficulty.
+    positions:
+      - label: "a strong top-down cascade"
+        claim: >-
+          Wolves reduced elk browsing, which allowed willow, aspen and cottonwood to
+          recover and changed streams and wildlife.
+        falsifiable: true
+        falsified_if: >-
+          Comparisons that account for climate, hydrology, other predators and browsing
+          history find no vegetation recovery attributable to reduced elk browsing.
+        falsifiability_status: scientific
+        evidence_pointers: ["Ripple & Beschta 2012, Biological Conservation, doi:10.1016/j.biocon.2011.11.005"]
+      - label: "weaker effects that depend on place and conditions"
+        claim: >-
+          Recovery is limited and uneven: where it occurs it depends on local factors
+          such as stream hydrology, so the cascade is not general across the landscape.
+        falsifiable: true
+        falsified_if: >-
+          Landscape-wide data show recovery that is similar across sites with different
+          hydrology and conditions.
+        falsifiability_status: scientific
+        evidence_pointers: ["Marshall et al. 2013, Proc R Soc B, doi:10.1098/rspb.2012.2977", "landscape-level test of the aspen cascade, Kauffman et al. 2010, Ecology, doi:10.1890/09-1949.1 (with published comments)"]
+      - label: "the evidence cannot separate the wolves' effect from other changes"
+        claim: >-
+          With no replicated control and many simultaneous changes, the data cannot
+          isolate how much of the recovery the wolves caused.
+        falsifiable: true
+        falsified_if: >-
+          A design with comparable control areas or a natural experiment isolates the
+          wolves' contribution and independent groups reproduce it.
+        falsifiability_status: scientific
+        evidence_pointers: ["absence of replicated controls", "confounding with climate and other predators"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.psychology.stereotype_threat
+    keywords: ["stereotype threat", "do stereotypes lower test scores", "stereotype threat replication", "gender gap in maths test threat"]
+    question: "Does stereotype threat measurably lower the test performance of stereotyped groups?"
+    domain: social-science/psychology
+    note: >-
+      A famous early result, followed by replications and meta-analyses that disagree
+      about the size of the effect and about whether it appears in real testing
+      settings.
+    positions:
+      - label: "a reliable effect"
+        claim: >-
+          Awareness of a negative stereotype about one's group reliably lowers
+          performance on a relevant test.
+        falsifiable: true
+        falsified_if: >-
+          Preregistered, adequately powered replications across settings find no effect.
+        falsifiability_status: scientific
+        evidence_pointers: ["Steele & Aronson 1995, J Pers Soc Psychol, doi:10.1037/0022-3514.69.5.797"]
+      - label: "small effects, inflated by publication bias"
+        claim: >-
+          Average effects are small, and the larger early results are explained by
+          publication bias and flexible analysis.
+        falsifiable: true
+        falsified_if: >-
+          Preregistered replications find effects as large as the early studies.
+        falsifiability_status: scientific
+        evidence_pointers: ["Flore & Wicherts 2015, J School Psychol, doi:10.1016/j.jsp.2014.10.002"]
+      - label: "effects are limited in operational testing settings"
+        claim: >-
+          Where the conditions look like real high-stakes tests, effects are small or
+          absent, so laboratory results do not transfer to operational testing.
+        falsifiable: true
+        falsified_if: >-
+          Studies in real high-stakes settings find effects comparable to the laboratory.
+        falsifiability_status: scientific
+        evidence_pointers: ["Shewach et al. 2019, J Applied Psychology, doi:10.1037/apl0000420"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.education.growth_mindset_interventions
+    keywords: ["growth mindset", "does growth mindset improve grades", "mindset intervention", "fixed versus growth mindset"]
+    question: "Do growth-mindset interventions improve student achievement?"
+    domain: social-science/education
+    positions:
+      - label: "brief interventions help, mainly lower-achieving students in supportive settings"
+        claim: >-
+          A short online intervention improves grades for lower-achieving students, and
+          more so in schools whose peer norms support taking on challenges.
+        falsifiable: true
+        falsified_if: >-
+          Large preregistered trials find no benefit for lower-achieving students, or no
+          difference by school context.
+        falsifiability_status: scientific
+        evidence_pointers: ["Yeager et al. 2019, Nature, doi:10.1038/s41586-019-1466-y"]
+      - label: "effects are very small or negligible overall"
+        claim: >-
+          Mindsets are only weakly related to achievement, and interventions have very
+          small effects on average.
+        falsifiable: true
+        falsified_if: >-
+          Independent, adequately powered trials with objective outcomes find effect
+          sizes consistently larger than the meta-analytic estimate.
+        falsifiability_status: scientific
+        evidence_pointers: ["Sisk et al. 2018, Psychol Sci, doi:10.1177/0956797617739704"]
+      - label: "average effects hide large differences by implementation and context"
+        claim: >-
+          The average masks real variation: some versions, delivered to some students in
+          some schools, help, and others do nothing.
+        falsifiable: true
+        falsified_if: >-
+          Moderator analyses across trials find no reliable differences by implementation
+          or context beyond chance.
+        falsifiability_status: scientific
+        evidence_pointers: ["heterogeneity analyses in the national experiment", "implementation fidelity studies"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.psychology.implicit_association_test
+    keywords: ["implicit bias test", "Implicit Association Test", "IAT predicts discrimination", "unconscious bias measure"]
+    question: "Does the Implicit Association Test predict discriminatory behaviour?"
+    domain: social-science/psychology
+    note: >-
+      Two meta-analyses of the same literature reach different conclusions about how well
+      the test predicts behaviour, and the construct itself (what the test measures) is
+      also disputed.
+    positions:
+      - label: "it predicts behaviour, at least in aggregate"
+        claim: >-
+          IAT scores predict behavioural outcomes, and in socially sensitive domains
+          they predict better than self-report measures.
+        falsifiable: true
+        falsified_if: >-
+          Preregistered studies with behavioural outcomes find correlations near zero
+          after accounting for explicit attitudes.
+        falsifiability_status: scientific
+        evidence_pointers: ["Greenwald et al. 2009, J Pers Soc Psychol, doi:10.1037/a0015575"]
+      - label: "predictive validity is weak, especially for individuals"
+        claim: >-
+          IAT scores are poor predictors of discriminatory behaviour, and are not
+          reliable enough to be used to judge an individual.
+        falsifiable: true
+        falsified_if: >-
+          Studies with reliable behavioural measures find predictive correlations well
+          above those in the critical meta-analysis, for individuals as well as groups.
+        falsifiability_status: scientific
+        evidence_pointers: ["Oswald et al. 2013, J Pers Soc Psychol, doi:10.1037/a0032734"]
+      - label: "it measures something, but what is not settled"
+        claim: >-
+          The test measures an association, but whether that is a stable attitude, a
+          cultural association or a task artifact is unresolved, so prediction claims
+          outrun the construct.
+        falsifiable: true
+        falsified_if: >-
+          Convergent evidence from independent methods identifies one construct and shows
+          the test measures it reliably.
+        falsifiability_status: scientific
+        evidence_pointers: ["construct validity debates", "test-retest reliability studies"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.linguistics.universal_grammar
+    keywords: ["universal grammar", "innate language faculty", "Chomsky language acquisition", "language instinct", "language universals"]
+    question: "Is language acquisition guided by an innate, language-specific faculty (universal grammar)?"
+    domain: linguistics/psycholinguistics
+    note: >-
+      Whether this can be tested depends on which properties are claimed to be universal
+      and innate. A claim that names none is hard to falsify, and a claim that names
+      specific structures can be tested against the world's languages and against what
+      learners acquire.
+    positions:
+      - label: "a rich innate faculty with universal structure"
+        claim: >-
+          Children are born with a language-specific endowment containing the principles
+          common to all human languages.
+        falsifiable: depends
+        falsified_if: >-
+          Depends on listing the specific innate principles. Once listed, a language
+          spoken by a normal community that lacks one, or learners shown to acquire it from
+          the input with domain-general learning alone, would count against it.
+        falsifiability_status: conditional
+        evidence_pointers: ["the Chomskyan tradition (books, no DOI)", "poverty-of-the-stimulus arguments"]
+      - label: "a minimal innate endowment, with most structure learned"
+        claim: >-
+          What is innate and specific to language is small (for example, the capacity for
+          recursion), and much of the rest comes from general cognition and learning.
+        falsifiable: true
+        falsified_if: >-
+          Evidence that the proposed core capacity is absent in some normal speakers, or
+          present in the same form in other species' communication.
+        falsifiability_status: scientific
+        evidence_pointers: ["Hauser, Chomsky & Fitch 2002, Science, doi:10.1126/science.298.5598.1569"]
+      - label: "usage and general learning explain acquisition; universals are tendencies"
+        claim: >-
+          Languages differ more than the universal-grammar view predicts, and general
+          learning from experience explains acquisition.
+        falsifiable: true
+        falsified_if: >-
+          Learners are shown to acquire a structure that no general-purpose learner could
+          acquire from the same input, or the cross-linguistic universals are shown to
+          hold without exception.
+        falsifiability_status: scientific
+        evidence_pointers: ["Evans & Levinson 2009, Behavioral and Brain Sciences, doi:10.1017/S0140525X0999094X"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"

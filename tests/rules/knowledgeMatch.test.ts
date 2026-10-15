@@ -93,6 +93,42 @@ describe('matchKnowledge', () => {
     expect(top('Does hippocampal damage stop people forming new memories, like patient H.M.?')).toBe('established.neuroscience.hippocampus_declarative_memory');
   });
 
+  it('finds the new batch-1 and batch-2 entries from plain questions', () => {
+    const top = (claim: string): string | undefined => matchKnowledge(index, claim, { limit: 1 })[0]?.id;
+    const expected: [string, string][] = [
+      ['Did BICEP2 detect primordial gravitational waves from inflation?', 'refuted.cosmology.bicep2_primordial_waves'],
+      ['Do neutrinos travel faster than light, as the OPERA experiment reported?', 'refuted.physics.opera_ftl_neutrinos'],
+      ['Is LK-99 a room temperature superconductor?', 'refuted.materials.lk99_room_temperature_superconductor'],
+      ['Can bacteria use arsenic instead of phosphorus in their DNA, like GFAJ-1?', 'refuted.biology.arsenic_life_gfaj1'],
+      ['Do brain training games make you smarter?', 'refuted.neuroscience.brain_training_transfer'],
+      ['Does the 5-HTTLPR serotonin transporter gene interact with stress to cause depression?', 'refuted.genetics.candidate_gene_5httlpr'],
+      ['Has global warming stopped since 1998?', 'refuted.climate.warming_pause_since_1998'],
+      ['Is the sun responsible for recent global warming?', 'refuted.climate.solar_explains_recent_warming'],
+      ['Will Himalayan glaciers disappear by 2035?', 'refuted.climate.himalayan_glaciers_2035'],
+      ['Does public debt above 90 percent of GDP sharply reduce growth?', 'refuted.economics.reinhart_rogoff_debt_threshold'],
+      ['Does it take 10,000 hours of deliberate practice to become an expert?', 'refuted.psychology.ten_thousand_hours'],
+      ['Does the marshmallow test predict success in later life?', 'refuted.psychology.marshmallow_test_destiny'],
+      ['Is the hot hand in basketball real or an illusion?', 'refuted.psychology.no_hot_hand'],
+      ['Were the Clovis people the first to arrive in the Americas?', 'refuted.archaeology.clovis_first'],
+      ['Have the continents always been in the same place, with land bridges explaining fossils?', 'refuted.geology.fixed_continents'],
+      ['Do homeopathic remedies work better than placebo?', 'refuted.medicine.homeopathy_beyond_placebo'],
+      ['Does hydroxychloroquine treat COVID-19?', 'refuted.medicine.hydroxychloroquine_covid'],
+      ['Are approved GMO foods safe to eat?', 'established.agriculture.approved_gm_food_safety'],
+      ['Is nuclear power safer than coal in deaths per unit of energy?', 'established.energy.nuclear_low_mortality_per_energy'],
+      ['Can the grid run on 100 percent wind, water and solar power?', 'contested.energy.high_renewable_grid_feasibility'],
+      ['Do concealed carry laws reduce violent crime?', 'contested.criminology.right_to_carry_laws'],
+      ['Does saturated fat cause heart disease?', 'contested.nutrition.saturated_fat_cardiovascular_disease'],
+      ['Should healthy people at low risk take statins?', 'contested.medicine.statins_low_risk_primary_prevention'],
+      ['What fraction of the human genome is functional rather than junk DNA?', 'contested.biology.human_genome_functional_fraction'],
+      ['Did wolves restore Yellowstone through a trophic cascade?', 'contested.ecology.yellowstone_wolf_trophic_cascade'],
+      ['Does stereotype threat lower test scores?', 'contested.psychology.stereotype_threat'],
+      ['Do growth mindset interventions raise student grades?', 'contested.education.growth_mindset_interventions'],
+      ['Does the Implicit Association Test predict discrimination?', 'contested.psychology.implicit_association_test'],
+      ['Is there an innate universal grammar for language?', 'contested.linguistics.universal_grammar'],
+    ];
+    for (const [claim, id] of expected) expect(top(claim), claim).toBe(id);
+  });
+
   it('presents every position of a contested entry, with the same falsifiability standard on each', () => {
     const entry = matchKnowledge(index, 'Does the Cambrian explosion show new body plans', { limit: 1 })[0];
     const positions = (entry?.details.positions ?? []) as { label: string; falsifiability_status: string }[];

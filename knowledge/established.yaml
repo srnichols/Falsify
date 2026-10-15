@@ -1797,3 +1797,46 @@ entries:
       does not show that potentiation is the mechanism of all memory; results differ
       by task and manipulation, and that wider claim is still debated.
     sources: ["Bliss & Lomo 1973, J Physiol, doi:10.1113/jphysiol.1973.sp010273", "Morris et al. 1986, Nature, doi:10.1038/319774a0"]
+
+  - id: established.agriculture.approved_gm_food_safety
+    keywords: ["are GMOs safe to eat", "genetically modified food safety", "GM crops health risk", "genetically engineered crops safe", "GMO health effects"]
+    statement: >-
+      Genetically engineered crops that have passed regulatory review and are on the
+      market are not more risky to eat than their conventional counterparts.
+    domain: agriculture/food-safety
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Well-designed long-term studies or surveillance show a consistent adverse health
+      effect in people or animals from an approved genetically engineered crop compared
+      with its conventional counterpart, after accounting for the trait and the farming
+      practice.
+    status: well-supported
+    confirmations: ["a decade of published safety studies reviewed together", "compositional and animal-feeding studies", "national academy review of the evidence"]
+    domain_of_validity: >-
+      Applies to the specific crops that have passed review, assessed case by case. It
+      does not say that every future genetically engineered product is safe, and it does
+      not address environmental, agronomic, economic or ownership questions, which are
+      separate and in several cases contested.
+    sources: ["Nicolia et al. 2014, Crit Rev Biotechnol, doi:10.3109/07388551.2013.823595", "National Academies of Sciences, Engineering, and Medicine 2016, Genetically Engineered Crops: Experiences and Prospects (report, no DOI)"]
+
+  - id: established.energy.nuclear_low_mortality_per_energy
+    keywords: ["is nuclear power safe", "deaths per unit of energy", "nuclear versus coal deaths", "energy source mortality", "nuclear safety record"]
+    statement: >-
+      Per unit of electricity generated, nuclear power causes far fewer deaths, from
+      accidents and air pollution together, than coal, oil or gas.
+    domain: energy/public-health
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      A comprehensive accounting of deaths per unit of energy, using the same methods
+      across sources, finds nuclear power's death rate at or above that of the fossil
+      sources.
+    status: well-supported
+    confirmations: ["lifecycle health-effects comparison of electricity sources", "observed accident and radiation-exposure records, including after the 2011 Fukushima accident"]
+    domain_of_validity: >-
+      A comparison of health effects per unit of energy. It does not cover cost, waste
+      storage, weapons proliferation, or the chance of a rare large accident beyond the
+      observed record, and accident estimates depend on assumptions about radiation
+      dose and response.
+    sources: ["Markandya & Wilkinson 2007, Lancet, doi:10.1016/S0140-6736(07)61253-7", "UNSCEAR 2020 report on the Fukushima accident (report, no DOI)"]

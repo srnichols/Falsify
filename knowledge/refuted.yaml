@@ -544,3 +544,315 @@ entries:
       tries to exploit it, because people change their behaviour. Check whether a
       relationship holds when the conditions that produced it change.
     sources: ["Phillips 1958, Economica, doi:10.2307/2550759", "Phelps 1967, Economica, doi:10.2307/2552025"]
+
+  - id: refuted.cosmology.bicep2_primordial_waves
+    keywords: ["BICEP2", "primordial gravitational waves detected", "B-mode polarization", "inflation gravitational waves", "smoking gun of inflation"]
+    claim: >-
+      The BICEP2 telescope detected the B-mode polarization of the cosmic microwave
+      background that primordial gravitational waves from inflation would produce.
+    domain: astronomy/cosmology
+    type: refuted-claim
+    era: "2014–2015"
+    falsified_by: >-
+      A joint analysis of BICEP2, Keck Array and Planck data found the measured signal
+      consistent with polarized emission from galactic dust, with no significant
+      evidence left for primordial gravitational waves.
+    superseded_by: "An upper limit on the strength of primordial gravitational waves; the signal was foreground dust."
+    lesson: >-
+      A striking signal measured at one frequency, through a foreground the team had to
+      estimate, is not a detection until independent frequencies rule the foreground out.
+    sources: ["BICEP2 Collaboration 2014, Phys Rev Lett, doi:10.1103/PhysRevLett.112.241101", "BICEP2/Keck and Planck Collaborations 2015, Phys Rev Lett, doi:10.1103/PhysRevLett.114.101301"]
+
+  - id: refuted.physics.opera_ftl_neutrinos
+    keywords: ["faster than light neutrinos", "OPERA experiment", "neutrinos faster than light", "superluminal neutrinos"]
+    claim: >-
+      Neutrinos in the OPERA experiment travelled faster than light, arriving about 60
+      nanoseconds earlier than light would over the 730 km path from CERN to Gran Sasso.
+    domain: physics/relativity
+    type: refuted-claim
+    era: "2011–2012"
+    falsified_by: >-
+      The collaboration traced the early arrival to faults in its timing chain (a fibre
+      connection and an oscillator), and the independent ICARUS experiment, on the same
+      neutrino beam, measured velocities consistent with the speed of light.
+    superseded_by: "Neutrino speed is consistent with the speed of light within measurement error."
+    lesson: >-
+      A result that contradicts a Bedrock law earns the hardest scrutiny of its own
+      measurement chain first. Here the team published, asked for outside checks, and the
+      fault was in the cables.
+    sources: ["OPERA Collaboration 2012, J High Energy Phys, doi:10.1007/JHEP10(2012)093", "ICARUS Collaboration 2012, Phys Lett B, doi:10.1016/j.physletb.2012.05.033"]
+
+  - id: refuted.materials.lk99_room_temperature_superconductor
+    keywords: ["LK-99", "room temperature superconductor", "copper-doped lead apatite", "ambient pressure superconductivity"]
+    claim: >-
+      LK-99, a copper-doped lead apatite, is a superconductor at room temperature and
+      ordinary pressure.
+    domain: materials-science/condensed-matter
+    type: refuted-claim
+    era: "2023"
+    falsified_by: >-
+      Replication attempts found no zero resistance and no superconducting levitation.
+      The resistivity drop was traced to a copper sulfide impurity, and carefully
+      grown phase-pure samples were insulating.
+    superseded_by: "LK-99 is not a superconductor; the claimed effects came from an impurity and from ordinary magnetism."
+    lesson: >-
+      A video of partial levitation and a drop in resistance are not the two defining
+      signatures of superconductivity (zero resistance and the Meissner effect) shown
+      together and reproduced by others. Open data made the check fast.
+    sources: ["Nature news 2023, 'LK-99 isn't a superconductor', doi:10.1038/d41586-023-02585-7", "Lee et al. 2023, arXiv:2307.12008 (preprint, no DOI)"]
+
+  - id: refuted.biology.arsenic_life_gfaj1
+    keywords: ["arsenic life", "GFAJ-1", "bacterium that uses arsenic instead of phosphorus", "alternative biochemistry"]
+    claim: >-
+      The bacterium GFAJ-1 can grow by using arsenic in place of phosphorus,
+      incorporating arsenate into its DNA and other biomolecules.
+    domain: biology/astrobiology
+    type: refuted-claim
+    era: "2010–2012"
+    falsified_by: >-
+      Independent groups showed that GFAJ-1 is arsenate-resistant but phosphate-dependent,
+      and that arsenate was not detectable in its DNA. The original paper was later
+      formally retracted by the journal.
+    superseded_by: "GFAJ-1 tolerates arsenate and scavenges trace phosphate; no organism is known to use arsenic in place of phosphorus."
+    lesson: >-
+      A claim of a new biochemistry must first exclude the ordinary explanation, here
+      trace phosphate and contamination, before it earns the extraordinary one.
+    sources: ["Wolfe-Simon et al. 2011, Science (retracted), doi:10.1126/science.1197258", "Erb et al. 2012, Science, doi:10.1126/science.1218455", "Reaves et al. 2012, Science, doi:10.1126/science.1219861"]
+
+  - id: refuted.neuroscience.brain_training_transfer
+    keywords: ["brain training", "brain games improve intelligence", "cognitive training transfer", "Lumosity"]
+    claim: >-
+      Commercial brain-training programs improve general cognitive ability, so gains from
+      the trained games carry over to untrained tasks and to everyday thinking.
+    domain: neuroscience/cognition
+    type: refuted-claim
+    era: "2000s–2010s"
+    falsified_by: >-
+      A large online randomized trial of several weeks of training found improvement on
+      the trained tasks but none on untrained ones, and a later review of the evidence
+      found that practised tasks improve while broad transfer to everyday cognition is
+      not shown.
+    superseded_by: "Practice improves the practised task; broad cognitive gains from brain-training games are not demonstrated."
+    lesson: >-
+      Improvement on the practised task is not improvement in the ability it is named
+      after. Test transfer on something you did not train.
+    sources: ["Owen et al. 2010, Nature, doi:10.1038/nature09042", "Simons et al. 2016, Psychol Sci Public Interest, doi:10.1177/1529100616661983"]
+
+  - id: refuted.genetics.candidate_gene_5httlpr
+    keywords: ["5-HTTLPR", "serotonin transporter gene depression", "gene environment interaction depression", "candidate gene"]
+    claim: >-
+      A common variant of the serotonin transporter gene (5-HTTLPR) interacts with
+      stressful life events to raise the risk of depression.
+    domain: biology/genetics
+    type: refuted-claim
+    era: "2003–2019"
+    falsified_by: >-
+      A meta-analysis of the interaction studies found no evidence for the effect, and a
+      large analysis across multiple big samples found no support for historical
+      candidate-gene or candidate gene-by-environment hypotheses for major depression.
+    superseded_by: "Depression risk is shaped by very many variants of tiny effect; this single-gene interaction is not supported."
+    lesson: >-
+      A single-gene finding from a small sample, however elegant its story, needs
+      replication in samples large enough for the effect size it claims.
+    sources: ["Caspi et al. 2003, Science, doi:10.1126/science.1083968", "Risch et al. 2009, JAMA, doi:10.1001/jama.2009.878", "Border et al. 2019, Am J Psychiatry, doi:10.1176/appi.ajp.2018.18070881"]
+
+  - id: refuted.climate.warming_pause_since_1998
+    keywords: ["global warming stopped in 1998", "warming pause", "global warming hiatus", "no warming since 1998"]
+    claim: >-
+      Global warming stopped around 1998, showing that the long-term warming trend has
+      ended.
+    domain: climate/atmospheric-science
+    type: refuted-claim
+    era: "2000s–2010s"
+    falsified_by: >-
+      Starting a trend at the exceptionally warm 1998 El Niño year exaggerated any
+      slowdown. Corrected datasets showed the surface warming rate had not stopped, and
+      the record warmth that followed continued the long-term rise.
+    superseded_by: "A short-term slowdown in the surface rate was within natural variability; the long-term warming trend continued."
+    lesson: >-
+      A trend measured from a hand-picked, unusually warm start year describes the start
+      year. Test whether a "pause" survives different start dates and the uncertainty.
+    sources: ["Karl et al. 2015, Science, doi:10.1126/science.aaa5632", "Medhaug et al. 2017, Nature, doi:10.1038/nature22315"]
+
+  - id: refuted.climate.solar_explains_recent_warming
+    keywords: ["the sun causes global warming", "solar activity explains warming", "sunspots and climate", "solar variability warming"]
+    claim: >-
+      Changes in the Sun's output are the main cause of the global warming observed
+      since the mid-20th century.
+    domain: climate/atmospheric-science
+    type: refuted-claim
+    era: "1990s–present"
+    falsified_by: >-
+      Measurements of solar output show no upward trend over the period when
+      temperatures rose, and reviews of solar influences on climate find them too small
+      to account for the recent warming.
+    superseded_by: "Solar variability has a measurable but small effect; it does not explain the warming since the mid-20th century."
+    lesson: >-
+      A candidate cause must change in the right direction by the right amount at the
+      right time. Check the cause's own record before crediting it with the effect.
+    sources: ["Foukal et al. 2006, Nature, doi:10.1038/nature05072", "Gray et al. 2010, Rev Geophys, doi:10.1029/2009RG000282"]
+
+  - id: refuted.climate.himalayan_glaciers_2035
+    keywords: ["Himalayan glaciers will disappear by 2035", "IPCC glacier error", "glaciergate"]
+    claim: >-
+      Himalayan glaciers will very probably disappear by the year 2035.
+    domain: climate/glaciology
+    type: refuted-claim
+    era: "2007–2010"
+    falsified_by: >-
+      The date traced to a poorly sourced statement that was repeated in an IPCC report
+      without peer-reviewed support. Measured and modelled glacier mass loss show the
+      Himalayan glaciers shrinking, but not disappearing by 2035.
+    superseded_by: "Himalayan glaciers are losing mass over this century at rates the literature supports; 2035 was an error."
+    lesson: >-
+      The same standard applies in both directions. An alarming claim that cannot be
+      traced to evidence is refuted as readily as a reassuring one, and its error does
+      not make the underlying trend false.
+    sources: ["Cogley et al. 2010, Science, doi:10.1126/science.327.5965.522-a", "Bolch et al. 2012, Science, doi:10.1126/science.1215828"]
+
+  - id: refuted.economics.reinhart_rogoff_debt_threshold
+    keywords: ["90 percent debt to GDP", "debt threshold growth", "Reinhart Rogoff", "public debt slows growth", "austerity debt ceiling"]
+    claim: >-
+      Economic growth falls sharply once public debt exceeds about 90 percent of GDP.
+    domain: economics/macroeconomics
+    type: refuted-claim
+    era: "2010–2013"
+    falsified_by: >-
+      A replication found a spreadsheet coding error, the exclusion of some country-years
+      and an unconventional weighting in the original analysis. Correcting them removed
+      the sharp drop at 90 percent and left a much weaker relationship with no threshold.
+    superseded_by: "High debt and slower growth are correlated, but there is no established sharp threshold, and the direction of causation is open."
+    lesson: >-
+      A policy-relevant number needs to survive a replication on the raw data. A
+      correlation between debt and growth also leaves the direction of causation open.
+    sources: ["Reinhart & Rogoff 2010, Am Econ Rev, doi:10.1257/aer.100.2.573", "Herndon, Ash & Pollin 2014, Cambridge J Econ, doi:10.1093/cje/bet075"]
+
+  - id: refuted.psychology.ten_thousand_hours
+    keywords: ["10,000 hours", "deliberate practice makes experts", "practice explains expertise", "talent is practice"]
+    claim: >-
+      Around 10,000 hours of deliberate practice is what makes an expert, and practice
+      explains most of the differences in performance between people.
+    domain: social-science/psychology
+    type: refuted-claim
+    era: "1993–2014"
+    falsified_by: >-
+      A meta-analysis of studies across music, games, sports, education and the
+      professions found that deliberate practice accounted for only part of the
+      differences in performance, a smaller share in some domains than others, leaving
+      most of the variation to other factors.
+    superseded_by: "Practice matters, but it explains only part of the differences between performers; other factors also contribute."
+    lesson: >-
+      Check the popular version against the original paper, then check the strong claim
+      against the pooled data. The strong version did not survive.
+    sources: ["Ericsson, Krampe & Tesch-Romer 1993, Psychol Rev, doi:10.1037/0033-295X.100.3.363", "Macnamara, Hambrick & Oswald 2014, Psychol Sci, doi:10.1177/0956797614535810"]
+
+  - id: refuted.psychology.marshmallow_test_destiny
+    keywords: ["marshmallow test", "delay of gratification predicts success", "self-control in children predicts life outcomes"]
+    claim: >-
+      How long a young child can wait for a second treat strongly predicts later
+      achievement and life outcomes, reflecting self-control rather than circumstances.
+    domain: social-science/psychology
+    type: refuted-claim
+    era: "1989–2018"
+    falsified_by: >-
+      A conceptual replication in a larger and more diverse sample found a much smaller
+      association with later outcomes, which shrank further after accounting for family
+      background and early cognitive ability.
+    superseded_by: "Early delay of gratification is modestly associated with later outcomes, largely through family background and cognitive ability."
+    lesson: >-
+      A correlation from a small, homogeneous sample may be a correlation with
+      background. Test it with controls in a sample that varies.
+    sources: ["Mischel, Shoda & Rodriguez 1989, Science, doi:10.1126/science.2658056", "Watts, Duncan & Quan 2018, Psychol Sci, doi:10.1177/0956797618761661"]
+
+  - id: refuted.psychology.no_hot_hand
+    keywords: ["hot hand", "streak shooting illusion", "hot hand fallacy", "basketball shooting streaks are random"]
+    claim: >-
+      Streaks of successful shots in basketball are an illusion: shooters have no "hot
+      hand" beyond chance.
+    domain: social-science/psychology
+    type: refuted-claim
+    era: "1985–2018"
+    falsified_by: >-
+      A statistical re-analysis showed that the original method was biased against
+      finding streakiness in finite sequences of shots. Corrected, the same kind of data
+      shows evidence of a hot hand.
+    superseded_by: "Shooters' success can depend on recent shots; the original no-hot-hand result came partly from a biased test."
+    lesson: >-
+      A famous debunking can itself be wrong. Ask whether the test could have detected
+      the thing it says is absent before treating its null result as settled.
+    sources: ["Gilovich, Vallone & Tversky 1985, Cognitive Psychology, doi:10.1016/0010-0285(85)90010-6", "Miller & Sanjurjo 2018, Econometrica, doi:10.3982/ECTA14943"]
+
+  - id: refuted.archaeology.clovis_first
+    keywords: ["Clovis first", "first people in the Americas", "peopling of the Americas", "pre-Clovis", "Monte Verde"]
+    claim: >-
+      The Clovis culture, about 13,000 years ago, represents the first people to enter
+      the Americas.
+    domain: archaeology/peopling-of-the-americas
+    type: refuted-claim
+    era: "mid-20th century to 2000s"
+    falsified_by: >-
+      Dated sites older than Clovis, including Monte Verde in Chile and the Buttermilk
+      Creek assemblage in Texas, and later evidence of human occupation in Mexico and
+      footprints in New Mexico from around the last glacial maximum, show people were
+      present thousands of years earlier. Some of the earliest dates remain disputed.
+    superseded_by: "People reached the Americas before Clovis; how early, and by which routes, is still under active study."
+    lesson: >-
+      A dominant "first" claim is refuted by a single well-dated earlier site that
+      survives scrutiny, and the field's resistance then makes the quality of the
+      evidence the whole story.
+    sources: ["Dillehay et al. 2008, Science, doi:10.1126/science.1156533", "Waters et al. 2011, Science, doi:10.1126/science.1201855", "Ardelean et al. 2020, Nature, doi:10.1038/s41586-020-2509-0", "Bennett et al. 2021, Science, doi:10.1126/science.abg7586"]
+
+  - id: refuted.geology.fixed_continents
+    keywords: ["fixed continents", "land bridges", "continents never moved", "stabilism", "continental drift rejected"]
+    claim: >-
+      The continents have always been where they are now, and the matching coastlines
+      and fossils across oceans are explained by land bridges that later sank.
+    domain: geology/tectonics
+    type: refuted-theory
+    era: "early 20th century to the 1960s"
+    falsified_by: >-
+      Seafloor magnetic stripes, symmetric about mid-ocean ridges and matched to
+      reversals of Earth's magnetic field, showed new ocean floor forming and spreading,
+      which fixed continents cannot explain.
+    superseded_by: "Plate tectonics (see the Established entry)."
+    lesson: >-
+      A theory can be rejected for decades for lack of a mechanism. The decisive evidence
+      came from a different kind of measurement that made a risky prediction.
+    sources: ["Vine & Matthews 1963, Nature, doi:10.1038/199947a0", "Wegener 1915, Die Entstehung der Kontinente und Ozeane (book, no DOI)"]
+
+  - id: refuted.medicine.homeopathy_beyond_placebo
+    keywords: ["homeopathy", "homeopathic remedies work", "like cures like", "ultra-diluted remedies"]
+    claim: >-
+      Homeopathic remedies have specific therapeutic effects beyond placebo.
+    domain: medicine/clinical-trials
+    type: refuted-claim
+    era: "1800s–present"
+    falsified_by: >-
+      A comparison of matched placebo-controlled trials of homeopathy and conventional
+      medicine found that the effects of homeopathy were compatible with placebo effects,
+      and a national review of the evidence concluded there are no health conditions for
+      which reliable evidence shows homeopathy to be effective.
+    superseded_by: "Reported benefits are consistent with placebo response, expectation and bias."
+    lesson: >-
+      Small, low-quality trials can show effects that shrink toward zero as trials get
+      larger and better controlled. Weigh the trials by quality, not by count.
+    sources: ["Shang et al. 2005, Lancet, doi:10.1016/S0140-6736(05)67177-2", "NHMRC 2015, Evidence on the effectiveness of homeopathy for treating health conditions (report, no DOI)"]
+
+  - id: refuted.medicine.hydroxychloroquine_covid
+    keywords: ["hydroxychloroquine covid", "HCQ treatment covid-19", "chloroquine covid", "hydroxychloroquine prophylaxis"]
+    claim: >-
+      Hydroxychloroquine treats COVID-19 or prevents it after exposure, reducing illness
+      or death.
+    domain: medicine/infectious-disease
+    type: refuted-claim
+    era: "2020"
+    falsified_by: >-
+      A large randomized trial in hospitalized patients found no reduction in 28-day
+      mortality, and a randomized trial of post-exposure prophylaxis found it did not
+      prevent illness after exposure.
+    superseded_by: "Hydroxychloroquine is not an effective treatment or post-exposure prevention for COVID-19."
+    lesson: >-
+      Early reports of benefit in a new disease are hypotheses. The question became
+      decidable the moment someone designed the randomized comparison, and it was
+      answered within months.
+    sources: ["RECOVERY Collaborative Group 2020, N Engl J Med, doi:10.1056/NEJMoa2022926", "Boulware et al. 2020, N Engl J Med, doi:10.1056/NEJMoa2016638"]
