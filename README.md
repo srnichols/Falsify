@@ -73,7 +73,11 @@ recorded "yes", or revise a refuted hypothesis without saying what changed (and
 without keeping every earlier falsification condition). Refuted hypotheses are
 written to the notebook and struck through; theories that survive are recorded in the
 notebook and, if `OPENBRAIN_KEY` is set, the corpus. Session state and the notebook
-live under `.falsify/` (git-ignored); set `FALSIFY_DATA_DIR` to keep them elsewhere. After
+live under `.falsify/` (git-ignored); set `FALSIFY_DATA_DIR` to keep them elsewhere. Every
+result names the `next` tool and repeats the `sessionId`, and a step without a session
+carries a `sessionWarning`. If your host keeps dropping the session, set
+`FALSIFY_REQUIRE_SESSION=1` in the server's environment and any step after intake
+without one is refused with `session:required`. After
 rebuilding, reload the `falsify` server in your MCP host (in VS Code, restart it from
 the MCP servers list) so it picks up new tools; a running server keeps the old build.
 See [DESIGN.md](./DESIGN.md) §3.

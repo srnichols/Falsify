@@ -200,6 +200,64 @@ describe('cycle sessions', () => {
   });
 });
 
+describe('guidance for hosts that forget the session', () => {
+  it('names the next tool and repeats the sessionId at every step', () => {
+    const ctx: CycleContext = { sessions: new SessionStore() };
+    const intake = ok(opIntake({ question: 'Does a 200mg caffeine dose lower reaction time?' }, ctx));
+    const sessionId = intake.sessionId as string;
+    expect(intake.next).toEqual({ tool: 'falsify_hypothesize', sessionId });
+
+    const hyp = ok(
+      opHypothesize(
+        {
+          statement: 'Caffeine lowers reaction time',
+          predicts: 'faster responses',
+          falsificationConditions: [{ description: 'no drop in reaction time versus placebo' }],
+          sessionId,
+        },
+        [],
+        ctx,
+      ),
+    );
+    expect(hyp.next).toEqual({ tool: 'falsify_experiment', sessionId });
+
+    const exp = ok(opExperiment({ couldFail: true, decisiveEvidence: ['blinded placebo-controlled test'], sessionId }, ctx));
+    expect(exp.next).toEqual({ tool: 'falsify_analyze', sessionId });
+
+    const yes = ok(opAnalyze({ verdict: 'yes', evidenceCited: ['reaction time fell versus placebo'], sessionId }, ctx));
+    expect(yes.next).toEqual({ tool: 'falsify_review', sessionId });
+    expect(yes.sessionId).toBe(sessionId);
+
+    const done = ok(opReview({ ...ANSWERS, outcome: 'confirm', sessionId }, ctx));
+    expect(done.next).toBeUndefined();
+  });
+
+  it('warns a stateless caller that nothing was verified or recorded', () => {
+    const p = ok(opHypothesize({
+      statement: 'Caffeine lowers reaction time',
+      predicts: 'faster responses',
+      falsificationConditions: [{ description: 'no drop in reaction time versus placebo' }],
+    }, []));
+    expect(String(p.sessionWarning)).toMatch(/sessionId/);
+    expect(p.next).toBeUndefined();
+  });
+
+  it('refuses stateless steps when the server requires a session, but still lets intake start one', () => {
+    const ctx: CycleContext = { sessions: new SessionStore(), requireSession: true };
+    expect(ok(opIntake({ question: 'Does caffeine lower reaction time?' }, ctx)).sessionId).toBeTruthy();
+    const r = opHypothesize(
+      {
+        statement: 'Caffeine lowers reaction time',
+        predicts: 'faster responses',
+        falsificationConditions: [{ description: 'no drop in reaction time versus placebo' }],
+      },
+      [],
+      ctx,
+    );
+    expect(rule(r)).toBe('session:required');
+  });
+});
+
 describe('claim types', () => {
   it('requires a numeric threshold for a probabilistic claim', () => {
     const r = opHypothesize(

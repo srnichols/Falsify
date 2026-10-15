@@ -17,6 +17,7 @@ export function createDefaultContext(): CycleContext {
   const ctx: CycleContext = {
     sessions: new SessionStore(DEFAULT_SESSION_DIR),
     notebook: new NotebookStore(),
+    requireSession: process.env.FALSIFY_REQUIRE_SESSION === '1',
   };
   try {
     const client = new OpenBrainMcpClient(loadConfig());

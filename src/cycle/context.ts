@@ -20,6 +20,8 @@ export interface CycleContext {
   corpus?: MemoryWriter;
   /** Corpus tier reader: semantic recall, used by `falsify_related`. */
   memory?: MemoryReader;
+  /** Refuse any step after intake that does not carry a sessionId (`FALSIFY_REQUIRE_SESSION=1`). */
+  requireSession?: boolean;
   /** Searchable view of the knowledge tiers. Defaulted from `knowledge/*.yaml`. */
   knowledge?: KnowledgeIndex;
 }

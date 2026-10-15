@@ -94,9 +94,32 @@ export function errorResult(error: string, rule: string, guidance: string): OpRe
   return { kind: 'error', error, rule, guidance };
 }
 
-/** An ok result that also reports where the cycle now stands. */
+/** The tool that moves the cycle on from each state. */
+const NEXT_TOOL: Partial<Record<CycleState, string>> = {
+  hypothesis: 'falsify_hypothesize',
+  experiment: 'falsify_experiment',
+  analysis: 'falsify_analyze',
+  review: 'falsify_review',
+};
+
+const STATELESS_WARNING =
+  'No sessionId was used, so this step ran statelessly: the server cannot verify the cycle, and a Theory cannot be verified or recorded. Pass the sessionId that falsify_intake returned.';
+
+/**
+ * An ok result that also reports where the cycle now stands. In a session it names
+ * the next tool and repeats the sessionId, because a model follows an instruction
+ * in the result far more reliably than one in a tool description it read earlier.
+ */
 function withState(payload: Record<string, unknown>, state: CycleState): OpResult {
-  return okResult({ ...payload, cycleState: state, legalNext: legalEvents(state) });
+  const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId : undefined;
+  const nextTool = NEXT_TOOL[state];
+  const guidance: Record<string, unknown> =
+    sessionId === undefined
+      ? { sessionWarning: STATELESS_WARNING }
+      : nextTool !== undefined
+        ? { next: { tool: nextTool, sessionId } }
+        : {};
+  return okResult({ ...payload, ...guidance, cycleState: state, legalNext: legalEvents(state) });
 }
 
 /**
@@ -156,6 +179,15 @@ function resolveState(
   fallback: CycleState,
 ): SessionLookup | { err: OpResult } {
   if (sessionId === undefined) {
+    if (ctx?.requireSession === true) {
+      return {
+        err: errorResult(
+          'This server requires a sessionId on every step after intake.',
+          'session:required',
+          'Call falsify_intake first and pass the sessionId it returns to every later falsify_* call.',
+        ),
+      };
+    }
     return { state: cycleState ?? fallback };
   }
   if (ctx?.sessions === undefined) {
@@ -669,7 +701,10 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
       recordAnalysis();
       commit(ctx, session, 'refute', moved.next, 'Data disagreed with the prediction (No branch).');
     }
-    return withState({ analysis: parsed.data, evidence: items, ...scoring, ...consensusNote, ...provenance }, moved.next);
+    return withState(
+      { analysis: parsed.data, evidence: items, ...(session !== undefined ? { sessionId: session.id } : {}), ...scoring, ...consensusNote, ...provenance },
+      moved.next,
+    );
   }
 
   // verdict === 'yes' — do NOT finalize; Review is mandatory (DESIGN.md §3).
@@ -689,6 +724,8 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
     evidence: items,
     reviewRequired: true,
     nextTool: 'falsify_review',
+    next: session !== undefined ? { tool: 'falsify_review', sessionId: session.id } : undefined,
+    ...(session !== undefined ? { sessionId: session.id } : { sessionWarning: STATELESS_WARNING }),
     cycleState: state,
     legalNext: legalEvents(state),
     note: 'Yes is not final: run review (outcome: confirm) to record a Theory.',
