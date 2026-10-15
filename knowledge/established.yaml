@@ -1546,3 +1546,175 @@ entries:
       A broad empirical pattern, not a rigid schedule. Timing and pathways vary
       with institutions, culture, migration, public health, and policy.
     sources: ["Notestein 1945", "historical demography"]
+
+  - id: established.medicine.smoking_lung_cancer
+    keywords: ["smoking causes lung cancer", "cigarettes cancer", "tobacco lung cancer", "quitting smoking reduces risk"]
+    statement: >-
+      Cigarette smoking causes lung cancer.
+    domain: medicine/epidemiology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Cohort data, after accounting for age and occupational confounders, showing
+      that smokers develop lung cancer at no higher rate than comparable
+      non-smokers, or that the risk does not fall in people who stop smoking.
+    status: well-supported
+    confirmations: ["dose-response relationship between cigarettes per day and lung cancer", "risk falls after cessation", "consistent across cohorts, countries and decades"]
+    domain_of_validity: >-
+      A population-level causal claim about risk. It does not say that every
+      smoker develops lung cancer, nor that every lung cancer is caused by smoking.
+    sources: ["Doll & Hill 1950, BMJ, doi:10.1136/bmj.2.4682.739", "Doll & Hill 1954, BMJ, doi:10.1136/bmj.1.4877.1451"]
+
+  - id: established.medicine.vaccine_efficacy
+    keywords: ["vaccines work", "vaccination reduces disease", "measles vaccine", "MMR effectiveness", "vaccines prevent infection"]
+    statement: >-
+      Licensed vaccines substantially reduce the incidence of the infectious
+      diseases they target.
+    domain: medicine/immunology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Randomized trials or population surveillance showing that vaccinated groups
+      have no lower incidence of the targeted disease than comparable unvaccinated
+      groups.
+    status: well-supported
+    confirmations: ["randomized trials and systematic reviews", "disease incidence falls as coverage rises", "outbreaks concentrate in under-vaccinated groups"]
+    domain_of_validity: >-
+      Protection varies by vaccine, age, and time since vaccination; it is rarely
+      complete, and waning immunity or pathogen change can reduce it. Each vaccine
+      is its own claim; this entry states the general pattern.
+    sources: ["Demicheli et al. 2012, Cochrane Database Syst Rev, doi:10.1002/14651858.CD004407.pub3", "Orenstein & Ahmed 2017, PNAS, doi:10.1073/pnas.1704507114", "Andre et al. 2008, Bull World Health Organ, doi:10.2471/BLT.07.040089"]
+
+  - id: established.medicine.hand_hygiene
+    keywords: ["hand washing reduces infection", "hand hygiene", "washing hands prevents illness", "soap and water"]
+    statement: >-
+      Hand hygiene reduces the transmission of respiratory and gastrointestinal
+      infections.
+    domain: medicine/public-health
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Randomized community or clinical trials consistently showing no lower rate
+      of infection in groups practising hand hygiene than in matched control
+      groups.
+    status: well-supported
+    confirmations: ["meta-analysis of community trials", "reviews of physical interventions against respiratory viruses"]
+    domain_of_validity: >-
+      The effect is modest and depends on adherence and setting. It describes an
+      average reduction in infection risk, not protection in every encounter.
+    sources: ["Aiello et al. 2008, Am J Public Health, doi:10.2105/AJPH.2007.124610", "Jefferson et al. 2011, Cochrane Database Syst Rev, doi:10.1002/14651858.CD006207.pub4"]
+
+  - id: established.medicine.folic_acid_neural_tube
+    keywords: ["folic acid pregnancy", "neural tube defects", "spina bifida prevention", "periconceptional supplementation"]
+    statement: >-
+      Folic acid taken before and in early pregnancy reduces the risk of
+      neural-tube defects in the child.
+    domain: medicine/obstetrics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Randomized trials of periconceptional folic acid showing no lower rate of
+      neural-tube defects than in unsupplemented control groups.
+    status: well-supported
+    confirmations: ["randomized controlled trials in two countries", "population declines after folic acid fortification"]
+    domain_of_validity: >-
+      Lowers risk by a substantial fraction; it does not prevent every
+      neural-tube defect, and the size of the effect depends on dose and on the
+      population's baseline folate status.
+    sources: ["MRC Vitamin Study Research Group 1991, Lancet, doi:10.1016/0140-6736(91)90133-a", "Czeizel & Dudas 1992, N Engl J Med, doi:10.1056/NEJM199212243272602"]
+
+  - id: established.psychology.testing_effect
+    keywords: ["retrieval practice", "testing effect", "practice testing improves retention", "test-enhanced learning"]
+    statement: >-
+      Retrieving material from memory improves later retention more than
+      re-studying it for the same time.
+    domain: social-science/psychology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Controlled experiments, across materials and delays, consistently showing
+      equal or better long-term retention after re-study than after practice
+      testing.
+    status: well-supported
+    confirmations: ["laboratory experiments across materials and ages", "classroom studies", "meta-analysis of practice testing"]
+    domain_of_validity: >-
+      The benefit is clearest at longer delays and with feedback; at very short
+      delays re-study can match or beat testing. Effect sizes in real classrooms
+      are smaller than in the laboratory.
+    sources: ["Roediger & Karpicke 2006, Psychological Science, doi:10.1111/j.1467-9280.2006.01693.x", "Adesope et al. 2017, Review of Educational Research, doi:10.3102/0034654316689306"]
+
+  - id: established.psychology.spacing_effect
+    keywords: ["spaced practice", "distributed practice", "spacing effect", "cramming versus spacing"]
+    statement: >-
+      Spreading study or practice over time yields better long-term retention
+      than massing it in one session.
+    domain: social-science/psychology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Controlled experiments, across materials and retention intervals,
+      consistently showing equal or better long-term retention after massed
+      practice than after spaced practice of the same total duration.
+    status: well-supported
+    confirmations: ["quantitative synthesis of hundreds of experiments", "meta-analysis in applied settings"]
+    domain_of_validity: >-
+      The best spacing interval depends on how long the material must be
+      retained. For some motor and complex tasks the advantage is smaller or less
+      consistent.
+    sources: ["Cepeda et al. 2006, Psychological Bulletin, doi:10.1037/0033-2909.132.3.354", "Donovan & Radosevich 1999, J Appl Psychol, doi:10.1037/0021-9010.84.5.795"]
+
+  - id: established.psychology.stroop_interference
+    keywords: ["Stroop effect", "color-word interference", "automatic reading interferes"]
+    statement: >-
+      Naming the ink colour of a word is slower and less accurate when the word
+      names a different colour than when it does not.
+    domain: social-science/psychology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Timed colour-naming tasks with conflicting and neutral words consistently
+      showing no difference in response time or errors.
+    status: well-supported
+    confirmations: ["decades of replications across languages and populations", "integrative review of the literature"]
+    domain_of_validity: >-
+      Describes a robust behavioural interference effect. Theories of its cause
+      (automaticity, response competition, attention) are still debated.
+    sources: ["Stroop 1935, J Exp Psychol, doi:10.1037/h0054651", "MacLeod 1991, Psychological Bulletin, doi:10.1037/0033-2909.109.2.163"]
+
+  - id: established.psychology.anchoring
+    keywords: ["anchoring effect", "anchoring bias", "numerical anchors bias estimates"]
+    statement: >-
+      Numerical estimates are pulled toward an arbitrary number the person has
+      just considered.
+    domain: social-science/psychology
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Controlled experiments with randomly assigned high and low anchors showing
+      no difference in later estimates.
+    status: well-supported
+    confirmations: ["original heuristics-and-biases experiments", "multi-site replication across many samples and countries"]
+    domain_of_validity: >-
+      The direction is robust but the size varies a great deal with the task, the
+      anchor and the participant's knowledge. It does not predict how large the
+      pull will be in a particular real-world decision.
+    sources: ["Tversky & Kahneman 1974, Science, doi:10.1126/science.185.4157.1124", "Klein et al. 2014, Social Psychology, doi:10.1027/1864-9335/a000178"]
+
+  - id: established.economics.law_of_demand
+    keywords: ["law of demand", "price elasticity", "higher prices reduce quantity demanded", "demand curve slopes downward"]
+    statement: >-
+      For most ordinary goods, the quantity demanded falls when the price rises,
+      other things equal.
+    domain: economics/microeconomics
+    type: theory
+    falsifiable: true
+    falsified_if: >-
+      Well-identified price changes for ordinary goods consistently showing no
+      decline, or an increase, in the quantity demanded.
+    status: well-supported
+    confirmations: ["meta-analyses of estimated price elasticities", "natural experiments on taxes and price changes"]
+    domain_of_validity: >-
+      A tendency under 'other things equal', not a law for every good. Elasticities
+      vary widely by good and time horizon, and rare exceptions such as Giffen
+      behaviour have been documented in narrow settings.
+    sources: ["Bijmolt, van Heerde & Pieters 2005, J Marketing Research, doi:10.1509/jmkr.42.2.141.62296", "Gallet & List 2003, Health Economics, doi:10.1002/hec.765", "Jensen & Miller 2008, American Economic Review, doi:10.1257/aer.98.4.1553"]

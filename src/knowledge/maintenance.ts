@@ -41,7 +41,7 @@ export type KnowledgeLintIssueCode =
   | 'tier-id-prefix-mismatch';
 
 /** Advisories about whether an entry has earned the tier it sits in. They never fail the lint. */
-export type KnowledgeLintWarningCode = 'thin-sourcing' | 'missing-validity-domain' | 'weak-falsifier';
+export type KnowledgeLintWarningCode = 'thin-sourcing' | 'missing-validity-domain' | 'weak-falsifier' | 'domain-imbalance';
 
 export interface KnowledgeLintIssue {
   code: KnowledgeLintIssueCode | KnowledgeLintWarningCode;
@@ -282,6 +282,33 @@ export function getKnowledgeTemplate(tier: Tier): KnowledgeTemplate {
   };
 }
 
+/** One field of study may not make up more than this share of the corpus without an advisory. */
+const MAX_DOMAIN_SHARE = 0.4;
+/** Below this many entries a share means little (small test corpora, new installs). */
+const MIN_ENTRIES_FOR_BALANCE = 30;
+
+/**
+ * A corpus dominated by one field makes every claim in other fields look novel and
+ * under-checked. Quantitative principles are excluded: they are lenses, not claims.
+ */
+function domainBalanceWarnings(entries: readonly { tier: Tier; entry: KnowledgeEntry }[]): KnowledgeLintIssue[] {
+  const counts = new Map<string, number>();
+  let total = 0;
+  for (const { tier, entry } of entries) {
+    if (tier === 'quantitative' || !('domain' in entry) || typeof entry.domain !== 'string') continue;
+    const field = entry.domain.split('/')[0] ?? entry.domain;
+    counts.set(field, (counts.get(field) ?? 0) + 1);
+    total += 1;
+  }
+  if (total < MIN_ENTRIES_FOR_BALANCE) return [];
+  return [...counts]
+    .filter(([, n]) => n / total > MAX_DOMAIN_SHARE)
+    .map(([field, n]) => ({
+      code: 'domain-imbalance' as const,
+      message: `'${field}' is ${n} of ${total} claim entries (${Math.round((100 * n) / total)}%, above ${Math.round(100 * MAX_DOMAIN_SHARE)}%); add entries from other fields so the corpus is not skewed toward it.`,
+    }));
+}
+
 export function lintKnowledge(knowledgeDir: string = DEFAULT_KNOWLEDGE_DIR): KnowledgeLintSummary {
   const knowledge = loadAllKnowledge(knowledgeDir);
   const issues: KnowledgeLintIssue[] = [];
@@ -331,6 +358,8 @@ export function lintKnowledge(knowledgeDir: string = DEFAULT_KNOWLEDGE_DIR): Kno
       seenPrimaryText.set(normalizedPrimaryText, { id: entry.id, tier });
     }
   }
+
+  warnings.push(...domainBalanceWarnings([...allEntries(knowledge)]));
 
   return {
     issueCount: issues.length,

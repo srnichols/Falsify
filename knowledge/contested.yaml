@@ -367,3 +367,183 @@ entries:
         falsifiability_status: scientific
         evidence_pointers: ["meta-analyses with heterogeneous effects", "cost-effectiveness comparisons", "teacher-quality comparisons"]
     engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.criminology.death_penalty_deterrence
+    question: "Does the threat of execution deter murder more than long imprisonment does?"
+    domain: social-science/criminology
+    note: >-
+      The empirical question (deterrence) is separate from the moral question
+      (whether execution is justified). Only the first is a scientific
+      hypothesis; a position resting on the second is reported as normative, not
+      as wrong.
+    positions:
+      - label: "a measurable deterrent effect"
+        claim: >-
+          Executions measurably reduce the murder rate beyond what long
+          imprisonment achieves.
+        falsifiable: true
+        falsified_if: >-
+          Well-identified studies, robust to reasonable changes of model and
+          data, repeatedly find no reduction in murders after executions
+          relative to comparison jurisdictions or periods.
+        falsifiability_status: scientific
+        evidence_pointers: ["post-moratorium state panel studies (e.g. Dezhbakhsh, Rubin & Shepherd 2003, doi:10.1093/aler/ahg021)", "differences across states and years"]
+      - label: "no demonstrated deterrent effect"
+        claim: >-
+          The data do not show that execution deters murder more than long
+          imprisonment, and reported effects disappear under reasonable
+          alternative specifications.
+        falsifiable: true
+        falsified_if: >-
+          Well-identified studies repeatedly find a reduction in murders after
+          executions that survives changes of model, data and comparison group.
+        falsifiability_status: scientific
+        evidence_pointers: ["reanalyses showing sensitivity to model choice", "comparisons of neighbouring jurisdictions with and without the penalty"]
+      - label: "existing studies cannot answer the question"
+        claim: >-
+          Existing studies cannot establish either an effect or its absence,
+          because executions are rare and their timing and the counterfactual are
+          poorly identified.
+        falsifiable: true
+        falsified_if: >-
+          A design with credible identification of the counterfactual yields a
+          stable estimate that other analysts reproduce.
+        falsifiability_status: scientific
+        evidence_pointers: ["expert-panel review of the deterrence literature", "identification problems with rare events"]
+      - label: "justified regardless of deterrence"
+        claim: >-
+          Execution is justified as just punishment whatever its effect on murder
+          rates.
+        falsifiable: false
+        falsifiability_status: normative-outside-method
+        note: >-
+          A moral position. No observation about deterrence could refute it, so
+          it is neither supported nor contradicted by the empirical evidence
+          above, and it is not scored as a hypothesis.
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.psychology.adolescent_social_media_wellbeing
+    question: "Does heavy social-media use cause worse mental health in adolescents?"
+    domain: social-science/psychology
+    note: >-
+      Most evidence is correlational and self-reported; effect-size estimates
+      differ by orders of analytic choice. Both a large and a negligible effect
+      are testable.
+    positions:
+      - label: "substantial causal harm"
+        claim: >-
+          Heavy social-media use causes meaningful declines in adolescent mental
+          health, especially for girls.
+        falsifiable: true
+        falsified_if: >-
+          Preregistered longitudinal and experimental studies with objective
+          usage measures consistently find no change in mental-health outcomes
+          after changes in use.
+        falsifiability_status: scientific
+        evidence_pointers: ["time-trend correlations with smartphone adoption", "reduction-of-use experiments", "reports of social comparison and sleep disruption"]
+      - label: "small or negligible average association"
+        claim: >-
+          The average association between digital-technology use and well-being
+          is very small, comparable to other everyday factors, and its causal
+          direction is unclear.
+        falsifiable: true
+        falsified_if: >-
+          Large, preregistered studies with objective measures find an effect
+          size on well-being that is consistently large and causal.
+        falsifiability_status: scientific
+        evidence_pointers: ["specification-curve analyses of large datasets (Orben & Przybylski 2019, doi:10.1038/s41562-018-0506-1)", "comparisons with the effect of eating potatoes or wearing glasses"]
+      - label: "heterogeneous effects"
+        claim: >-
+          Average effects hide real harm for some adolescents and some kinds of
+          use, and benefit for others.
+        falsifiable: true
+        falsified_if: >-
+          Well-powered studies find no systematic subgroup or usage-type
+          differences beyond chance.
+        falsifiability_status: scientific
+        evidence_pointers: ["subgroup analyses", "experience-sampling studies of individual differences"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.psychology.violent_games_aggression
+    question: "Does playing violent video games increase aggressive behaviour?"
+    domain: social-science/psychology
+    positions:
+      - label: "a reliable but modest increase"
+        claim: >-
+          Violent video games increase aggressive thoughts, feelings and
+          behaviour, with a modest average effect.
+        falsifiable: true
+        falsified_if: >-
+          Preregistered studies with behavioural (not self-report) outcomes
+          consistently find no effect once publication bias is corrected for.
+        falsifiability_status: scientific
+        evidence_pointers: ["meta-analyses across Western and East Asian samples (Anderson et al. 2010, doi:10.1037/a0018251)", "laboratory and longitudinal studies"]
+      - label: "negligible effect after bias correction"
+        claim: >-
+          Once publication bias and weak outcome measures are accounted for, the
+          effect on real aggression is negligible.
+        falsifiable: true
+        falsified_if: >-
+          Bias-corrected, preregistered studies of behavioural aggression
+          consistently find a reliable positive effect.
+        falsifiability_status: scientific
+        evidence_pointers: ["meta-analysis with publication-bias adjustment (Ferguson 2015, doi:10.1177/1745691615592234)", "disagreement over outcome measures"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.medicine.moderate_alcohol_mortality
+    question: "Does moderate alcohol consumption lower all-cause mortality compared with abstaining?"
+    domain: medicine/epidemiology
+    positions:
+      - label: "a protective J-shaped curve"
+        claim: >-
+          Light-to-moderate drinkers live longer than abstainers, giving a
+          J-shaped relationship between intake and mortality.
+        falsifiable: true
+        falsified_if: >-
+          Studies that remove misclassified former drinkers and other
+          abstainer biases find no mortality advantage for moderate drinkers.
+        falsifiability_status: scientific
+        evidence_pointers: ["cohort studies", "meta-analyses of consumption and mortality"]
+      - label: "no protection once bias is removed"
+        claim: >-
+          The apparent protection comes from comparing drinkers with a biased
+          abstainer group and from confounding, and disappears in better-designed
+          studies.
+        falsifiable: true
+        falsified_if: >-
+          Well-designed studies that exclude those biases still find a clear
+          mortality advantage for moderate drinkers.
+        falsifiability_status: scientific
+        evidence_pointers: ["systematic review adjusting for abstainer bias (Stockwell et al. 2016, doi:10.15288/jsad.2016.77.185)", "Mendelian-randomization studies"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"
+
+  - id: contested.economics.immigration_native_wages
+    question: "Does immigration lower the wages of native-born workers?"
+    domain: economics/labor
+    note: >-
+      Results differ by which workers are compared and how the counterfactual is
+      built, so the contested part is largely a matter of identification.
+    positions:
+      - label: "little or no average wage effect"
+        claim: >-
+          A sudden increase in immigration has little or no effect on the wages
+          or employment of native workers on average.
+        falsifiable: true
+        falsified_if: >-
+          Well-identified natural experiments consistently show wage or
+          employment declines for comparable native workers after immigration
+          inflows.
+        falsifiability_status: scientific
+        evidence_pointers: ["Mariel boatlift study (Card 1990, doi:10.1177/001979399004300205)", "labour-market adjustment and complementarity"]
+      - label: "a negative effect on the closest substitutes"
+        claim: >-
+          Immigration lowers wages of native workers who are close substitutes,
+          such as those with the least education, even if the average effect is
+          small.
+        falsifiable: true
+        falsified_if: >-
+          Reanalyses using the same designs and comparable groups find no decline
+          for the closest substitutes.
+        falsifiability_status: scientific
+        evidence_pointers: ["reappraisal of the Mariel natural experiment (Borjas 2017, doi:10.1177/0019793917692945)", "sub-group wage analyses"]
+    engine_directive: "present_all_positions_with_falsifiability; do_not_pick_winner"

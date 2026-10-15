@@ -377,3 +377,150 @@ entries:
       Intuitive personalization stories are not enough; the specific prediction
       must appear in controlled comparisons. Here it repeatedly did not.
     sources: ["Pashler et al. 2008", "later reviews of the meshing hypothesis"]
+
+  - id: refuted.psychology.ego_depletion
+    keywords: ["ego depletion", "willpower is a limited resource", "self-control fatigue", "self-control depleted"]
+    claim: >-
+      Exerting self-control on one task depletes a limited resource, so people
+      perform worse on an unrelated self-control task that follows.
+    domain: social-science/psychology
+    type: refuted-claim
+    era: "1998–2016"
+    falsified_by: >-
+      A preregistered replication of the standard sequential-task paradigm run
+      by 23 laboratories found an effect near zero (d about 0.04, with an
+      interval spanning no effect), where the original literature had reported
+      moderate effects.
+    superseded_by: "The sequential-task effect is not reliably observed; whether self-control fatigue exists by other mechanisms remains open."
+    lesson: >-
+      A large published literature can rest on publication bias and flexible
+      analysis. A multi-site preregistered replication is stronger evidence than
+      dozens of small positive studies.
+    sources: ["Hagger et al. 2016, Perspectives on Psychological Science, doi:10.1177/1745691616652873", "Baumeister et al. 1998 (original paradigm)"]
+
+  - id: refuted.psychology.power_posing_hormones
+    keywords: ["power posing", "expansive posture", "high-power pose", "posture testosterone"]
+    claim: >-
+      Holding an expansive posture for two minutes raises testosterone, lowers
+      cortisol, and increases risk-taking.
+    domain: social-science/psychology
+    type: refuted-claim
+    era: "2010–2015"
+    falsified_by: >-
+      A larger preregistered replication found no effect on hormone levels or
+      risk-taking. Only self-reported feelings of power showed any difference.
+    superseded_by: "Posture may change how powerful people say they feel; the hormonal and behavioural claims are unsupported."
+    lesson: >-
+      A small study with a vivid, useful-sounding result gets far more attention
+      than the replication that undoes it. Separate the self-reported part of an
+      effect from the physiological part.
+    sources: ["Ranehill et al. 2015, Psychological Science, doi:10.1177/0956797614553946", "Carney, Cuddy & Yap 2010, Psychological Science, doi:10.1177/0956797610383437"]
+
+  - id: refuted.psychology.social_priming_elderly_walking
+    keywords: ["priming", "elderly words walk slower", "subtle primes change behavior", "automatic behavior priming"]
+    claim: >-
+      Briefly exposing people to words associated with old age makes them walk
+      more slowly afterwards, without their awareness.
+    domain: social-science/psychology
+    type: refuted-claim
+    era: "1996–2012"
+    falsified_by: >-
+      A replication using automated timing found no slowing; the original
+      effect appeared only when experimenters who timed participants by hand
+      had been led to expect it, pointing to experimenter expectancy.
+    superseded_by: "Behavioural priming of this kind is not a reliable effect; expectancy effects explain the original result."
+    lesson: >-
+      When the person who measures the outcome knows the prediction, the
+      measurement can carry the hypothesis. Blind or automate the measurement.
+    sources: ["Doyen et al. 2012, PLoS ONE, doi:10.1371/journal.pone.0029081", "Bargh, Chen & Burrows 1996, J Pers Soc Psychol, doi:10.1037/0022-3514.71.2.230"]
+
+  - id: refuted.psychology.mozart_effect
+    keywords: ["Mozart effect", "classical music raises intelligence", "listening to Mozart IQ"]
+    claim: >-
+      Listening to Mozart raises general intelligence or spatial-reasoning
+      ability.
+    domain: social-science/psychology
+    type: refuted-claim
+    era: "1993–2010"
+    falsified_by: >-
+      A meta-analysis found at most a small, short-lived difference in spatial
+      tasks, with signs of publication bias and no specific advantage of
+      Mozart over other music or conditions.
+    superseded_by: "Any short-lived task differences are not specific to Mozart and do not amount to a rise in intelligence."
+    lesson: >-
+      Test the specific cause you name: if other music or conditions give the
+      same result, the named cause is not doing the work.
+    sources: ["Pietschnig, Voracek & Formann 2010, Intelligence, doi:10.1016/j.intell.2010.03.001"]
+
+  - id: refuted.medicine.sugar_hyperactivity
+    keywords: ["sugar makes children hyperactive", "sugar rush", "sucrose behavior children"]
+    claim: >-
+      Eating sugar causes hyperactivity or impaired behaviour in children.
+    domain: medicine/pediatrics
+    type: refuted-claim
+    era: "1970s–1990s popular belief"
+    falsified_by: >-
+      Double-blind, placebo-controlled trials, and a meta-analysis of them, found
+      no effect of sugar on children's behaviour or cognition.
+    superseded_by: "Sugar does not cause hyperactivity in blinded tests; the belief is better explained by expectation and context."
+    lesson: >-
+      Blinding exposes expectation. A belief that survives every unblinded
+      observation can fail the first blinded one.
+    sources: ["Wolraich, Wilson & White 1995, JAMA, doi:10.1001/jama.1995.03530200053037", "Wolraich et al. 1994, N Engl J Med, doi:10.1056/nejm199402033300501"]
+
+  - id: refuted.medicine.antioxidant_supplements_mortality
+    keywords: ["antioxidant supplements", "beta-carotene", "vitamin E supplements", "vitamin C supplements prevent disease"]
+    claim: >-
+      Taking antioxidant supplements (beta-carotene, vitamins A, C and E,
+      selenium) lowers mortality and prevents chronic disease in healthy people.
+    domain: medicine/nutrition
+    type: refuted-claim
+    era: "1980s–2007"
+    falsified_by: >-
+      A meta-analysis of randomized trials found no mortality benefit, and
+      beta-carotene, vitamin A and vitamin E taken as supplements were
+      associated with slightly higher mortality.
+    superseded_by: "Antioxidants in food are associated with health in observational data; antioxidant supplements are not shown to help and some may harm."
+    lesson: >-
+      A biological mechanism and an observational association are not a
+      randomized outcome. Healthier people eat more fruit and vegetables for
+      many reasons.
+    sources: ["Bjelakovic et al. 2007, JAMA, doi:10.1001/jama.297.8.842"]
+
+  - id: refuted.medicine.hormone_therapy_heart_protection
+    keywords: ["hormone replacement therapy", "estrogen heart disease", "HRT cardioprotective", "menopause hormone therapy"]
+    claim: >-
+      Estrogen plus progestin hormone therapy protects postmenopausal women
+      against coronary heart disease.
+    domain: medicine/cardiology
+    type: refuted-treatment-dogma
+    era: "1980s–2002"
+    falsified_by: >-
+      Randomized trials found no reduction in coronary events in women with heart
+      disease, and a large trial in healthy women found more coronary events,
+      strokes, blood clots and breast cancer in the treated group.
+    superseded_by: "Menopausal hormone therapy is used for symptom relief with its risks weighed; it is not used to prevent heart disease."
+    lesson: >-
+      Observational studies of people who chose a treatment were confounded by
+      who chooses it. Only randomization settled it, and it reversed the
+      conclusion.
+    sources: ["Writing Group for the WHI 2002, JAMA, doi:10.1001/jama.288.3.321", "Hulley et al. 1998 (HERS), JAMA, doi:10.1001/jama.280.7.605"]
+
+  - id: refuted.medicine.arthroscopic_knee_osteoarthritis
+    keywords: ["arthroscopic surgery knee osteoarthritis", "knee debridement", "knee lavage", "sham surgery"]
+    claim: >-
+      Arthroscopic lavage or debridement relieves pain from knee osteoarthritis
+      beyond a placebo effect.
+    domain: medicine/orthopedics
+    type: refuted-treatment-dogma
+    era: "1970s–2002"
+    falsified_by: >-
+      A randomized, sham-controlled trial found that patients who had the
+      procedure did no better on pain or function than patients who received
+      only skin incisions and believed they had had the operation.
+    superseded_by: "Arthroscopic lavage and debridement are not recommended for knee osteoarthritis."
+    lesson: >-
+      Surgical improvement, like drug improvement, needs a placebo control. A
+      sham-controlled trial is ethical when the procedure's benefit is
+      unproven.
+    sources: ["Moseley et al. 2002, N Engl J Med, doi:10.1056/NEJMoa013259"]

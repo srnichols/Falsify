@@ -284,6 +284,36 @@ entries:
     expect(summary.warningCount).toBe(summary.warnings.length);
   });
 
+  it('advises when one field makes up too much of the corpus', () => {
+    const dir = createKnowledgeDir();
+    const entry = (id: string, domain: string): string =>
+      `  - id: refuted.${id}\n    claim: Claim number ${id} was refuted.\n    domain: ${domain}\n    type: claim\n    falsified_by: Controlled test ${id} failed.\n    lesson: Claims need decisive checks.\n    sources: ["source-${id}"]\n`;
+    const physics = Array.from({ length: 30 }, (_, i) => entry(`p${i}`, 'physics/example')).join('');
+    const biology = Array.from({ length: 6 }, (_, i) => entry(`b${i}`, 'biology/example')).join('');
+    writeFileSync(join(dir, 'refuted.yaml'), `tier: refuted\nweight: 0\nentries:\n${physics}${biology}`, 'utf8');
+
+    const imbalance = lintKnowledge(dir).warnings.filter((w) => w.code === 'domain-imbalance');
+
+    expect(imbalance).toHaveLength(1);
+    expect(imbalance[0]?.message).toMatch(/'physics'/);
+  });
+
+  it('keeps the shipped corpus spread across fields, with real coverage of the human sciences', () => {
+    const counts = new Map<string, number>();
+    for (const [tier, file] of Object.entries(loadAllKnowledge())) {
+      if (tier === 'quantitative') continue;
+      for (const entry of file.entries) {
+        const field = ('domain' in entry ? String(entry.domain) : '?').split('/')[0] ?? '?';
+        counts.set(field, (counts.get(field) ?? 0) + 1);
+      }
+    }
+    const total = [...counts.values()].reduce((a, b) => a + b, 0);
+    expect(Math.max(...counts.values()) / total).toBeLessThanOrEqual(0.4);
+    expect(counts.get('social-science') ?? 0).toBeGreaterThanOrEqual(12);
+    expect(counts.get('medicine') ?? 0).toBeGreaterThanOrEqual(12);
+    expect(counts.get('economics') ?? 0).toBeGreaterThanOrEqual(3);
+  });
+
   it('reports duplicate ids and tier/id prefix mismatches', () => {
     const dir = createKnowledgeDir();
     writeFileSync(

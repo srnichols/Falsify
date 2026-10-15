@@ -284,7 +284,16 @@ by a model and never at run time.**
   *advisories* (they do not fail the lint). The shipped corpus has none, and a test
   keeps it that way: a new Bedrock/Established entry has to arrive complete.
 - Contested is for questions with several legitimate positions; an entry sits there
-  because the positions are all live, and the engine presents all of them.
+  because the positions are all live, and the engine presents all of them. A position
+  that rests on a value judgement rather than an observation (for instance "justified
+  whatever the deterrent effect") is marked `normative-outside-method`: reported, not
+  scored, and not called wrong.
+- **Coverage is part of the curation.** A corpus that is mostly physics makes every
+  claim in another field look novel and under-checked, which is a bias of its own.
+  The lint warns when one field exceeds 40% of the claim entries, and a test pins the
+  spread and a minimum of social-science, medicine and economics entries. Coverage
+  is still uneven (the human sciences are far thinner than physics and biology), and
+  every added entry cites sources whose DOIs were checked against Crossref.
 
 ### Knowledge storage — two stores, one truth
 
