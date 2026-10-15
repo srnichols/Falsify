@@ -8,7 +8,7 @@
 
 import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { parse as parseYaml, parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import { loadConfig } from '../config.js';
 import {
