@@ -747,8 +747,8 @@ export interface ReviewInput {
 
 /** Plain-text rendering of a locked hypothesis for the notebook and corpus. */
 function renderHypothesis(h: LockedHypothesis): string {
-  const falsifiers = h.falsificationConditions.map((c) => c.description).join('; ');
-  return `${h.statement} — predicts: ${h.predicts}. Falsified if: ${falsifiers}.`;
+  const falsifiers = h.falsificationConditions.map((c) => c.description.trim().replace(/[.\s]+$/, '')).join('; ');
+  return `${h.statement.trim().replace(/[.\s]+$/, '')} — predicts: ${h.predicts.trim().replace(/[.\s]+$/, '')}. Falsified if: ${falsifiers}.`;
 }
 
 /** Record a refuted hypothesis in the notebook: kept legible, struck through, dated. */

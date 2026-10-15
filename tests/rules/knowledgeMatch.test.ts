@@ -49,4 +49,10 @@ describe('matchKnowledge', () => {
     expect(matchKnowledge(index, '')).toEqual([]);
     expect(matchKnowledge(index, 'energy momentum conservation light speed', { limit: 2 }).length).toBeLessThanOrEqual(2);
   });
+
+  it('does not match on generic claim language (a real host run matched caffeine to RL circuits)', () => {
+    const claim =
+      'A 200mg oral caffeine dose lowers mean reaction time in healthy adults compared with placebo, with faster responses after the dose';
+    expect(matchKnowledge(index, claim)).toEqual([]);
+  });
 });

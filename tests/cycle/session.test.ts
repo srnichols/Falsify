@@ -122,6 +122,7 @@ describe('cycle sessions', () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.kind).toBe('hypothesis');
     expect(items[0]?.struck?.reason).toContain('reaction time was unchanged');
+    expect(items[0]?.text).not.toMatch(/\.\./);
 
     // No explanation of what changed.
     expect(rule(opHypothesize({ ...hypothesis, sessionId }, [], ctx))).toBe('honesty:revision-note-required');

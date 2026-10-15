@@ -46,7 +46,10 @@ const STOPWORDS = new Set(
     'the and for that this with from are was were has have had not but can will would could should ' +
     'than then its their there these those which what when where who whom how why into onto over under ' +
     'about between within without more most less least very also any all some such only other each both ' +
-    'does did done being been out off per via best explain explains'
+    'does did done being been out off per via best explain explains ' +
+    'after before time mean average adult adults healthy dose faster slower higher lower response responses ' +
+    'effect effects result results show shows shown found group groups study trial test tests compared ' +
+    'significantly significant increase increases decrease decreases'
   ).split(' '),
 );
 
