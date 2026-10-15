@@ -255,6 +255,14 @@ function isNegated(text: string): boolean {
   return (text.match(NEGATION)?.length ?? 0) % 2 === 1;
 }
 
+/** A match found only by meaning (not wording) below this score may be about something else. */
+const MIN_SEMANTIC_ONLY_SCORE = 0.7;
+
+/** Found by meaning alone and not clearly on topic: negation tells us nothing about it. */
+function isWeakSemanticMatch(match: KnowledgeMatch): boolean {
+  return (match.via === 'semantic' || match.via === 'embedding') && match.score < MIN_SEMANTIC_ONLY_SCORE;
+}
+
 /**
  * Work out whether a claim asserts or denies the entry it matched, from negation alone,
  * and stop telling a claim that denies a refuted idea that it resembles that idea.
@@ -263,10 +271,20 @@ function isNegated(text: string): boolean {
  * negates the same way as the entry is `asserts`. An affirmative claim against a
  * negatively worded entry is `unclear` ("conserved" versus "cannot be created"), as is
  * any claim with a contrast clause, and `unclear` keeps the tier's original directive
- * so the heuristic can only soften the guidance where it is confident.
+ * so the heuristic can only soften the guidance where it is confident. It is never
+ * confident about a weak match found by meaning alone: whether a claim agrees with an
+ * entry is meaningless if the entry may not be about the same thing, so that match is
+ * `unclear` and says it may be unrelated.
  */
 export function withStance(claimText: string, match: KnowledgeMatch): KnowledgeMatch {
   if (match.stance !== undefined) return match;
+  if (isWeakSemanticMatch(match)) {
+    return {
+      ...match,
+      stance: 'unclear',
+      directive: `Weak match by meaning, not wording: it may be about something else, so check that it is really on topic before relying on it. ${match.directive}`,
+    };
+  }
   const claimNegated = isNegated(claimText);
   const entryNegated = isNegated(match.title);
   let stance: Stance;

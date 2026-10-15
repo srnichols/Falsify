@@ -154,7 +154,10 @@ lives in the transport-free core (`src/cycle/operations.ts`):
   `denies`, `unclear`) from a negation heuristic, so "vaccines do not cause autism" is
   not told it resembles the refuted claim that they do. Where the heuristic cannot tell
   (an affirmative claim against a negatively worded entry, a contrast clause) the
-  original, stricter directive stands. It sees negation only, not antonyms.
+  original, stricter directive stands. It sees negation only, not antonyms. A weak match
+  found by meaning alone (below 0.7, no wording overlap) is marked `unclear` and warned
+  as possibly off-topic, because whether a claim agrees with an entry is meaningless if
+  the entry may not be about the same thing.
 - **Claim types.** A *probabilistic* claim must state a numeric threshold; a *causal*
   claim's test must include a comparison; an *existential* claim notes that failing to
   find it once is not a refutation.
