@@ -18,8 +18,11 @@ It is built on two ideas:
   and **consensus carries low weight by design**: we demand the receipts rather than
   reflexively accepting *or* rejecting what's popular.
 
-📄 See **[DESIGN.md](./DESIGN.md)** for the full architecture — this is an early,
-iterating design.
+📄 See **[DESIGN.md](./DESIGN.md)** for the full architecture, and
+**[docs/CAPABILITIES.md](./docs/CAPABILITIES.md)** for everything Falsify can and cannot do:
+every tool, every rule that can refuse you, every setting and command. That file is
+checked by a test against the code, so it cannot silently go stale. Agents should start
+with **[AGENTS.md](./AGENTS.md)**.
 
 ---
 
@@ -98,7 +101,9 @@ a local Ollama; it never changes a verdict or score, and `npm run calibrate:judg
 how good a given model actually is before you trust it. After
 rebuilding, reload the `falsify` server in your MCP host (in VS Code, restart it from
 the MCP servers list) so it picks up new tools; a running server keeps the old build.
-See [DESIGN.md](./DESIGN.md) §3.
+See [DESIGN.md](./DESIGN.md) §3. Every setting (`FALSIFY_KNOWLEDGE_DIR`, `FALSIFY_JUDGE_KEY`,
+`FALSIFY_BRAIN_PROJECT`, `OPENBRAIN_REST_BASE` and the rest) is listed in
+[docs/CAPABILITIES.md](./docs/CAPABILITIES.md#settings-environment-variables).
 
 ### Guidance for agents that use Falsify
 
@@ -197,4 +202,10 @@ sync fails, the YAML corpus is still authoritative and recoverable from git.
 
 ## Status
 
-Early design draft. Nothing is final.
+Working and in active use, still iterating. Ten MCP tools and a local web UI sit on one
+transport-neutral core, with a 174-entry tiered knowledge corpus. Be clear about what it
+is: it enforces discipline on what an agent *submits*, and records a **process**, not
+proof. It cannot tell whether a paper supports a claim or whether the numbers are true,
+its score weights are priors that real recorded outcomes have not yet calibrated, and its
+keyword checks miss phrasing they were not written for. The full list of limits is in
+[docs/CAPABILITIES.md](./docs/CAPABILITIES.md#what-falsify-cannot-do).

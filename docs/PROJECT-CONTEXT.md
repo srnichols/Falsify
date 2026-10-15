@@ -59,8 +59,10 @@ only serve as the engine's exhibit of what a successful falsification looks like
 1. **Node.js + TypeScript** (ESM) — chosen over .NET because OpenBrain, Plan Forge, and the
    MCP SDK are all Node/ESM. Avoids re-implementing MCP plumbing.
 2. **MCP server first, web UI second.** Both consume the same transport-agnostic core.
-   MCP tools: `falsify_intake`, `falsify_hypothesize`, `falsify_experiment`,
-   `falsify_analyze`, `falsify_review`, `falsify_recall`.
+   MCP tools (10): `falsify_intake`, `falsify_hypothesize`, `falsify_experiment`,
+   `falsify_analyze`, `falsify_review`, `falsify_recall`, `falsify_related`, `falsify_dissent`,
+   `falsify_verify_source`, `falsify_outcome`. The full, test-checked surface is in
+   [`CAPABILITIES.md`](./CAPABILITIES.md).
 3. **OpenBrain** as the Corpus memory backend (auth = reused env var, see Integrations).
 4. **Plan Forge** is the build tool that scaffolds + drives Falsify's construction.
 
@@ -151,6 +153,20 @@ only serve as the engine's exhibit of what a successful falsification looks like
   - [x] Slice 3: localhost HTTP/JSON API (`node:http`, no new deps; body cap, traversal guard, no key leak)
   - [x] Slice 4: thin static front-end (hypothesis card + visible-mistakes notebook), no framework/bundler
   - [x] Slice 5: `falsify-web` bin + full-cycle HTTP integration test + README
+
+- [x] **Phase 4 — BIAS-INTEGRITY AND HONESTY (Oct 2026): COMPLETE** (unplanned in the original slices; driven by a gap review and red-team runs). Read [`CAPABILITIES.md`](./CAPABILITIES.md) for the surface; DESIGN.md §3–§4 for the reasoning.
+  - [x] **Server-held sessions** (`cycle/session.ts`): authoritative state, locked (pre-registered) hypotheses, revision rules, confirm needs a recorded yes; `FALSIFY_REQUIRE_SESSION`.
+  - [x] **Substance checks and structured evidence** (`rules/substance.ts`, `domain/evidence.ts`, `rules/signals.ts`): the claim score is built from the recorded run, consensus is the smallest enforced weight.
+  - [x] **Bias-integrity rules** (`rules/integrity.ts`): `outcomesTested` plus Bonferroni adjustment for outcomes and refuted attempts, `evidenceSearch` disclosure, contrary-evidence handling, `epistemicStatus` instead of "verified".
+  - [x] **Source checks** (`cycle/verify.ts`, `rules/sourceCheck.ts`): Crossref DOI verification, topic-mismatch withholding, `replicationDoi` required for replication credit, off-topic-only sources held at `tentative`.
+  - [x] **Mirror** (`cycle/mirror.ts`): `mirrorOf` links opposite framings, compares them at Review, caps one-sided theories at `provisional`.
+  - [x] **Knowledge matching**: lexical, semantic recall and optional embeddings; stance (negation) with weak meaning-only matches marked `unclear`; Established entries get symmetric guidance (what they rest on, what would overturn them).
+  - [x] **Outcome tracking** (`cycle/outcome.ts`, `memory/outcomes.ts`): `falsify_outcome` and `npm run calibrate:outcomes`.
+  - [x] **Calibration** (`rules/calibration.ts`, `replicationModel.ts`): 12 historical cases, a replication model fitted to the Reproducibility Project, `--sensitivity` over random weightings. Weights remain priors.
+  - [x] **Optional advisory judge model** (`rules/judge.ts`): measured, never changes a verdict.
+  - [x] **Corpus**: 174 entries across 5 tiers with Crossref-verified sources, broadened into medicine, social science and economics, plus contested entries on the Cambrian explosion, protein-fold rarity and information in DNA; a domain-balance lint.
+  - [x] **Agent guidance** (`.github/`): `falsify-inquiry` instructions and skill, a Falsify Reviewer agent, a `/falsify-inquiry` prompt; `npm run eval:inquiry` measures their effect.
+  - [x] **Server resolves `knowledge/` and `public/` from the package** (`src/paths.ts`), not the working directory, so a host starting it in another project works.
 - [ ] Knowledge seed expansion (more entries per tier, via PR)
 
 ### Module map (Phase 1 — `src/`)
@@ -192,11 +208,30 @@ only serve as the engine's exhibit of what a successful falsification looks like
 | `web/server.ts` | Thin `node:http` shell over `handleRequest` + static file server. Binds `127.0.0.1`, port `FALSIFY_WEB_PORT` (default 4319), 1 MB body cap, serves `public/` with a path-traversal guard + `nosniff`. Shebang → `falsify-web` bin; entry-guarded `main()`. |
 | `public/{index.html,app.js,styles.css}` | Hand-authored static front-end (no framework/bundler): a guided hypothesis card and the visible-mistakes notebook (struck entries dimmed + lined-through, kept legible). Threads `cycleState` across steps. Not in the TS/lint scope by design (keeps the core `tsc` build DOM-free). |
 
+### Module map (Phase 4 — `src/cycle/`, `src/rules/`, `src/memory/`, `scripts/`)
+| Module | Responsibility |
+|--------|----------------|
+| `cycle/session.ts`, `context.ts`, `defaultContext.ts` | Sessions (disk-backed, authoritative state), the `CycleContext` of optional collaborators, and the environment wiring for the real entrypoints. |
+| `cycle/mirror.ts` | Links opposite framings (`mirrorOf`), compares both sides at Review, and decides the status cap. |
+| `cycle/outcome.ts`, `memory/outcomes.ts` | `falsify_outcome`: append-only outcome log with the score snapshot of the confirmed theory. |
+| `cycle/verify.ts`, `rules/sourceCheck.ts` | DOI verification against Crossref, abstract retrieval, topic-mismatch check. |
+| `cycle/related.ts`, `dissent.ts`, `advice.ts` | `falsify_related`, `falsify_dissent`, and the optional judge-model advice hooks. |
+| `rules/integrity.ts` | Multiplicity adjustment, search disclosure, contrary-evidence and null-phrasing checks. |
+| `rules/signals.ts`, `claimScore.ts`, `weights.ts` | The claim score, its signals, and validated `FALSIFY_WEIGHTS`. |
+| `rules/knowledgeMatch.ts`, `semanticMatch.ts`, `embeddings.ts` | Tier matching (lexical, semantic, embedding), stance, directives. |
+| `rules/judge.ts` | Advisory judge model, off unless `FALSIFY_JUDGE_URL` is set. |
+| `rules/replicationModel.ts`, `calibration.ts`, `outcomeCalibration.ts` | Fitted replication model, calibration harness with weight sensitivity, outcome-based check. |
+| `domain/evidence.ts` | Evidence schema, quality, multiplicity-adjusted statistical support. |
+| `paths.ts` | Resolves `knowledge/` and `public/` from the package, with `FALSIFY_KNOWLEDGE_DIR` override. |
+| `knowledge/maintenance.ts` | Corpus lint (duplicates, tier-admission advisories, domain balance) and mutation. |
+| `scripts/eval-inquiry.mjs` | The agent-guidance evaluation harness (`npm run eval:inquiry`). |
+
 ### Commands
 - `npm run build` (tsc) · `npm test` (vitest run) · `npm run dev` (watch) · `npm run lint` (eslint src tests)
 - `node dist/src/mcp/server.js` (run the MCP server over stdio; also the `falsify-mcp` bin)
 - `npm run web` → `node dist/src/web/server.js` (run the web UI; `falsify-web` bin; binds `127.0.0.1`, port `FALSIFY_WEB_PORT` default 4319)
 - Coverage: `npx vitest run --coverage` (v8 provider).
+- Corpus: `npm run knowledge -- lint | template | add | upsert | move | sync`. Calibration: `npm run calibrate` (`-- --sensitivity`), `calibrate:replication`, `calibrate:judge`, `calibrate:outcomes`. Agent-guidance evaluation: `npm run eval:inquiry` (spends model credits). All commands and settings: [`CAPABILITIES.md`](./CAPABILITIES.md).
 - **Gate runner allowlist = `node` / `npm` / `npx` only** (no pnpm). TS imports require `.js` extensions (NodeNext).
 
 ### Plan Forge layout (added by onboarding)
@@ -295,3 +330,14 @@ only serve as the engine's exhibit of what a successful falsification looks like
   test (intake→…→**No-branch revise loop**→…→**review-on-Yes**→confirm→theory, with a struck-but-present
   notebook entry) + a README "Run the Falsify web UI" section. **135 tests pass, lint clean, 0 vulns.**
   **Phase 3 complete.** Next: knowledge seed expansion, or a multi-model Quorum (DESIGN §6).
+- **2026-10-15 (Phase 4 — bias-integrity and honesty)** — Upgraded the toolchain (TypeScript 6, zod 4,
+  eslint 10, vitest 5), reviewed the system for gaps, then built the rules that make the cycle harder to
+  game: server-held sessions, multiplicity and search disclosure, `epistemicStatus` instead of "verified",
+  Crossref source checks and verified replication DOIs, mirrored opposite framings, outcome tracking,
+  stance-aware matching, a broadened corpus (174 entries), an advisory judge model, calibration against
+  real replication data (weights remain priors), agent guidance with a Falsify Reviewer, and an evaluation
+  harness. One full run of the harness showed the guidance made agents run the opposite framing in 7 of 8
+  questions instead of 0 of 8 (one model, one run per cell: a sketch, not a measurement). Added
+  `docs/CAPABILITIES.md` with a test that fails when code and doc drift. **All tests pass, lint clean.**
+  Open: record real outcomes with `falsify_outcome` so the score can finally be checked against reality;
+  thicker corpus coverage outside physics and biology.

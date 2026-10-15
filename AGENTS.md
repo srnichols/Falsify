@@ -1,123 +1,94 @@
-# Agents & Automation Architecture
+# Agents & Falsify
 
-> **Project**: Falsify  
-> **Stack**: TypeScript / Node.js / React  
-> **Last Updated**: 2026-06-15
+> **Project**: Falsify — scientific-method reasoning tools (MCP server + local web UI)
+> **Stack**: TypeScript / Node.js (ESM), npm, Vitest
+> **Full surface**: [docs/CAPABILITIES.md](./docs/CAPABILITIES.md) (test-checked against the code)
 
----
-
-## AI Agent Development Standards
-
-**BEFORE writing ANY agent code, read:** `.github/instructions/architecture-principles.instructions.md`
-
-### Priority
-1. **Architecture-First** — Follow proper layering (no business logic in workers)
-2. **TDD for Business Logic** — Red-Green-Refactor
-3. **Typed Error Handling** — No unhandled promise rejections
-4. **Type Safety** — No `any` types
+This file serves two kinds of agent: those that **use** Falsify to investigate a question,
+and those that **work on** Falsify's code.
 
 ---
 
-## Background Worker Pattern
+## If you are using Falsify to investigate a question
 
-### Template: Node.js Worker with Graceful Shutdown
+Falsify runs a question through intake → hypothesis → experiment → analysis → review and
+**refuses** steps that break scientific discipline. It never generates an answer: it checks
+what you submit, so it is only as honest as your inputs.
 
-```typescript
-import { parentPort } from 'worker_threads';
+**Read first:** [.github/instructions/falsify-inquiry.instructions.md](./.github/instructions/falsify-inquiry.instructions.md)
+(non-negotiables and temper guards), then follow the
+[falsify-inquiry skill](./.github/skills/falsify-inquiry/SKILL.md). To audit a finished inquiry, hand its
+`sessionId` to the **Falsify Reviewer** agent in a fresh session.
 
-class MyWorker {
-  private isRunning = true;
-  private intervalMs = 5 * 60 * 1000; // 5 minutes
+The ten tools (inputs and rules in [docs/CAPABILITIES.md](./docs/CAPABILITIES.md)):
 
-  async start(): Promise<void> {
-    console.log('Worker started');
-    
-    while (this.isRunning) {
-      try {
-        await this.process();
-      } catch (error) {
-        console.error('Worker iteration failed:', error);
-      }
-      await this.sleep(this.intervalMs);
-    }
-  }
+| Step | Tool |
+|---|---|
+| Is it falsifiable? Start a session; link the opposite framing with `mirrorOf` | `falsify_intake` |
+| What knowledge does the claim touch? | `falsify_related` |
+| Lock a testable hypothesis | `falsify_hypothesize` |
+| State the decisive test | `falsify_experiment` |
+| Yes or no, with evidence | `falsify_analyze` |
+| The three review questions; confirm or revise | `falsify_review` |
+| Check a cited DOI is real | `falsify_verify_source` |
+| Compare competing hypotheses | `falsify_dissent` |
+| Recall prior knowledge (needs `OPENBRAIN_KEY`) | `falsify_recall` |
+| Record what later happened to a confirmed theory | `falsify_outcome` |
 
-  async process(): Promise<void> {
-    // Business logic here
-  }
+Rules that matter most:
+1. Carry the `sessionId` through every call. Without it nothing is recorded.
+2. Never invent a p-value, sample size, DOI or `outcomesTested`. A refusal is information, not an obstacle.
+3. `evidenceSearch` must describe a search you actually ran, including a look for null and contrary results.
+4. Consensus is a signal, never evidence. Ask which experiment, and could it have failed.
+5. Run the opposite framing too (`mirrorOf`); a one-sided inquiry cannot be rated `supported`.
+6. A completed cycle is a process record, not proof. Report the `epistemicStatus` the tool returns.
 
-  stop(): void {
-    this.isRunning = false;
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-}
-
-const worker = new MyWorker();
-worker.start();
-
-// Graceful shutdown
-process.on('SIGTERM', () => worker.stop());
-process.on('SIGINT', () => worker.stop());
-```
-
-### Template: Cron Job (node-cron)
-
-```typescript
-import cron from 'node-cron';
-
-// Run every hour
-cron.schedule('0 * * * *', async () => {
-  try {
-    await processScheduledTask();
-  } catch (error) {
-    console.error('Scheduled task failed:', error);
-  }
-});
-```
+What Falsify cannot do (it cannot tell whether a paper supports a claim, or whether your
+numbers are true) is listed in [docs/CAPABILITIES.md](./docs/CAPABILITIES.md#what-falsify-cannot-do).
 
 ---
 
-## Agent Categories
+## If you are working on Falsify's code
 
-| Category | Purpose | Pattern |
-|----------|---------|---------|
-| **Background Workers** | Scheduled processing | Worker threads / cron |
-| **Event Processors** | Pub/sub handling | Message broker consumers |
-| **Real-Time** | Live updates | Socket.io / WebSocket |
+**Before any code change, read:** [.github/instructions/architecture-principles.instructions.md](./.github/instructions/architecture-principles.instructions.md).
 
----
+### Architecture in one paragraph
 
-## Communication Patterns
+`src/cycle/operations.ts` holds the discipline as pure `op*` functions returning a
+transport-neutral result. The MCP tools (`src/mcp/tools/`) and the web API (`src/web/api.ts`) are
+thin adapters over the same operations, so neither transport can weaken a rule. Rules live in
+`src/rules/`, sessions and collaborators in `src/cycle/`, the schemas in `src/domain/`, the corpus
+in `knowledge/*.yaml` (the source of truth; OpenBrain is only a mirror). Module map:
+[docs/PROJECT-CONTEXT.md](./docs/PROJECT-CONTEXT.md).
 
-### Pub/Sub (Event-Driven)
-```
-User action → Event emitted → Worker consumes → State updated
-```
+### Standards
 
-### Request/Response (Direct)
-```
-Frontend → API (Express) → Service → Repository → Database
-```
+1. **Architecture-first**: put code in the right layer; check for an existing pattern.
+2. **TDD for business logic**: red, green, refactor. Every new rule has a test that fails without it.
+3. **Typed errors, no unhandled rejections**; refusals carry a `rule`, an `error` and `guidance`.
+4. **Type safety**: no `any`, no `@ts-ignore`; zod at external boundaries.
+5. **Never present a heuristic as a verdict.** If a check is keyword-based or advisory, say so in the result.
 
-### Real-Time (Socket.io)
-```
-Server event → Socket.io emit → Connected clients
-```
-
----
-
-## Quick Commands
+### Commands
 
 ```bash
-# Run worker
-pnpm --filter @myapp/worker dev
-
-# Run tests
-pnpm test
-
-# Build all
-pnpm build
+npm install          # dependencies
+npm run build        # compile to dist/ (required before running the server or the eval harness)
+npm test             # run the tests
+npm run lint         # eslint src tests
+npm run knowledge -- lint   # validate the corpus
 ```
+
+After rebuilding, restart the `falsify` server in your MCP host; a running server keeps the old build.
+
+### Keep the docs true
+
+[docs/CAPABILITIES.md](./docs/CAPABILITIES.md) is checked by `tests/docs/capabilities.test.ts`. If you add a tool,
+rule id, environment variable, npm script or web route, or change the corpus size, the test fails until
+that file says so. Update [DESIGN.md](./DESIGN.md) when a design decision changes.
+
+### Conventions
+
+- Windows + PowerShell. Never commit secrets; read keys from the environment.
+- Commit messages follow conventional commits (`feat(scope): ...`).
+- Plan Forge (`.github/`, `pforge-*`) is the build tooling; its files are managed by `pforge update`.
