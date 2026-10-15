@@ -20,6 +20,7 @@ export { CONSENSUS_CHALLENGE };
 const inputShape = {
   question: z.string().min(1, 'a question is required'),
   cycleState: CycleStateSchema.optional(),
+  mirrorOf: z.string().min(1).optional(),
 } as const;
 
 /** Register `falsify_intake` on the server. */
@@ -33,12 +34,19 @@ export function registerIntake(server: McpServer, ctx?: CycleContext): void {
         'demand for the experiment, never deference. On a falsifiable claim the cycle advances ' +
         'to Hypothesis and a sessionId is returned: pass it to every later falsify_* call so the ' +
         'cycle is tracked and enforced server-side. Otherwise the question is flagged as outside ' +
-        'the scientific method.',
+        'the scientific method. To test the opposite framing of a question (the other side of it), ' +
+        'start a second inquiry with mirrorOf set to the first sessionId: the two are linked, compared ' +
+        'at Review for uneven rigor, and a theory with no completed opposite framing cannot be rated ' +
+        '"supported".',
       inputSchema: inputShape,
     },
     async (args) =>
       toCallToolResult(
-        await adviseIntake(args.question, opIntake({ question: args.question, cycleState: args.cycleState }, ctx), ctx),
+        await adviseIntake(
+          args.question,
+          opIntake({ question: args.question, cycleState: args.cycleState, mirrorOf: args.mirrorOf }, ctx),
+          ctx,
+        ),
       ),
   );
 }

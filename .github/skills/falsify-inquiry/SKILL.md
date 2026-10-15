@@ -16,7 +16,7 @@ Read `.github/instructions/falsify-inquiry.instructions.md` first: it holds the 
 
 ### 0. Mirror the question
 
-Write the question and its opposite framing side by side (e.g. "X causes Y" / "X does not cause Y"; "A explains Z" / "B explains Z"). Plan to apply the same requirements to both. Keep both for the report.
+Write the question and its opposite framing side by side (e.g. "X causes Y" / "X does not cause Y"; "A explains Z" / "B explains Z"). You will run both as linked inquiries (step 8, `mirrorOf`) and apply the same requirements to each. Keep both for the report.
 
 ### 1. Intake: `falsify_intake`
 
@@ -71,7 +71,7 @@ On `revise`, return to step 3 with a `revisionNote` that states what the refutat
 
 ### 8. Run the mirror
 
-Repeat steps 3 to 7 (or at least 3, 5 and 6) for the opposite framing from step 0, with the same rigor. If you cannot, say so in the report and treat the conclusion as one-sided.
+Start the opposite framing from step 0 with `falsify_intake` and **`mirrorOf: <the first sessionId>`**, then repeat steps 3 to 7 for it with the same rigor: the same number of falsifiers, a search as long and as hostile to its own side, contrary results reported. The server links the two and, at Review, compares them: it flags both framings reaching "yes", names visible gaps in rigor (falsifiers, evidence, verified sources, search effort, contrary results), and will not rate a theory "supported" unless its opposite framing was tested. Do the mirror before you confirm the first side, so the comparison is available when you review it.
 
 ### 9. Report
 

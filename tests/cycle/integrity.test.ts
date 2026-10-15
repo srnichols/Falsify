@@ -5,6 +5,7 @@ import type { CycleContext } from '../../src/cycle/context.js';
 import { SessionStore } from '../../src/cycle/session.js';
 import type { Evidence } from '../../src/domain/evidence.js';
 import { CLEAN_YES, MODERATE_EVIDENCE, REPLICATION_DOI, SEARCH, STRONG_EVIDENCE, verifyReplication } from '../helpers/evidence.js';
+import { runMirror } from '../helpers/mirror.js';
 
 const ANSWERS = {
   q1Methods: 'The protocol was blinded and sound.',
@@ -102,6 +103,7 @@ describe('review gate on weak evidence', () => {
   it('labels replicated evidence supported and unreplicated evidence provisional', async () => {
     const strong = setup();
     await verifyReplication(strong.ctx, strong.sessionId);
+    runMirror(strong.ctx, strong.sessionId);
     ok(opAnalyze({ verdict: 'yes', evidence: [STRONG_EVIDENCE], evidenceSearch: SEARCH, sessionId: strong.sessionId }, strong.ctx));
     expect(ok(opReview({ ...ANSWERS, outcome: 'confirm', sessionId: strong.sessionId }, strong.ctx)).epistemicStatus).toBe('supported');
 

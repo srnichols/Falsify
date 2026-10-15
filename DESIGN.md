@@ -141,6 +141,12 @@ lives in the transport-free core (`src/cycle/operations.ts`):
   deliberately conservative lexical checks; they catch placeholders, not weak science.
 - **Consensus is not evidence.** An analysis whose cited evidence is only appeals to
   authority is refused; a mixed one is answered with the challenge above.
+- **The other side is tested too.** `falsify_intake` accepts `mirrorOf` to link an
+  inquiry to its opposite framing. At Review the two are compared (falsifiers, evidence,
+  verified sources, search effort, contrary results), both reaching "yes" is flagged,
+  and a theory with no completed mirror is held at `provisional` instead of `supported`.
+  It does not say who is right; it makes an uneven standard visible, and it can only
+  compare what each side chose to record.
 - **Stance, not just topic.** Each knowledge match carries a `stance` (`asserts`,
   `denies`, `unclear`) from a negation heuristic, so "vaccines do not cause autism" is
   not told it resembles the refuted claim that they do. Where the heuristic cannot tell

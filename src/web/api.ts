@@ -58,6 +58,7 @@ export interface ApiResponse {
 const intakeBody = z.object({
   question: z.string().min(1),
   cycleState: CycleStateSchema.optional(),
+  mirrorOf: z.string().min(1).optional(),
 });
 
 const hypothesizeBody = z.object({

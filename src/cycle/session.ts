@@ -73,6 +73,8 @@ export interface SessionRecord {
     /** The claim score at the time of analysis, kept so a recorded theory states how well it was supported. */
     score?: { score: number; nonConsensusScore: number; evidenceStrength: EvidenceStrength };
   };
+  /** The inquiry that is this one's opposite framing; set on both sides when linked. */
+  mirrorOf?: string;
   /** True after a review chose "revise": the next hypothesis must justify itself. */
   pendingRevision: boolean;
   history: SessionEvent[];

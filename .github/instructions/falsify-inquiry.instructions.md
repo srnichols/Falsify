@@ -14,7 +14,7 @@ Use the `falsify-inquiry` skill for the step-by-step procedure. Use the **Falsif
 2. **Never invent inputs.** No made-up p-values, sample sizes, DOIs, effect sizes or "outcomes tested". If you do not have a number, leave it out and say so. A refusal from a tool is information, not an obstacle to route around.
 3. **Search before you disclose.** `evidenceSearch` must describe a search you actually ran (with web or paper tools), including a deliberate look for null or contrary results. Report what you found even when it hurts the claim.
 4. **Consensus is a signal, never evidence.** "Experts agree" does not count for or against a claim. Ask which experiment, and could it have failed. The converse also holds: do not treat disagreeing with the mainstream as evidence either.
-5. **Treat both sides the same.** Whatever you require of one side (a stated falsifier, a real test, contrary results disclosed), require of its mirror image. If the conclusion were the opposite, would you accept this evidence?
+5. **Treat both sides the same.** Whatever you require of one side (a stated falsifier, a real test, contrary results disclosed), require of its mirror image. If the conclusion were the opposite, would you accept this evidence? Run the opposite framing as its own inquiry with `mirrorOf` at intake; Falsify compares the two at Review and will not rate a one-sided inquiry "supported".
 6. **A completed cycle is a process record, not proof.** Report the `epistemicStatus` the tool returns. Never describe a result as "verified" or "proven" because the cycle finished.
 7. **Check sources you cite.** Call `falsify_verify_source` for each DOI before relying on it, and read what the paper actually says. A real paper on a different topic is not support.
 

@@ -37,6 +37,8 @@ import type { EvidenceSearch } from '../rules/integrity.js';
 import { loadAllKnowledge } from '../knowledge/loader.js';
 import type { CycleContext } from './context.js';
 import type { LockedHypothesis, SessionRecord } from './session.js';
+import { assessMirror, canPair, linkMirror, mirrorCapReason } from './mirror.js';
+import type { MirrorAssessment } from './mirror.js';
 import { loadConfig } from '../config.js';
 import { OpenBrainMcpClient } from '../memory/openbrainMcpClient.js';
 import type { MemoryReader, RecallQuery } from '../memory/openbrainClient.js';
@@ -255,6 +257,8 @@ function getDefaultReader(): MemoryReader {
 export interface IntakeInput {
   question: string;
   cycleState?: CycleState | undefined;
+  /** The sessionId of the inquiry this one is the opposite framing of; both are linked. */
+  mirrorOf?: string | undefined;
 }
 
 /**
@@ -303,7 +307,22 @@ export function opIntake(input: IntakeInput, ctx?: CycleContext): OpResult {
     payload.challenge = CONSENSUS_CHALLENGE;
   }
   if (ctx?.sessions !== undefined) {
-    payload.sessionId = ctx.sessions.create(question).id;
+    if (input.mirrorOf !== undefined) {
+      const pairable = canPair(ctx, input.mirrorOf);
+      if (!pairable.ok) return errorResult(pairable.error, pairable.rule, pairable.guidance);
+    }
+    const created = ctx.sessions.create(question);
+    payload.sessionId = created.id;
+    if (input.mirrorOf !== undefined) {
+      linkMirror(ctx, created, input.mirrorOf);
+      payload.mirrorOf = input.mirrorOf;
+    }
+  } else if (input.mirrorOf !== undefined) {
+    return errorResult(
+      'Mirroring needs a session store.',
+      'mirror:session-required',
+      'Run the server with its default on-disk context so inquiries can be linked.',
+    );
   }
   return withState(payload, moved.next);
 }
@@ -858,6 +877,20 @@ const EPISTEMIC_BY_STRENGTH: Record<'strong' | 'moderate' | 'weak', EpistemicSta
 
 const PROCESS_NOT_PROOF =
   'Completing the cycle records that the process was followed. It does not establish that the claim is true, and every input was supplied by the caller.';
+/** Mirror assessment as a result payload: the comparison, not a verdict. */
+function mirrorPayload(m: MirrorAssessment): Record<string, unknown> {
+  if (!m.linked) {
+    return { linked: false, note: 'No opposite framing is linked. Start one with falsify_intake and mirrorOf to test the other side the same way.' };
+  }
+  return {
+    linked: true,
+    completed: m.completed,
+    ...(m.partner !== undefined ? { oppositeFraming: m.partner } : {}),
+    ...(m.bothYes ? { bothFramingsYes: true } : {}),
+    ...(m.asymmetries.length > 0 ? { asymmetries: m.asymmetries } : {}),
+  };
+}
+
 /** Plain-text rendering of a locked hypothesis for the notebook and corpus. */
 function renderHypothesis(h: LockedHypothesis): string {
   const falsifiers = h.falsificationConditions.map((c) => c.description.trim().replace(/[.\s]+$/, '')).join('; ');
@@ -883,6 +916,7 @@ function recordTheory(
   ctx: CycleContext | undefined,
   session: SessionRecord,
   status: EpistemicStatus,
+  mirrorTested: boolean,
 ): Record<string, unknown> {
   const hypothesis = session.hypothesis;
   if (hypothesis === undefined) {
@@ -903,6 +937,7 @@ function recordTheory(
         metadata: {
           tier: 'survived-test',
           epistemic_status: status,
+          mirror_tested: mirrorTested,
           falsifiable: true,
           falsified_if: hypothesis.falsificationConditions.map((c) => c.description).join('; '),
           revisions_survived: hypothesis.revision,
@@ -1015,6 +1050,7 @@ export function opReview(input: ReviewInput, ctx?: CycleContext): OpResult {
     return withState(payload, moved.next);
   }
 
+  const mirror = assessMirror(ctx, session);
   if (outcome === 'revise') {
     const notebookId = recordRefutation(ctx, session, input);
     if (notebookId !== undefined) {
@@ -1025,12 +1061,20 @@ export function opReview(input: ReviewInput, ctx?: CycleContext): OpResult {
     }
     session.pendingRevision = true;
     payload.nextStep = 'Revise the hypothesis: pass revisionNote and keep it at least as falsifiable.';
+    if (mirror.linked) payload.mirror = mirrorPayload(mirror);
   } else {
-    const status = EPISTEMIC_BY_STRENGTH[strength];
+    let status = EPISTEMIC_BY_STRENGTH[strength];
+    const capReason = mirrorCapReason(mirror);
+    if (capReason !== undefined && status === 'supported') {
+      status = 'provisional';
+      payload.statusCap = `Held at provisional rather than supported. ${capReason}`;
+    }
     payload.cycleVerified = true;
     payload.epistemicStatus = status;
     payload.note = PROCESS_NOT_PROOF;
-    payload.recorded = recordTheory(ctx, session, status);
+    payload.mirror = mirrorPayload(mirror);
+    if (capReason !== undefined) payload.mirrorNote = capReason;
+    payload.recorded = recordTheory(ctx, session, status, mirror.linked && mirror.completed && !mirror.bothYes);
   }
   commit(ctx, session, event, moved.next, outcome === 'confirm' ? 'Theory confirmed after review.' : 'Refuted; revising.');
   payload.sessionId = session.id;
