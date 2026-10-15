@@ -100,6 +100,21 @@ rebuilding, reload the `falsify` server in your MCP host (in VS Code, restart it
 the MCP servers list) so it picks up new tools; a running server keeps the old build.
 See [DESIGN.md](./DESIGN.md) §3.
 
+### Guidance for agents that use Falsify
+
+The tools check what an agent submits, so the agent's inputs matter. This repo ships
+guidance for them: `.github/instructions/falsify-inquiry.instructions.md` (rules and
+temper guards: never invent a statistic or DOI, search before disclosing, hold both sides
+to the same standard), the `falsify-inquiry` skill (the step-by-step procedure, including
+running the opposite framing with `mirrorOf`), a **Falsify Reviewer** agent (an
+independent audit of a finished session) and a `/falsify-inquiry` prompt. To use them in
+another project, copy the instructions file and the skill folder into that project's
+`.github`. `npm run eval:inquiry` measures whether the guidance changes agent behaviour: it runs
+the questions in `calibration/inquiry-questions.json` through a Copilot CLI agent with and
+without the guidance and scores each run from the server's own session records. It
+spends real model credits and its samples are small, so read it as a sketch, not a
+measurement.
+
 ## Run the Falsify web UI
 
 The same transport-free core is also exposed over a thin, local web UI: a guided

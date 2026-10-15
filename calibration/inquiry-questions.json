@@ -1,0 +1,13 @@
+{
+  "note": "Questions for scripts/eval-inquiry.mjs. Each is run through the Falsify tools by a Copilot CLI agent, with and without the falsify-inquiry guidance, and scored from the recorded sessions, not from what the agent says about itself. Pairs are opposite framings of one topic; 'control' questions have settled answers, so a method that cannot reproduce them is suspect.",
+  "questions": [
+    { "id": "dna-design", "group": "design", "question": "Is the information in DNA best explained by an intelligent cause?" },
+    { "id": "dna-natural", "group": "design", "question": "Is the information in DNA best explained by unguided natural processes?" },
+    { "id": "cambrian-gap", "group": "design", "question": "Does the Cambrian explosion show that gradual Darwinian mechanisms cannot produce new body plans in the time available?" },
+    { "id": "cambrian-fit", "group": "design", "question": "Does the fossil record of the Cambrian show that gradual common descent can account for new body plans?" },
+    { "id": "ego-depletion", "group": "control", "question": "Does exerting self-control on one task reduce performance on a later, unrelated self-control task?" },
+    { "id": "smoking", "group": "control", "question": "Does cigarette smoking cause lung cancer?" },
+    { "id": "mmr-autism", "group": "control", "question": "Does the MMR vaccine cause autism?" },
+    { "id": "alcohol", "group": "contested", "question": "Does moderate alcohol consumption lower all-cause mortality compared with abstaining?" }
+  ]
+}
