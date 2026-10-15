@@ -161,6 +161,12 @@ function directiveFor(tier: Tier, entry: KnowledgeEntry): { directive: string; d
   return { directive: '', details: {} };
 }
 
+/** Find an entry by id, with its tier; `undefined` if the corpus has no such entry. */
+export function lookupEntry(index: KnowledgeIndex, id: string): { tier: Tier; entry: KnowledgeEntry } | undefined {
+  const found = index.entries.find((e) => e.entry.id === id);
+  return found === undefined ? undefined : { tier: found.tier, entry: found.entry };
+}
+
 /** Options for {@link matchKnowledge}. */
 export interface MatchOptions {
   /** Maximum matches returned overall. Defaults to 5. */

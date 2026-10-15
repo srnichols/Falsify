@@ -13,6 +13,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import type { CycleState } from '../domain/types.js';
+import type { EvidenceStrength, ResolvedEvidence } from '../domain/evidence.js';
 
 /** Default on-disk location for sessions, mirroring `.falsify/notebook`. */
 export const DEFAULT_SESSION_DIR = resolve(process.cwd(), '.falsify', 'sessions');
@@ -53,7 +54,14 @@ export interface SessionRecord {
   /** Hypotheses refuted by earlier loops, oldest first. */
   refuted: LockedHypothesis[];
   experiment?: { decisiveEvidence: string[] };
-  analysis?: { verdict: 'yes' | 'no'; evidenceCited: string[]; at: string };
+  analysis?: {
+    verdict: 'yes' | 'no';
+    evidenceCited: string[];
+    at: string;
+    evidence?: ResolvedEvidence[];
+    /** The claim score at the time of analysis, kept so a recorded theory states how well it was supported. */
+    score?: { score: number; nonConsensusScore: number; evidenceStrength: EvidenceStrength };
+  };
   /** True after a review chose "revise": the next hypothesis must justify itself. */
   pendingRevision: boolean;
   history: SessionEvent[];

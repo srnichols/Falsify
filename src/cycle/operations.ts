@@ -25,8 +25,12 @@ import {
   assessFalsificationCondition,
   assessReviewAnswer,
 } from '../rules/substance.js';
-import { buildKnowledgeIndex, matchKnowledge } from '../rules/knowledgeMatch.js';
+import { buildKnowledgeIndex, lookupEntry, matchKnowledge } from '../rules/knowledgeMatch.js';
 import type { KnowledgeIndex } from '../rules/knowledgeMatch.js';
+import { COMPARISON_PATTERN, scoreClaim } from '../rules/signals.js';
+import type { KnowledgeRelation, ResolvedKnowledgeRef } from '../rules/signals.js';
+import { normalizeEvidence } from '../domain/evidence.js';
+import type { Evidence } from '../domain/evidence.js';
 import { loadAllKnowledge } from '../knowledge/loader.js';
 import type { CycleContext } from './context.js';
 import type { LockedHypothesis, SessionRecord } from './session.js';
@@ -481,9 +485,7 @@ export function opExperiment(input: ExperimentInput, ctx?: CycleContext): OpResu
   }
 
   if (session?.hypothesis?.claimType === 'causal') {
-    const hasComparison = parsed.data.decisiveEvidence.some((e) =>
-      /\b(?:control|placebo|comparison|compared|versus|vs\.?|randomi[sz]ed|intervention|baseline|before and after|blinded)\b/i.test(e),
-    );
+    const hasComparison = parsed.data.decisiveEvidence.some((e) => COMPARISON_PATTERN.test(e));
     if (!hasComparison) {
       return errorResult(
         'A causal hypothesis needs a comparison in its test.',
@@ -506,12 +508,63 @@ export function opExperiment(input: ExperimentInput, ctx?: CycleContext): OpResu
   return withState({ experiment: parsed.data }, moved.next);
 }
 
+/** A link the analyst asserts between the claim and a Bedrock/Established entry. */
+export interface KnowledgeRefInput {
+  id: string;
+  relation: KnowledgeRelation;
+}
+
 /** Analyze input. */
 export interface AnalyzeInput {
   verdict: 'yes' | 'no';
+  /** Free-text observations; each is normalized into an evidence item. */
   evidenceCited?: string[] | undefined;
+  /** Structured evidence with provenance and statistics; used by the claim score. */
+  evidence?: Evidence[] | undefined;
+  /** Bedrock/Established entries the claim supports or conflicts with. */
+  knowledgeRefs?: KnowledgeRefInput[] | undefined;
   sessionId?: string | undefined;
   cycleState?: CycleState | undefined;
+}
+
+/** Look up the analyst's knowledge references; only Bedrock and Established carry support weight. */
+function resolveKnowledgeRefs(
+  refs: readonly KnowledgeRefInput[],
+  ctx: CycleContext | undefined,
+): ResolvedKnowledgeRef[] | OpResult {
+  if (refs.length === 0) {
+    return [];
+  }
+  let index: KnowledgeIndex;
+  try {
+    index = ctx?.knowledge ?? getDefaultKnowledgeIndex();
+  } catch {
+    return errorResult(
+      'The knowledge corpus could not be loaded, so knowledgeRefs cannot be checked.',
+      'analysis:knowledge-unavailable',
+      'Omit knowledgeRefs, or fix the knowledge/ directory.',
+    );
+  }
+  const resolved: ResolvedKnowledgeRef[] = [];
+  for (const ref of refs) {
+    const found = lookupEntry(index, ref.id);
+    if (found === undefined) {
+      return errorResult(
+        `No knowledge entry '${ref.id}'.`,
+        'analysis:unknown-knowledge-ref',
+        'Use an id returned in knowledgeMatches from falsify_hypothesize.',
+      );
+    }
+    if (found.tier !== 'bedrock' && found.tier !== 'established') {
+      return errorResult(
+        `'${ref.id}' is a ${found.tier} entry; only Bedrock and Established entries can be supported or contradicted.`,
+        'analysis:knowledge-ref-tier',
+        'Contested positions are presented, not scored; refuted lookalikes are addressed in review.',
+      );
+    }
+    resolved.push({ id: ref.id, tier: found.tier, relation: ref.relation });
+  }
+  return resolved;
 }
 
 /**
@@ -521,6 +574,9 @@ export interface AnalyzeInput {
  *
  * Consensus is a signal, not evidence: an analysis whose every cited item is an
  * appeal to authority is refused, and a mixed one is answered with the challenge.
+ * Within a session the evidence is scored (`claimScore`); a yes that conflicts
+ * with Bedrock/Established knowledge must rest on a sourced experiment or
+ * statistical result, not on observation alone.
  */
 export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
   const resolved = resolveState(input.sessionId, ctx, input.cycleState, 'analysis');
@@ -529,15 +585,16 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
   }
   const { session, state } = resolved;
 
+  const items = normalizeEvidence(input.evidenceCited ?? [], input.evidence ?? [], isConsensusAppeal);
   const parsed = AnalysisSchema.safeParse({
     verdict: input.verdict,
-    evidenceCited: input.evidenceCited ?? [],
+    evidenceCited: items.map((i) => i.observation),
   });
   if (!parsed.success) {
     return errorResult(
       'An analysis must cite the evidence its verdict rests on.',
       'analysis:evidence-required',
-      'List the observation(s) the verdict is based on in evidenceCited.',
+      'List the observation(s) the verdict is based on in evidenceCited, or pass structured evidence.',
     );
   }
 
@@ -550,19 +607,58 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
     );
   }
 
-  const appeals = parsed.data.evidenceCited.filter(isConsensusAppeal);
-  if (appeals.length === parsed.data.evidenceCited.length) {
+  const appeals = items.filter((i) => i.kind === 'consensus').map((i) => i.observation);
+  if (appeals.length === items.length) {
     return errorResult(
       'Consensus is a signal, not evidence: every cited item is an appeal to authority.',
       'analysis:consensus-is-not-evidence',
       `${CONSENSUS_CHALLENGE} Cite that experiment's observation instead.`,
     );
   }
+
+  const refs = resolveKnowledgeRefs(input.knowledgeRefs ?? [], ctx);
+  if (!Array.isArray(refs)) {
+    return refs;
+  }
+  const conflicts = refs.some((r) => r.relation === 'conflicts');
+  if (
+    parsed.data.verdict === 'yes' &&
+    conflicts &&
+    !items.some((i) => (i.kind === 'experiment' || i.kind === 'statistical') && i.source !== undefined)
+  ) {
+    return errorResult(
+      'This claim conflicts with Bedrock/Established knowledge, so a yes needs decisive evidence.',
+      'analysis:decisive-evidence-required',
+      'Cite at least one evidence item of kind "experiment" or "statistical" with a source; observation alone cannot override a law.',
+    );
+  }
+
   const consensusNote: Record<string, unknown> =
     appeals.length > 0 ? { consensusCitedAsEvidence: appeals, challenge: CONSENSUS_CHALLENGE } : {};
   const lockedAt = session?.hypothesis?.lockedAt;
   const provenance: Record<string, unknown> =
     lockedAt !== undefined ? { predictionLockedAt: lockedAt } : {};
+  const report =
+    session?.hypothesis !== undefined
+      ? scoreClaim({
+          hypothesis: session.hypothesis,
+          experimentEvidence: session.experiment?.decisiveEvidence ?? [],
+          evidence: items,
+          knowledgeRefs: refs,
+        })
+      : undefined;
+  const scoring: Record<string, unknown> = report !== undefined ? { claimScore: report } : {};
+  const recordAnalysis = (): void => {
+    if (session === undefined) return;
+    session.analysis = {
+      ...parsed.data,
+      at: new Date().toISOString(),
+      evidence: items,
+      ...(report !== undefined
+        ? { score: { score: report.score, nonConsensusScore: report.nonConsensusScore, evidenceStrength: report.evidenceStrength } }
+        : {}),
+    };
+  };
 
   if (parsed.data.verdict === 'no') {
     const moved = advance(state, 'refute');
@@ -570,10 +666,10 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
       return moved.err;
     }
     if (session !== undefined) {
-      session.analysis = { ...parsed.data, at: new Date().toISOString() };
+      recordAnalysis();
       commit(ctx, session, 'refute', moved.next, 'Data disagreed with the prediction (No branch).');
     }
-    return withState({ analysis: parsed.data, ...consensusNote, ...provenance }, moved.next);
+    return withState({ analysis: parsed.data, evidence: items, ...scoring, ...consensusNote, ...provenance }, moved.next);
   }
 
   // verdict === 'yes' — do NOT finalize; Review is mandatory (DESIGN.md §3).
@@ -585,16 +681,18 @@ export function opAnalyze(input: AnalyzeInput, ctx?: CycleContext): OpResult {
     );
   }
   if (session !== undefined) {
-    session.analysis = { ...parsed.data, at: new Date().toISOString() };
+    recordAnalysis();
     commit(ctx, session, 'analyze-yes', state, 'Data agreed with the prediction; review required.');
   }
   return okResult({
     analysis: parsed.data,
+    evidence: items,
     reviewRequired: true,
     nextTool: 'falsify_review',
     cycleState: state,
     legalNext: legalEvents(state),
     note: 'Yes is not final: run review (outcome: confirm) to record a Theory.',
+    ...scoring,
     ...consensusNote,
     ...provenance,
   });
@@ -653,6 +751,12 @@ function recordTheory(ctx: CycleContext | undefined, session: SessionRecord): Re
           falsifiable: true,
           falsified_if: hypothesis.falsificationConditions.map((c) => c.description).join('; '),
           revisions_survived: hypothesis.revision,
+          ...(session.analysis?.score !== undefined
+            ? {
+                evidence_strength: session.analysis.score.evidenceStrength,
+                claim_score: session.analysis.score.score,
+              }
+            : {}),
           session: session.id,
         },
       })

@@ -129,6 +129,8 @@ lives in the transport-free core (`src/cycle/operations.ts`):
   lexically) against every tier: refuted lookalikes, the Bedrock/Established burden of
   proof, and the full set of Contested positions. A lexical match shows *relevance*,
   not contradiction; it cannot prove a claim conflicts with a law.
+- **Claims are scored from the record.** Each analysis returns a `claimScore` built from
+  structured evidence and the Bedrock/Established entries the analyst links (see §4).
 - **Outcomes are kept.** A refuted hypothesis is written to the notebook and struck
   through, dated; a surviving theory goes to the notebook and, best-effort, to the
   Corpus (tagged `tier: survived-test`, never a higher tier than it earned).
@@ -189,11 +191,25 @@ claim_score =
 > failed?* — not to assume the consensus is wrong.
 
 > **Implementation status:** `claimScore` / `compareClaims` (`src/rules/claimScore.ts`)
-> are implemented and tested, and structurally bar consensus from deciding a verdict.
-> The cycle does **not** call them yet: nothing in a run produces the per-claim signal
-> strengths they need. Wiring them in requires structured evidence (see §7), so today
-> the consensus commitment is enforced by `analysis:consensus-is-not-evidence`, not by
-> the score.
+> structurally bar consensus from deciding a verdict. Within a session, every analysis
+> is now scored (`src/rules/signals.ts`) from what the run recorded, never from the
+> model's opinion of the claim:
+>
+> | Signal | Derived from |
+> |---|---|
+> | `directEvidence` | the best non-consensus evidence item (kind, source, sample size, replication) |
+> | `statisticalSupport` | reported sample size, p-value and effect size; zero if none are reported |
+> | `falsifiabilityQuality` | observable falsifiers, numeric thresholds, claim type, a comparison in the test |
+> | `bedrockSupport` / `establishedSupport` | `knowledgeRefs` the analyst links (ids must exist; a conflict zeroes the tier) |
+> | `institutionalConsensus` | the share of cited items that were appeals to authority |
+>
+> The score is reported with its signals, its consensus-free part, and exactly what
+> consensus added (at most `w_consensus`); a recorded theory carries its evidence
+> strength. A *yes* that conflicts with Bedrock/Established knowledge must cite a
+> sourced experiment or statistical result. The per-kind credits are heuristics and
+> tunable; the ordering of weights is the commitment. `compareClaims` is not yet used
+> by the cycle (it is for comparing rival claims, which Contested questions
+> deliberately never do — they present every side).
 
 ### Knowledge storage — two stores, one truth
 
@@ -322,10 +338,11 @@ picks — because the whole point is to surface disagreement, not bury it.
 ## 7. Open Design Questions (to iterate)
 
 - [ ] **Weights:** starting values for `w_*` in §4. Ordering is fixed; numbers TBD.
-- [ ] **"Evidence" sourcing:** how does the agent obtain *data* (papers, datasets,
-      user-supplied observations)? Retrieval strategy + provenance. Today evidence is
-      a list of free-text observations; structured evidence (source, sample size,
-      effect size) is what `claimScore` would need.
+- [x] **"Evidence" sourcing:** how does the agent obtain *data* (papers, datasets,
+      user-supplied observations)? *Partly resolved:* the caller supplies evidence as
+      structured items (kind, source, sample size, effect size, p-value, replication),
+      which feed the claim score (§4). Still open: Falsify does not retrieve or verify
+      sources itself; a `source` is a string the caller asserts.
 - [ ] **Falsifiability classifier:** how do we reliably detect an unfalsifiable
       claim? (Heuristics + model judgment + a checklist.) *Partly done:* intake uses
       narrow lexical patterns and falsification conditions get substance checks; both

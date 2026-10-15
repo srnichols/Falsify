@@ -16,6 +16,7 @@
 
 import { z } from 'zod';
 import { CycleStateSchema } from '../domain/schemas.js';
+import { EvidenceSchema } from '../domain/evidence.js';
 import type { QuantEntry } from '../domain/types.js';
 import {
   opIntake,
@@ -76,6 +77,10 @@ const experimentBody = z.object({
 const analyzeBody = z.object({
   verdict: z.enum(['yes', 'no']),
   evidenceCited: z.array(z.string()).optional(),
+  evidence: z.array(EvidenceSchema).optional(),
+  knowledgeRefs: z
+    .array(z.object({ id: z.string().min(1), relation: z.enum(['supports', 'conflicts']) }))
+    .optional(),
   sessionId: z.string().optional(),
   cycleState: CycleStateSchema.optional(),
 });

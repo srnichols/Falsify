@@ -100,6 +100,14 @@ function renderCard(json) {
   if (json.analysis) {
     add('Verdict', escapeHtml(json.analysis.verdict));
   }
+  if (json.claimScore) {
+    const s = json.claimScore;
+    add('Evidence strength', escapeHtml(s.evidenceStrength));
+    add(
+      'Claim score',
+      `${escapeHtml(s.score)} (without consensus: ${escapeHtml(s.nonConsensusScore)}; consensus added ${escapeHtml(s.consensusContribution)})`,
+    );
+  }
   if (json.reviewRequired) {
     add('Review', 'A "yes" is not final — review is mandatory.');
   }
