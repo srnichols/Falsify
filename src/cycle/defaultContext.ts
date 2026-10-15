@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { loadConfig, resolveDataDir } from '../config.js';
 import { loadAllKnowledge } from '../knowledge/loader.js';
 import { NotebookStore } from '../memory/notebook.js';
+import { OutcomeStore } from '../memory/outcomes.js';
 import { EmbeddingMatcher, createOpenAiEmbedder } from '../rules/embeddings.js';
 import { createOpenAiJudge } from '../rules/judge.js';
 import type { Judge } from '../rules/judge.js';
@@ -24,6 +25,7 @@ export function createDefaultContext(): CycleContext {
   const ctx: CycleContext = {
     sessions: new SessionStore(DEFAULT_SESSION_DIR),
     notebook: new NotebookStore(),
+    outcomes: new OutcomeStore(),
     requireSession: process.env.FALSIFY_REQUIRE_SESSION === '1',
     weights: loadWeights(),
   };

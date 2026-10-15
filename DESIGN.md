@@ -458,6 +458,12 @@ picks — because the whole point is to surface disagreement, not bury it.
       Established weights cannot be probed at all by this set (it holds them fixed). Nothing
       here was tuned to the cases; a better score on 12 author-labelled cases is not
       grounds to change a weight.
+      **Outcome tracking is how the rest gets grounded.** `falsify_outcome` records, later,
+      whether a confirmed theory held up or was refuted, together with the score it was
+      confirmed with; `npm run calibrate:outcomes` compares the two and refuses to print an
+      accuracy until there are at least 5 of each outcome. It is self-reported and drawn
+      from your own inquiries, so it checks the score rather than validating it, and it
+      only becomes informative as resolved cases accumulate.
 - [x] **"Evidence" sourcing:** how does the agent obtain *data* (papers, datasets,
       user-supplied observations)? *Resolved to the extent Falsify can:* the caller
       supplies structured evidence, and a cited DOI can be confirmed to exist

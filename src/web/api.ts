@@ -30,6 +30,7 @@ import type { OpResult } from '../cycle/operations.js';
 import type { CycleContext } from '../cycle/context.js';
 import { SessionStore } from '../cycle/session.js';
 import { opRelated } from '../cycle/related.js';
+import { OutcomeInputSchema, opOutcome } from '../cycle/outcome.js';
 import { opDissent } from '../cycle/dissent.js';
 import { opVerifySource } from '../cycle/verify.js';
 import { adviseAnalysis, adviseIntake } from '../cycle/advice.js';
@@ -218,6 +219,10 @@ export async function handleRequest(
     case 'POST /api/related': {
       const p = parse(relatedBody, body);
       return 'response' in p ? p.response : fromOp(await opRelated(p.value, ctx));
+    }
+    case 'POST /api/outcome': {
+      const p = parse(OutcomeInputSchema, body);
+      return 'response' in p ? p.response : fromOp(opOutcome(p.value, ctx));
     }
     case 'POST /api/verify-source': {
       const p = parse(verifySourceBody, body);

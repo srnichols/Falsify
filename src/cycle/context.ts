@@ -8,6 +8,7 @@
 
 import type { SessionStore } from './session.js';
 import type { NotebookStore } from '../memory/notebook.js';
+import type { OutcomeStore } from '../memory/outcomes.js';
 import type { MemoryReader, MemoryWriter } from '../memory/openbrainClient.js';
 import type { KnowledgeIndex } from '../rules/knowledgeMatch.js';
 import type { ScoreWeights } from '../rules/claimScore.js';
@@ -20,6 +21,8 @@ export interface CycleContext {
   sessions?: SessionStore;
   /** Where refuted hypotheses (struck through) and surviving theories are kept. */
   notebook?: NotebookStore;
+  /** Later outcomes of recorded theories, for checking the score against reality. */
+  outcomes?: OutcomeStore;
   /** Corpus tier writer for theories that survived their test. */
   corpus?: MemoryWriter;
   /** Corpus tier reader: semantic recall, used by `falsify_related`. */

@@ -25,13 +25,15 @@ iterating design.
 
 ## Use Falsify inside your agent (MCP)
 
-Falsify ships as an MCP server exposing nine discipline-enforcing tools —
+Falsify ships as an MCP server exposing ten discipline-enforcing tools —
 `falsify_intake`, `falsify_hypothesize`, `falsify_experiment`, `falsify_analyze`,
 `falsify_review`, `falsify_recall`, plus `falsify_related` (which knowledge tiers a
 claim touches, with semantic matching when the corpus is reachable), `falsify_dissent`
 (compare competing hypotheses from several models and surface where they disagree,
-never picking a winner) and `falsify_verify_source` (confirm that a DOI you cite as
-evidence is a real publication). They never generate an answer; they take your
+never picking a winner), `falsify_verify_source` (confirm that a DOI you cite as
+evidence is a real publication) and `falsify_outcome` (record later whether a
+confirmed theory held up or was refuted, so the score can be checked against reality;
+`npm run calibrate:outcomes` reports on the log). They never generate an answer; they take your
 draft, run it through the cycle, and **refuse** anything that breaks the rules (a
 hypothesis with no falsification condition, an experiment that cannot fail, a Yes
 that skipped review).

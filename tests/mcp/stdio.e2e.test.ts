@@ -65,7 +65,7 @@ describe.skipIf(!built)('falsify-mcp over stdio', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it('serves all nine tools', async () => {
+  it('serves all ten tools', async () => {
     const client = await connect();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
@@ -75,6 +75,7 @@ describe.skipIf(!built)('falsify-mcp over stdio', () => {
         'falsify_experiment',
         'falsify_hypothesize',
         'falsify_intake',
+        'falsify_outcome',
         'falsify_recall',
         'falsify_related',
         'falsify_review',

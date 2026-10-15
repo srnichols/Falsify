@@ -33,7 +33,8 @@
     "knowledge": "node dist/src/cli/knowledge.js",
     "calibrate": "node dist/src/cli/calibrate.js",
     "calibrate:replication": "node dist/src/cli/calibrateReplication.js",
-    "calibrate:judge": "node dist/src/cli/calibrateJudge.js"
+    "calibrate:judge": "node dist/src/cli/calibrateJudge.js",
+    "calibrate:outcomes": "node dist/src/cli/calibrateOutcomes.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
