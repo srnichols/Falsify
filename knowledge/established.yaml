@@ -29,7 +29,7 @@ entries:
       Gravity and accelerated reference frames over large regions need general
       relativity.
     sources:
-      ["Einstein 1905, Zur Elektrodynamik bewegter Körper, Annalen der Physik 17", "Ives & Stilwell 1938, time dilation of moving atomic clocks, J. Opt. Soc. Am. 28"]
+      ["Einstein 1905, Zur Elektrodynamik bewegter Körper, Annalen der Physik 17", "Ives & Stilwell 1938, time dilation of moving atomic clocks, J. Opt. Soc. Am. 28, 215"]
 
   - id: established.relativity.general
     statement: >-
@@ -48,7 +48,7 @@ entries:
       mergers. It is expected to need extension at singularities and at the
       Planck scale, and has not been reconciled with quantum mechanics.
     sources:
-      ["Einstein 1915", "Dyson, Eddington & Davidson 1920, eclipse measurement of light deflection", "Abbott et al. 2016, GW150914, Phys. Rev. Lett. 116, 061102"]
+      ["Einstein 1915", "Dyson, Eddington & Davidson 1920, eclipse measurement of light deflection, Phil. Trans. R. Soc. A 220, 291", "Abbott et al. 2016, GW150914, Phys. Rev. Lett. 116, 061102"]
 
   - id: established.quantum.mechanics
     statement: >-
@@ -187,7 +187,7 @@ entries:
     domain_of_validity: >-
       Reverse transcription (RNA -> DNA) is a known, bounded part of the dogma,
       not a violation of it; the barred step is protein -> sequence.
-    sources: ["Crick 1958, 1970", "Baltimore 1970, RNA-dependent DNA polymerase in virions, Nature 226"]
+    sources: ["Crick 1958, 1970", "Baltimore 1970, RNA-dependent DNA polymerase in virions of RNA tumour viruses, Nature 226, 1209"]
 
   - id: established.chemistry.atomic_theory
     statement: >-
@@ -246,7 +246,7 @@ entries:
       An excellent approximation at low mass and low speed. Superseded by general
       relativity near large masses and high velocities (Mercury's perihelion,
       light bending, GPS).
-    sources: ["Newton 1687", "Cavendish 1798, torsion-balance experiment"]
+    sources: ["Newton 1687", "Cavendish 1798, Experiments to determine the density of the earth, Phil. Trans. R. Soc. 88, 469"]
 
   - id: established.physics.mass_energy_equivalence
     statement: >-
@@ -265,7 +265,7 @@ entries:
       energy" is loose wording: in a closed system the invariant mass is what
       is conserved, and binding energy contributes to it.
     sources:
-      ["Einstein 1905, Ist die Trägheit eines Körpers von seinem Energieinhalt abhängig?", "Cockcroft & Walton 1932, Proc. R. Soc. A 137"]
+      ["Einstein 1905, Ist die Trägheit eines Körpers von seinem Energieinhalt abhängig?", "Cockcroft & Walton 1932, disintegration of elements by high velocity protons, Proc. R. Soc. A 137, 229"]
 
   - id: established.physics.standard_model
     statement: >-
