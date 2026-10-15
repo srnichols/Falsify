@@ -119,7 +119,7 @@ describe.skipIf(!built)('falsify-mcp over stdio', () => {
       evidence: [{ observation: 'randomized trial showed faster responses', kind: 'experiment', source: 'Trial A', sampleSize: 400, pValue: 0.004 }],
       sessionId,
     });
-    expect((analysis.claimScore as { evidenceStrength: string }).evidenceStrength).toBe('strong');
+    expect((analysis.claimScore as { evidenceStrength: string }).evidenceStrength).toBe('moderate');
 
     const review = await call(second, 'falsify_review', { ...REVIEW, outcome: 'confirm', sessionId });
     expect(review.cycleState).toBe('theory');

@@ -88,6 +88,9 @@ const KIND_BASE: Record<EvidenceKind, number> = {
 /** A sample this large earns the full sample-size credit. */
 const LARGE_SAMPLE = 300;
 const MIN_ADEQUATE_SAMPLE = 30;
+/** Multiplier on the reliability and statistical credit of a result nobody has reproduced. */
+const UNREPLICATED_DISCOUNT = 0.75;
+const UNREPLICATED_STATS_DISCOUNT = 0.5;
 
 /**
  * Reliability of one item in [0, 1]. A heuristic, not a verdict: a base by kind,
@@ -106,7 +109,9 @@ export function evidenceQuality(item: ResolvedEvidence): number {
     else if (item.sampleSize >= MIN_ADEQUATE_SAMPLE) quality += 0.1;
   }
   if (item.replicated === true) quality += 0.2;
-  return Math.min(1, quality);
+  // An unreplicated result is fragile however it is dressed: the replication record, not the
+  // p-value, is what separates results that survive from ones that do not.
+  return Math.min(1, item.replicated === true ? quality : quality * UNREPLICATED_DISCOUNT);
 }
 
 /**
@@ -122,7 +127,7 @@ export function statisticalSupport(items: readonly ResolvedEvidence[]): number {
     if (item.sampleSize !== undefined) score += Math.min(0.5, Math.log10(item.sampleSize) / 6);
     if (item.pValue !== undefined) score += item.pValue < 0.01 ? 0.4 : item.pValue < 0.05 ? 0.3 : 0;
     if (item.effectSize !== undefined) score += 0.1;
-    best = Math.max(best, score);
+    best = Math.max(best, item.replicated === true ? score : score * UNREPLICATED_STATS_DISCOUNT);
   }
   return Math.min(1, best);
 }
@@ -130,9 +135,12 @@ export function statisticalSupport(items: readonly ResolvedEvidence[]): number {
 /** How strongly the observations (not the consensus) support the verdict. */
 export type EvidenceStrength = 'weak' | 'moderate' | 'strong';
 
-/** Label a direct-evidence signal. */
-export function strengthLabel(directEvidence: number): EvidenceStrength {
-  if (directEvidence >= 0.7) return 'strong';
+/**
+ * Label a direct-evidence signal. "Strong" needs a replicated result: however large
+ * the effect, a result no one has reproduced is at best moderate.
+ */
+export function strengthLabel(directEvidence: number, hasReplication = true): EvidenceStrength {
+  if (directEvidence >= 0.7 && hasReplication) return 'strong';
   if (directEvidence >= 0.4) return 'moderate';
   return 'weak';
 }

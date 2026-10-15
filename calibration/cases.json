@@ -1,0 +1,114 @@
+{
+  "note": "Illustrative calibration cases for the claim score: evidence profiles for results whose fate is known. Profiles are reconstructed from the public record and approximate (numbers are rounded; where a figure is a bound it is the bound). This is a smoke test and regression guard, not validation that the score predicts truth. Add cases with a basis a reviewer can check; do not tune the score to pass this file alone.",
+  "cases": [
+    {
+      "id": "higgs-2012",
+      "outcome": "held-up",
+      "summary": "Two independent experiments each reported a new particle at about 5 sigma.",
+      "basis": "ATLAS Collaboration 2012, Phys. Lett. B 716, 1; CMS Collaboration 2012, Phys. Lett. B 716, 30",
+      "evidence": [
+        { "observation": "ATLAS excess near 125 GeV at about 5.9 sigma", "kind": "statistical", "source": "ATLAS Collaboration 2012, Phys. Lett. B 716, 1", "pValue": 0.0000003, "replicated": true },
+        { "observation": "CMS excess near 125 GeV at about 5 sigma, independent detector and analysis", "kind": "statistical", "source": "CMS Collaboration 2012, Phys. Lett. B 716, 30", "pValue": 0.0000003, "replicated": true }
+      ]
+    },
+    {
+      "id": "h-pylori-ulcers",
+      "outcome": "held-up",
+      "summary": "Eradicating H. pylori cured ulcers in randomized trials, replicating the original observation.",
+      "basis": "Marshall & Warren 1984, Lancet 1, 1311; Hentschel et al. 1993, N. Engl. J. Med. 328, 308 (n=104)",
+      "evidence": [
+        { "observation": "randomized trial of eradication versus no eradication on duodenal ulcer relapse", "kind": "experiment", "source": "Hentschel et al. 1993, N. Engl. J. Med. 328, 308", "sampleSize": 104, "pValue": 0.001, "replicated": true }
+      ]
+    },
+    {
+      "id": "smoking-lung-cancer",
+      "outcome": "held-up",
+      "summary": "Large cohort of British doctors showed a dose-response between smoking and lung cancer deaths; replicated by other cohorts.",
+      "basis": "Doll & Hill 1954, BMJ 1, 1451 (about 34,000 doctors); Hammond & Horn 1958, JAMA 166, 1294",
+      "evidence": [
+        { "observation": "prospective cohort of British doctors, lung cancer mortality rising with cigarettes smoked", "kind": "statistical", "source": "Doll & Hill 1954, BMJ 1, 1451", "sampleSize": 34000, "pValue": 0.001, "replicated": true }
+      ]
+    },
+    {
+      "id": "ligo-gw150914",
+      "outcome": "held-up",
+      "summary": "A gravitational-wave signal seen in two detectors at over 5 sigma; many further events followed.",
+      "basis": "Abbott et al. 2016, Phys. Rev. Lett. 116, 061102",
+      "evidence": [
+        { "observation": "coincident signal in two detectors with false-alarm rate below one in 200,000 years", "kind": "statistical", "source": "Abbott et al. 2016, Phys. Rev. Lett. 116, 061102", "pValue": 0.0000002, "replicated": true }
+      ]
+    },
+    {
+      "id": "michelson-morley-1887",
+      "outcome": "held-up",
+      "summary": "A null result for the aether wind, repeated with improved apparatus for decades.",
+      "basis": "Michelson & Morley 1887, Am. J. Sci. 34, 333; later repetitions by Morley & Miller and Kennedy & Thorndike",
+      "evidence": [
+        { "observation": "interferometer fringe shift far below the size expected from an aether wind", "kind": "experiment", "source": "Michelson & Morley 1887, Am. J. Sci. 34, 333", "replicated": true }
+      ]
+    },
+    {
+      "id": "cold-fusion-1989",
+      "outcome": "refuted",
+      "summary": "Excess heat claimed from palladium electrolysis; most laboratories could not reproduce it.",
+      "basis": "Fleischmann & Pons 1989, J. Electroanal. Chem. 261, 301; negative replications widely reported in 1989",
+      "evidence": [
+        { "observation": "excess heat reported in a palladium-deuterium electrolysis cell", "kind": "observation", "source": "Fleischmann & Pons 1989, J. Electroanal. Chem. 261, 301", "replicated": false }
+      ]
+    },
+    {
+      "id": "n-rays-1903",
+      "outcome": "refuted",
+      "summary": "A new radiation reported by many observers in one country; a visiting physicist found the effect persisted when the key component was secretly removed.",
+      "basis": "Blondlot 1903, C. R. Acad. Sci. 136, 735; Wood 1904, Nature 70, 530",
+      "evidence": [
+        { "observation": "observers reported brighter spark appearance under N-rays", "kind": "observation", "source": "Blondlot 1903, C. R. Acad. Sci. 136, 735", "replicated": false }
+      ]
+    },
+    {
+      "id": "polywater-1960s",
+      "outcome": "refuted",
+      "summary": "An anomalous form of water reported in tiny capillary samples; later traced to contamination.",
+      "basis": "Fedyakin & Deryagin reports in the 1960s; contamination shown by Rousseau & Porto 1970, Science 167, 1715",
+      "evidence": [
+        { "observation": "anomalous physical properties measured in water condensed in fine quartz capillaries", "kind": "observation", "source": "Fedyakin & Deryagin 1960s reports", "replicated": false }
+      ]
+    },
+    {
+      "id": "wakefield-1998",
+      "outcome": "refuted",
+      "summary": "A twelve-child case series linking MMR vaccine to autism; retracted, and large studies found no link.",
+      "basis": "Wakefield et al. 1998, Lancet 351, 637 (retracted 2010)",
+      "evidence": [
+        { "observation": "case series of twelve children with onset reported after vaccination", "kind": "observation", "source": "Wakefield et al. 1998, Lancet 351, 637", "sampleSize": 12, "replicated": false }
+      ]
+    },
+    {
+      "id": "opera-ftl-2011",
+      "outcome": "refuted",
+      "summary": "Neutrinos timed faster than light at about 6 sigma over thousands of events; traced to a loose fibre-optic cable and clock issue, and contradicted by a second experiment.",
+      "basis": "OPERA Collaboration 2011, arXiv:1109.4897; ICARUS Collaboration 2012 contradicted it",
+      "evidence": [
+        { "observation": "neutrino arrival earlier than light-speed expectation over about 15,000 events", "kind": "statistical", "source": "OPERA Collaboration 2011, arXiv:1109.4897", "sampleSize": 15000, "pValue": 0.000000002, "replicated": false }
+      ]
+    },
+    {
+      "id": "arsenic-life-2010",
+      "outcome": "refuted",
+      "summary": "A bacterium reported to build DNA with arsenic instead of phosphorus; independent groups could not reproduce it.",
+      "basis": "Wolfe-Simon et al. 2011, Science 332, 1163; Reaves et al. 2012 and Erb et al. 2012, Science 337, 467 and 342",
+      "evidence": [
+        { "observation": "growth in arsenate medium with arsenic detected in cell extracts", "kind": "experiment", "source": "Wolfe-Simon et al. 2011, Science 332, 1163", "replicated": false }
+      ]
+    },
+    {
+      "id": "bem-precognition-2011",
+      "outcome": "refuted",
+      "summary": "Nine experiments with over a thousand participants reported precognition at p below 0.05; independent replications found nothing.",
+      "basis": "Bem 2011, J. Pers. Soc. Psychol. 100, 407; Ritchie, Wiseman & French 2012, PLoS ONE 7, e33423",
+      "evidence": [
+        { "observation": "participants guessed future random picture positions above chance across nine experiments", "kind": "statistical", "source": "Bem 2011, J. Pers. Soc. Psychol. 100, 407", "sampleSize": 1000, "pValue": 0.01, "replicated": false }
+      ]
+    }
+  ]
+}

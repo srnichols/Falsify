@@ -200,8 +200,8 @@ claim_score =
 >
 > | Signal | Derived from |
 > |---|---|
-> | `directEvidence` | the best non-consensus evidence item (kind, source, sample size, replication) |
-> | `statisticalSupport` | reported sample size, p-value and effect size; zero if none are reported |
+> | `directEvidence` | the best non-consensus evidence item (kind, source, sample size, replication); an unreplicated item is discounted, and "strong" needs a replicated one |
+> | `statisticalSupport` | reported sample size, p-value and effect size (halved if unreplicated); zero if none are reported |
 > | `falsifiabilityQuality` | observable falsifiers, numeric thresholds, claim type, a comparison in the test |
 > | `bedrockSupport` / `establishedSupport` | `knowledgeRefs` the analyst links (ids must exist; a conflict zeroes the tier) |
 > | `institutionalConsensus` | the share of cited items that were appeals to authority |
@@ -381,8 +381,14 @@ picks — because the whole point is to surface disagreement, not bury it.
 
 - [x] **Weights:** starting values for `w_*` in §4. *Resolved as far as it can be:* the
       defaults are heuristics, tunable with `FALSIFY_WEIGHTS`, and what is fixed (and
-      tested) is the ordering. Calibrating the numbers against real outcomes would
-      need a body of resolved inquiries Falsify does not yet have.
+      tested) is the ordering. `npm run calibrate` scores a small, sourced set of results
+      that held up or were refuted (`calibration/cases.json`) and reports how well the
+      score separates them (currently 94% of pairs; the misordered pairs are named in
+      the test as known limits). That set already earned one change: a result nobody has
+      reproduced is now discounted, and can be at most "moderate", because the first
+      run ranked an unreplicated 6-sigma anomaly above the Higgs. It is a smoke test
+      and regression guard, not proof the score predicts truth, and tuning to it
+      repeatedly would only fit the set. Real calibration needs many resolved inquiries.
 - [x] **"Evidence" sourcing:** how does the agent obtain *data* (papers, datasets,
       user-supplied observations)? *Resolved to the extent Falsify can:* the caller
       supplies structured evidence, and a cited DOI can be confirmed to exist

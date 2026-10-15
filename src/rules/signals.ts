@@ -99,7 +99,10 @@ export function scoreClaim(input: ScoreInput, weights: ScoreWeights = DEFAULT_WE
     nonConsensusScore: Number(nonConsensus.toFixed(3)),
     consensusContribution: Number((total - nonConsensus).toFixed(3)),
     signals,
-    evidenceStrength: strengthLabel(directEvidence),
+    evidenceStrength: strengthLabel(
+      directEvidence,
+      observed.some((e) => e.replicated === true),
+    ),
     conflictsWithKnowledge: input.knowledgeRefs.some((r) => r.relation === 'conflicts'),
   };
 }
