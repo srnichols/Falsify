@@ -37,7 +37,8 @@
     "calibrate:replication": "node dist/src/cli/calibrateReplication.js",
     "calibrate:judge": "node dist/src/cli/calibrateJudge.js",
     "calibrate:outcomes": "node dist/src/cli/calibrateOutcomes.js",
-    "eval:inquiry": "node scripts/eval-inquiry.mjs"
+    "eval:inquiry": "node scripts/eval-inquiry.mjs",
+  "docs:screenshots": "node scripts/capture-screenshots.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

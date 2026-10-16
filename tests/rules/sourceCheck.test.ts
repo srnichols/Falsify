@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { checkDoi } from '../../src/rules/sourceCheck.js';
+import { checkDoi, titleRelatesTo } from '../../src/rules/sourceCheck.js';
 import type { SourceCheck, SourceFetch } from '../../src/rules/sourceCheck.js';
 import { normalizeDoi, evidenceQuality } from '../../src/domain/evidence.js';
 import type { ResolvedEvidence } from '../../src/domain/evidence.js';
@@ -25,6 +25,23 @@ function ok(result: OpResult): Record<string, unknown> {
   if (result.kind !== 'ok') throw new Error(`expected ok, got ${result.rule}: ${result.error}`);
   return result.payload;
 }
+
+describe('titleRelatesTo', () => {
+  const title = 'Estimating the reproducibility of psychological science';
+
+  it('matches word forms of the same stem, so "psychology" finds "psychological"', () => {
+    expect(titleRelatesTo(title, ['replications of published psychology studies were significant in a minority of cases'])).toBe(true);
+  });
+
+  it('still rejects a title that shares nothing with the citing text', () => {
+    expect(titleRelatesTo(title, ['Mean reaction time fell after a 200 mg caffeine dose'])).toBe(false);
+  });
+
+  it('does not let a longer word match a shorter one that merely starts the same', () => {
+    expect(titleRelatesTo('Functional proteins from a random-sequence library', ['randomized placebo-controlled trial'])).toBe(false);
+    expect(titleRelatesTo('Cats and dogs', ['catalyst kinetics'])).toBe(false);
+  });
+});
 
 describe('normalizeDoi', () => {
   it.each([

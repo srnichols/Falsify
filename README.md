@@ -18,7 +18,10 @@ It is built on two ideas:
   and **consensus carries low weight by design**: we demand the receipts rather than
   reflexively accepting *or* rejecting what's popular.
 
-📄 See **[DESIGN.md](./DESIGN.md)** for the full architecture, and
+![The Falsify dashboard](./docs/images/dashboard.png)
+
+📄 **New here? Start with the [user guide](./docs/USER-GUIDE.md)**, a step-by-step tour of the
+app. See **[DESIGN.md](./DESIGN.md)** for the full architecture, and
 **[docs/CAPABILITIES.md](./docs/CAPABILITIES.md)** for everything Falsify can and cannot do:
 every tool, every rule that can refuse you, every setting and command. That file is
 checked by a test against the code, so it cannot silently go stale. Agents should start
@@ -135,7 +138,13 @@ what each entry rests on and what would falsify it), **Tools** (related, verify 
 dissent), **Outcomes** (record what later happened, to check the score against reality)
 and the **Notebook** (a refuted hypothesis is struck through and dated, never deleted).
 It talks to the *same* `op*` operations the MCP tools call, so neither transport can
-weaken the honesty rules, and it shares sessions with the MCP server.
+weaken the honesty rules, and it shares sessions with the MCP server. The
+[user guide](./docs/USER-GUIDE.md) walks through each screen.
+
+![A completed inquiry in the Sessions screen](./docs/images/sessions.png)
+
+The screenshots in the docs are generated, not hand-made: `npm install --no-save playwright-core`
+then `npm run docs:screenshots` rebuilds them from a throwaway server and demo data.
 
 ```bash
 npm install

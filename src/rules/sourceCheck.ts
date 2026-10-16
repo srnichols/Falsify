@@ -69,12 +69,23 @@ interface CrossrefMessage {
 const firstString = (value: unknown): string | undefined =>
   Array.isArray(value) && typeof value[0] === 'string' ? value[0] : undefined;
 
+/** Endings removed so word forms meet: "psychology" and "psychological", "study" and "studies". */
+const SUFFIXES = ['ically', 'ical', 'ations', 'ation', 'ities', 'ity', 'ings', 'ing', 'ies', 'ied', 'ed', 'es', 's', 'y'];
+const MIN_STEM_LENGTH = 4;
+
+function stem(token: string): string {
+  for (const suffix of SUFFIXES) {
+    if (token.endsWith(suffix) && token.length - suffix.length >= MIN_STEM_LENGTH) return token.slice(0, -suffix.length);
+  }
+  return token;
+}
+
 /** True when a work's title shares at least one meaningful term with the text citing it. */
 export function titleRelatesTo(title: string, citingTexts: readonly string[]): boolean {
-  const titleTokens = tokenize(title);
+  const titleStems = new Set([...tokenize(title)].map(stem));
   for (const text of citingTexts) {
     for (const token of tokenize(text)) {
-      if (titleTokens.has(token)) return true;
+      if (titleStems.has(stem(token))) return true;
     }
   }
   return false;

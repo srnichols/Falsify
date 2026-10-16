@@ -4,7 +4,8 @@
 > rule that can refuse you, every setting, every command, and what Falsify **cannot**
 > do. A test (`tests/docs/capabilities.test.ts`) fails if the code gains a tool, rule,
 > setting, command or web route that this file does not mention. For the reasoning
-> behind the design, read [DESIGN.md](../DESIGN.md); for setup, [README.md](../README.md).
+> behind the design, read [DESIGN.md](../DESIGN.md); for setup, [README.md](../README.md); for a
+> step-by-step tour of the app, [USER-GUIDE.md](./USER-GUIDE.md).
 
 ## What Falsify is, in one paragraph
 
@@ -169,6 +170,7 @@ Write routes: `POST /api/intake`, `/api/hypothesize`, `/api/experiment`, `/api/a
 | `npm test` | Run the test suite. |
 | `npm run lint` | Lint `src` and `tests`. |
 | `npm run web` | Start the web UI. |
+| `npm run docs:screenshots` | Regenerate `docs/images/` from a throwaway server and demo data (needs `npm install --no-save playwright-core` and Edge or Chrome). |
 | `npm run knowledge -- lint \| template \| add \| upsert \| move \| sync` | Maintain the corpus (see README). |
 | `npm run seed-sync` | Mirror the corpus to OpenBrain. |
 | `npm run calibrate` | Score the 12 labelled historical cases; add `-- --sensitivity` to see how much accuracy depends on the hand-set weights. |

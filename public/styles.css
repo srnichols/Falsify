@@ -119,7 +119,7 @@ a:hover { text-decoration-thickness: 2px; }
 .side-note { margin-top: auto; font-size: 0.78rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 12px; }
 
 main { padding: 26px clamp(16px, 3vw, 40px) 60px; max-width: 1280px; width: 100%; }
-main:focus { outline: none; }
+main:focus, #view h1:focus { outline: none; }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
