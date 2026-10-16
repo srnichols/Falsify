@@ -5,12 +5,13 @@
 > do. A test (`tests/docs/capabilities.test.ts`) fails if the code gains a tool, rule,
 > setting, command or web route that this file does not mention. For the reasoning
 > behind the design, read [DESIGN.md](../DESIGN.md); for setup, [README.md](../README.md); for a
-> step-by-step tour of the app, [USER-GUIDE.md](./USER-GUIDE.md).
+> step-by-step tour of the app, [USER-GUIDE.md](./USER-GUIDE.md). This page is a reference for
+> people and agents who want every detail; if you are new, start with the user guide.
 
 ## What Falsify is, in one paragraph
 
-Falsify runs a question through the **Cycle of Scientific Enterprise** (intake →
-hypothesis → experiment → analysis → review, with a mandatory "No" branch back to the
+Falsify helps you test a claim honestly. It runs a question through the **Cycle of Scientific
+Enterprise** (intake → hypothesis → experiment → analysis → review, with a mandatory "No" branch back to the
 hypothesis) and **refuses** steps that break scientific discipline. It never generates an
 answer. It checks what the calling agent submits, so it is only as honest as the inputs;
 the `falsify-inquiry` guidance (below) exists to keep those inputs honest. Consensus

@@ -2,56 +2,109 @@
 
 > Follow the data, not the conclusion.
 
-Falsify is a reasoning tool that refuses to just hand you an answer. It runs
-scientific questions through the **Cycle of Scientific Enterprise** and returns
-*falsifiable hypotheses with their test conditions* — not opinions, not consensus,
-not "the science is settled."
-
-It is built on two ideas:
-
-- **The Cycle of Scientific Enterprise** — science is a *loop, not a line*, and the
-  most important move is the **"No" branch**, where data that disagrees with a
-  prediction sends you back to question your methods, your hypothesis, and finally
-  the theory itself.
-- **Layered, weighted knowledge** — claims are grounded in tiers (Bedrock laws →
-  Established theory → Contested explanations) with mandatory probability checks,
-  and **consensus carries low weight by design**: we demand the receipts rather than
-  reflexively accepting *or* rejecting what's popular.
+**Falsify helps you test a claim honestly, instead of just believing it.** You bring a
+question ("Does caffeine make reactions faster?", "Do most psychology studies replicate?").
+Falsify walks you through the steps good science uses, and it **refuses to let you skip the
+hard parts**. It never answers the question for you.
 
 ![The Falsify dashboard](./docs/images/dashboard.png)
 
-📄 **New here? Start with the [user guide](./docs/USER-GUIDE.md)**, a step-by-step tour of the
-app. See **[DESIGN.md](./DESIGN.md)** for the full architecture, and
-**[docs/CAPABILITIES.md](./docs/CAPABILITIES.md)** for everything Falsify can and cannot do:
-every tool, every rule that can refuse you, every setting and command. That file is
-checked by a test against the code, so it cannot silently go stale. Agents should start
-with **[AGENTS.md](./AGENTS.md)**.
+## The idea, in plain English
+
+Most arguments go wrong in the same few ways: a claim nobody could ever prove wrong, a test
+rigged to pass, a study picked because it agrees with you, a result that only looks
+impressive because ten other things were tried and not mentioned, or "everyone knows it's true"
+standing in for evidence. Falsify is a checklist that is **enforced**, so you can't quietly
+do those things.
+
+Three ideas sit underneath it:
+
+1. **A claim is only worth testing if something could prove it wrong.** That property is
+   called being *falsifiable*. "Caffeine speeds up reaction time" is: a reaction-time test could
+   show it doesn't. "Everything happens for a reason" is not: nothing could ever count against
+   it. Falsify makes you say, up front, what result would prove you wrong.
+2. **Being wrong is a result, not a failure.** Science is a loop, not a straight line. When the
+   data disagrees with your prediction, you go back and ask whether the method was sound,
+   whether the claim was wrong, and finally whether the underlying theory is. Falsify makes you
+   do that, and stops you from rescuing a failed claim by quietly narrowing it.
+3. **Popularity is not evidence, and neither is authority.** What most experts believe counts
+   for very little here (by design, the smallest weight of anything Falsify measures), and it can
+   never decide a verdict on its own. That is not a claim that experts are usually wrong.
+   Well-established science gets real weight, but it still has to say what it rests on and what
+   would overturn it, held to the same standard as any challenger.
+
+## What it looks like
+
+You type a question. Falsify checks it can be tested at all. You state a hypothesis and the
+observations that would prove it wrong. You name the test that would settle it, and confirm it
+could really come out against you. Then you record what the evidence shows, with sources, and
+answer three review questions. At the end you get a rating of how strong the evidence **you
+supplied** is, and a full record of the reasoning. If you take a shortcut, such as a vague
+hypothesis, a statistic with no count of how many things were tested, or a citation that turns
+out to be about something else, Falsify says no and explains why.
+
+It also keeps a library of more than 200 established facts, open scientific disputes and ideas that
+were tested and abandoned. It uses the library to show you what your claim touches. It never
+treats the library as the answer.
+
+## What it is not
+
+Falsify records whether the **process** was followed. It is not proof, and it is not a fact
+checker. It can't tell whether a paper really supports your claim or whether your numbers are
+true: every input comes from you (or your AI assistant), and it is only as honest as they are.
+Its scores are educated guesses until you record how past claims turned out. The full list of
+limits is in [docs/CAPABILITIES.md](./docs/CAPABILITIES.md#what-falsify-cannot-do).
+
+## Try it in two minutes
+
+You need [Node.js](https://nodejs.org) 22.12 or newer.
+
+```bash
+npm install
+npm run build
+npm run web
+```
+
+Then open <http://127.0.0.1:4319> in your browser. Click **Start an inquiry** and try one of the
+example questions. The app runs only on your own computer and stores everything in a local
+`.falsify` folder.
+
+## Where to go next
+
+| If you want to... | Read |
+|---|---|
+| Learn the app screen by screen | **[User guide](./docs/USER-GUIDE.md)** |
+| Use Falsify from an AI assistant such as GitHub Copilot | [Use Falsify inside your agent](#use-falsify-inside-your-agent-mcp), below |
+| See every tool, rule, setting and command | [docs/CAPABILITIES.md](./docs/CAPABILITIES.md) (checked by a test against the code, so it can't go stale) |
+| Understand how and why it is built this way | [DESIGN.md](./DESIGN.md) |
+| Add to the knowledge library | [Maintain the knowledge corpus](#maintain-the-knowledge-corpus), below |
+| Work on it as an AI agent | [AGENTS.md](./AGENTS.md) |
 
 ---
 
 ## Use Falsify inside your agent (MCP)
 
-Falsify ships as an MCP server exposing ten discipline-enforcing tools —
-`falsify_intake`, `falsify_hypothesize`, `falsify_experiment`, `falsify_analyze`,
-`falsify_review`, `falsify_recall`, plus `falsify_related` (which knowledge tiers a
-claim touches, with semantic matching when the corpus is reachable), `falsify_dissent`
-(compare competing hypotheses from several models and surface where they disagree,
-never picking a winner), `falsify_verify_source` (confirm that a DOI you cite as
-evidence is a real publication) and `falsify_outcome` (record later whether a
-confirmed theory held up or was refuted, so the score can be checked against reality;
-`npm run calibrate:outcomes` reports on the log). They never generate an answer; they take your
-draft, run it through the cycle, and **refuse** anything that breaks the rules (a
-hypothesis with no falsification condition, an experiment that cannot fail, a Yes
-that skipped review).
+If you work with an AI assistant, Falsify can sit behind it as a set of tools the assistant calls
+while it reasons. This uses MCP (Model Context Protocol), the standard way assistants such as
+GitHub Copilot in VS Code plug in outside tools. The assistant drafts each step; Falsify checks
+it and refuses anything that breaks the rules: a hypothesis with no way to prove it wrong, a test
+that can't fail, a "yes" that skipped review. Falsify never writes the answer itself.
 
-Build it, then register the stdio server with your MCP host:
+There are ten tools, one per job: start an inquiry, look up related knowledge, lock a hypothesis,
+design the test, analyze the evidence, run the review, check that a cited paper exists, compare
+rival theories, recall earlier work, and record how a theory later turned out. The table in
+[docs/CAPABILITIES.md](./docs/CAPABILITIES.md#the-tools-mcp--10) lists each one with its inputs
+and what it enforces. The web app and the assistant share the same inquiries, so you can start
+one in chat and read it in the browser.
+
+To set it up, build the project, then register it with your assistant:
 
 ```bash
 npm install
 npm run build
 ```
 
-VS Code (`.vscode/mcp.json`) or any MCP host:
+In VS Code add this to `.vscode/mcp.json` (other MCP-capable assistants take the same entry):
 
 ```json
 {
@@ -69,94 +122,102 @@ This workspace already includes a local MCP registration at
 `.vscode/mcp.json`. If you also use other MCP servers in this repo, keep all of
 them under the same top-level `servers` object rather than replacing the file.
 
-`OPENBRAIN_KEY` is optional and only enables `falsify_recall` (semantic recall from
-the OpenBrain corpus), semantic matching in `falsify_related`, and writing surviving theories to the corpus; the reasoning
-tools work without it. The key is read from the environment and is never stored in
-the repo.
+`OPENBRAIN_KEY` is optional. OpenBrain is a separate, optional memory service; with a key,
+Falsify can search earlier work by meaning (`falsify_recall`), match claims to the library by
+meaning as well as by wording, and save surviving theories to it. Everything else works without
+it. The key is read from the environment and is never stored in the repo.
 
 ### How a run is enforced
 
-`falsify_intake` returns a `sessionId`; pass it to every later call. The server then
-tracks the cycle itself, so you cannot skip a step, confirm a theory that never had a
-recorded "yes", or revise a refuted hypothesis without saying what changed (and
-without keeping every earlier falsification condition). Refuted hypotheses are
-written to the notebook and struck through; theories that survive are recorded in the
-notebook and, if `OPENBRAIN_KEY` is set, the corpus. Session state and the notebook
-live under `.falsify/` (git-ignored); set `FALSIFY_DATA_DIR` to keep them elsewhere. Every
-result names the `next` tool and repeats the `sessionId`, and a step without a session
-carries a `sessionWarning`. If your host keeps dropping the session, set
-`FALSIFY_REQUIRE_SESSION=1` in the server's environment and any step after intake
-without one is refused with `session:required`. The claim-score weights can be retuned
-with `FALSIFY_WEIGHTS` (for example `{"evidence":0.9,"consensus":0.05}`); a setting that
-stops consensus being the smallest weight is rejected at startup. For paraphrase-proof
-knowledge matching, point `FALSIFY_EMBEDDINGS_URL` at any OpenAI-compatible embeddings
-endpoint (a local Ollama, `http://127.0.0.1:11434/v1`, with `nomic-embed-text` keeps
-claims on your machine; set `FALSIFY_EMBEDDINGS_MODEL`, `FALSIFY_EMBEDDINGS_KEY` and
-`FALSIFY_EMBEDDINGS_THRESHOLD` as needed). It is off by default, so nothing is sent
-anywhere unless you set it. `npm run calibrate` scores the labelled cases in
-`calibration/cases.json` and reports how well the claim score separates results that
-held up from results that were refuted; `npm run calibrate:replication` refits the
-statistical-support model to the real Reproducibility Project: Psychology outcomes. For
-an advisory second opinion on falsifiability, appeals to authority and whether a cited
-paper's abstract reports your observation, set `FALSIFY_JUDGE_URL` (and
-`FALSIFY_JUDGE_MODEL`, default `qwen2.5:32b`) to an OpenAI-compatible chat endpoint such as
-a local Ollama; it never changes a verdict or score, and `npm run calibrate:judge` measures
-how good a given model actually is before you trust it. After
-rebuilding, reload the `falsify` server in your MCP host (in VS Code, restart it from
-the MCP servers list) so it picks up new tools; a running server keeps the old build.
-See [DESIGN.md](./DESIGN.md) §3. Every setting (`FALSIFY_KNOWLEDGE_DIR`, `FALSIFY_JUDGE_KEY`,
-`FALSIFY_BRAIN_PROJECT`, `OPENBRAIN_REST_BASE` and the rest) is listed in
+The first tool, `falsify_intake`, returns a `sessionId`. The assistant passes it to every later
+call, and the server tracks the inquiry itself. That is what stops anyone from skipping a step,
+confirming a theory that never had a recorded "yes", or revising a refuted hypothesis without
+saying what changed and keeping every earlier way it could have been proven wrong. Refuted
+hypotheses are written to the notebook and struck through; theories that survive are recorded in
+the notebook too (and in OpenBrain, if configured). Every result names the next tool to call and
+repeats the `sessionId`.
+
+Inquiries and the notebook are saved in a `.falsify/` folder (not committed to git). Set
+`FALSIFY_DATA_DIR` to keep them somewhere else. After you rebuild the project, restart the
+`falsify` server in your assistant (in VS Code, from the MCP servers list), because a running
+server keeps using the old build.
+
+### Optional extras
+
+All of these are off unless you turn them on, and none can change a verdict by itself. Every
+setting, with its default, is listed in
 [docs/CAPABILITIES.md](./docs/CAPABILITIES.md#settings-environment-variables).
 
-### Guidance for agents that use Falsify
+| Extra | What it does | How to enable |
+|---|---|---|
+| Require a session | Refuses any step after intake that arrives without a `sessionId`, for assistants that keep dropping it. | `FALSIFY_REQUIRE_SESSION=1` |
+| Retune the score weights | Changes how much each kind of evidence counts. A setting that stops consensus being the smallest weight is rejected at startup. | `FALSIFY_WEIGHTS`, for example `{"evidence":0.9,"consensus":0.05}` |
+| Match by meaning | Lets the library match paraphrases, not just shared words. A local Ollama with `nomic-embed-text` (`http://127.0.0.1:11434/v1`) keeps your claims on your machine. Nothing is sent anywhere unless you set this. | `FALSIFY_EMBEDDINGS_URL`, plus `FALSIFY_EMBEDDINGS_MODEL`, `FALSIFY_EMBEDDINGS_KEY`, `FALSIFY_EMBEDDINGS_THRESHOLD` as needed |
+| A second opinion from a model | An advisory check on falsifiability, appeals to authority, and whether a cited paper's abstract reports your observation. It never changes a verdict or score. | `FALSIFY_JUDGE_URL` and `FALSIFY_JUDGE_MODEL` (default `qwen2.5:32b`), any OpenAI-compatible chat endpoint such as a local Ollama |
 
-The tools check what an agent submits, so the agent's inputs matter. This repo ships
-guidance for them: `.github/instructions/falsify-inquiry.instructions.md` (rules and
-temper guards: never invent a statistic or DOI, search before disclosing, hold both sides
-to the same standard), the `falsify-inquiry` skill (the step-by-step procedure, including
-running the opposite framing with `mirrorOf`), a **Falsify Reviewer** agent (an
-independent audit of a finished session) and a `/falsify-inquiry` prompt. To use them in
-another project, copy the instructions file and the skill folder into that project's
-`.github`. `npm run eval:inquiry` measures whether the guidance changes agent behaviour: it runs
-the questions in `calibration/inquiry-questions.json` through a Copilot CLI agent with and
-without the guidance and scores each run from the server's own session records. It
-spends real model credits and its samples are small, so read it as a sketch, not a
-measurement. One full run (8 questions, one model, one run per cell): the opposite
-framing was completed in 7 of 8 guided runs and 0 of 8 unguided; web searches 35 versus 2;
-sources verified 26 versus 13; search descriptions averaged about 51 words versus 15;
-contrary results reported and invented replication claims were about equal (9 versus 9,
-and none). Guided runs cost roughly twice as much because they run two inquiries. The one
-guided run that skipped the mirror recorded a "no" for a thin search and said so.
+### Checking that the scoring is any good
 
-## Run the Falsify web UI
+The score weights start as educated guesses. Four commands help you test them:
 
-The same transport-free core is also exposed over a local web dashboard. Seven screens:
-**Dashboard** (where inquiries, corpus and evidence stand), **Inquiry** (the guided cycle,
-including opposite-framing links, structured evidence and live DOI checks), **Sessions**
-(the full record behind every result), **Knowledge** (browse and search the corpus, with
-what each entry rests on and what would falsify it), **Tools** (related, verify source,
-dissent), **Outcomes** (record what later happened, to check the score against reality)
-and the **Notebook** (a refuted hypothesis is struck through and dated, never deleted).
-It talks to the *same* `op*` operations the MCP tools call, so neither transport can
-weaken the honesty rules, and it shares sessions with the MCP server. The
-[user guide](./docs/USER-GUIDE.md) walks through each screen.
+- `npm run calibrate` scores the labelled historical cases in `calibration/cases.json` and
+  reports how well the score separates results that held up from results that were refuted.
+- `npm run calibrate:replication` refits the statistical-support model to the real outcomes of the
+  Reproducibility Project: Psychology.
+- `npm run calibrate:outcomes` reports on the outcomes you have recorded yourself (needs at least
+  five of each kind before it prints an accuracy).
+- `npm run calibrate:judge` measures how good a given judge model is before you trust it.
+
+See [DESIGN.md](./DESIGN.md) §3 for the reasoning behind the cycle.
+
+### Guidance for AI assistants that use Falsify
+
+Falsify checks what an assistant submits, so what the assistant puts in matters. This repo ships
+guidance to keep it honest:
+
+- `.github/instructions/falsify-inquiry.instructions.md`: the rules (never invent a statistic or
+  a DOI, search before saying what you found, hold both sides to the same standard).
+- The `falsify-inquiry` skill: the step-by-step procedure, including running the opposite framing.
+- A **Falsify Reviewer** agent: an independent audit of a finished inquiry.
+- A `/falsify-inquiry` prompt you can run from the chat picker.
+
+To use them in another project, copy the instructions file and the skill folder into that
+project's `.github` folder.
+
+`npm run eval:inquiry` measures whether this guidance changes assistant behaviour. It runs the
+questions in `calibration/inquiry-questions.json` through a Copilot CLI agent with and without the
+guidance, and scores each run from the server's own records. It spends real model credits and its
+samples are small, so read it as a sketch, not a measurement. In one full run (8 questions, one
+model, one run per cell) the guided assistant completed the opposite framing 7 times out of 8
+against 0 for the unguided one, did 35 web searches against 2, and verified 26 sources against 13.
+Its search descriptions averaged about 51 words against 15. Both groups reported contrary results
+equally often (9 each), and neither invented replication claims. Guided runs cost roughly twice as much because they run two
+inquiries.
+
+## The web app
+
+Run it with `npm run web` (build first with `npm run build`) and open <http://127.0.0.1:4319>.
+It has seven screens:
+
+- **Dashboard**: where your inquiries, the knowledge library and the evidence stand.
+- **Inquiry**: the guided step-by-step flow, with opposite-framing links, structured evidence and
+  live citation checks.
+- **Sessions**: every inquiry, with the full record behind each result.
+- **Knowledge**: browse and search the library; each entry says what it rests on and what would
+  overturn it.
+- **Tools**: look up related knowledge, check a citation, compare rival theories.
+- **Outcomes**: record what later happened to a theory, to check the scoring against reality.
+- **Notebook**: a log where a refuted hypothesis is struck through and dated, never deleted.
+
+The [user guide](./docs/USER-GUIDE.md) walks through each one. The app and the AI-assistant tools
+run the same checks, so neither can be used to get around the rules, and they share the same
+inquiries.
 
 ![A completed inquiry in the Sessions screen](./docs/images/sessions.png)
 
-The screenshots in the docs are generated, not hand-made: `npm install --no-save playwright-core`
-then `npm run docs:screenshots` rebuilds them from a throwaway server and demo data.
-
-```bash
-npm install
-npm run build
-npm run web
-```
-
-Then open the printed URL (default <http://127.0.0.1:4319>). The server binds to
-`127.0.0.1` only — it is a single-user local tool, with no authentication. It answers
-only to `localhost`/`127.0.0.1` host names and rejects cross-origin and non-JSON
-writes, so a web page you happen to visit cannot drive it (DNS rebinding / CSRF).
-Override the port with `FALSIFY_WEB_PORT`:
+**Safety.** The app is a single-user tool for your own computer. It listens only on `127.0.0.1`,
+has no login, only answers requests addressed to `localhost`, and rejects requests that come from
+other websites, so a page you happen to visit cannot control it. To use a different port, set
+`FALSIFY_WEB_PORT`:
 
 ```bash
 FALSIFY_WEB_PORT=8080 npm run web
@@ -166,10 +227,18 @@ As with the MCP server, `OPENBRAIN_KEY` is optional and only enables recall. No 
 framework or bundler is used: the API is plain `node:http` and the front-end is
 hand-authored static assets served from `public/`.
 
+The screenshots in the docs are generated, not hand-made. Run `npm install --no-save playwright-core`
+and then `npm run docs:screenshots` to rebuild them from a throwaway server and demo data.
+
 ## Maintain the knowledge corpus
 
-The tier files under `knowledge/*.yaml` are the canonical knowledge base. OpenBrain
-is only a searchable mirror. That means every maintenance workflow is designed as:
+The knowledge library is a set of plain text files under `knowledge/*.yaml`, one file per tier:
+Bedrock (established scientific laws, such as conservation of energy), Established (well-supported
+theory), Contested (open disputes, with every position shown), Quantitative (maths and statistics
+reminders, such as multiple comparisons, applied to every claim) and Refuted (ideas that were
+tested and abandoned). These files are the
+source of truth; OpenBrain, if you use it, is only a searchable copy. So every change follows
+the same path:
 
 1. write or update YAML
 2. validate the corpus
@@ -215,10 +284,10 @@ sync fails, the YAML corpus is still authoritative and recoverable from git.
 
 ## Status
 
-Working and in active use, still iterating. Ten MCP tools and a local web UI sit on one
-transport-neutral core, with a 211-entry tiered knowledge corpus. Be clear about what it
-is: it enforces discipline on what an agent *submits*, and records a **process**, not
+Working and in active use, still iterating. It has ten assistant tools, a local web app and a
+211-entry knowledge library, all running the same checks. Be clear about what it is: it enforces
+discipline on what an assistant or person *submits*, and records a **process**, not
 proof. It cannot tell whether a paper supports a claim or whether the numbers are true,
-its score weights are priors that real recorded outcomes have not yet calibrated, and its
-keyword checks miss phrasing they were not written for. The full list of limits is in
-[docs/CAPABILITIES.md](./docs/CAPABILITIES.md#what-falsify-cannot-do).
+its score weights are educated guesses that real recorded outcomes have not yet tested, and its
+keyword checks miss phrasing they were not written for. The full list of
+limits is in [docs/CAPABILITIES.md](./docs/CAPABILITIES.md#what-falsify-cannot-do).

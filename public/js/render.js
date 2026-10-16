@@ -94,7 +94,8 @@ export function scoreView(score) {
 
 function multiplicityView(m) {
   return h('div', null,
-    h('h3', null, `Multiplicity (over ${m.attempts} hypothesis attempt${m.attempts === 1 ? '' : 's'})`),
+    h('h3', null, `Adjusted for how many things were tested (${m.attempts} hypothesis attempt${m.attempts === 1 ? '' : 's'})`),
+    h('p', { class: 'small muted' }, 'A result that looks significant can be a fluke if many things were tried. The adjusted value is the fairer one.'),
     h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
       h('thead', null, h('tr', null, ['Observation', 'p', 'Outcomes tested', 'Adjusted p'].map((t) => h('th', { scope: 'col' }, t)))),
       h('tbody', null, m.adjustedPValues.map((r) => h('tr', null,
