@@ -66,6 +66,19 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+/**
+ * Headers for every static asset. The UI is same-origin scripts, styles and fetches only,
+ * so the policy forbids everything else: no inline script, no third-party loads, no framing.
+ */
+const STATIC_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'cache-control': 'no-cache',
+  'referrer-policy': 'no-referrer',
+  'x-frame-options': 'DENY',
+  'content-security-policy':
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+} as const;
+
 async function serveStatic(pathname: string, res: ServerResponse): Promise<void> {
   const rel = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
   const full = resolve(PUBLIC_DIR, rel);
@@ -77,7 +90,7 @@ async function serveStatic(pathname: string, res: ServerResponse): Promise<void>
   try {
     const data = await readFile(full);
     const type = CONTENT_TYPES[extname(full)] ?? 'application/octet-stream';
-    res.writeHead(200, { 'content-type': type, 'x-content-type-options': 'nosniff' });
+    res.writeHead(200, { 'content-type': type, ...STATIC_HEADERS });
     res.end(data);
   } catch {
     sendJson(res, 404, { error: 'Not found.', rule: 'request:not-found', guidance: 'No such asset.' });
@@ -201,7 +214,7 @@ async function handleConnection(
     return;
   }
 
-  const result = await handleRequest(method, pathname, body, deps);
+  const result = await handleRequest(method, pathname, body, deps, new URL(req.url ?? '/', 'http://localhost').searchParams);
   sendJson(res, result.status, result.json);
 }
 

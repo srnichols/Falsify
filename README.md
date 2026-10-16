@@ -127,11 +127,15 @@ guided run that skipped the mirror recorded a "no" for a thin search and said so
 
 ## Run the Falsify web UI
 
-The same transport-free core is also exposed over a thin, local web UI: a guided
-hypothesis card and a **visible-mistakes notebook** (a refuted hypothesis is struck
-through and dated, never deleted — the falsification loop made visible). It talks to
-the *same* `op*` operations the MCP tools call, so neither transport can weaken the
-honesty rules.
+The same transport-free core is also exposed over a local web dashboard. Seven screens:
+**Dashboard** (where inquiries, corpus and evidence stand), **Inquiry** (the guided cycle,
+including opposite-framing links, structured evidence and live DOI checks), **Sessions**
+(the full record behind every result), **Knowledge** (browse and search the corpus, with
+what each entry rests on and what would falsify it), **Tools** (related, verify source,
+dissent), **Outcomes** (record what later happened, to check the score against reality)
+and the **Notebook** (a refuted hypothesis is struck through and dated, never deleted).
+It talks to the *same* `op*` operations the MCP tools call, so neither transport can
+weaken the honesty rules, and it shares sessions with the MCP server.
 
 ```bash
 npm install

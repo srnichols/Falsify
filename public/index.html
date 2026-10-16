@@ -3,51 +3,48 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
     <title>Falsify</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header class="masthead">
-      <h1>Falsify</h1>
-      <p class="tagline">
-        It won't hand you an answer. It runs your question through the Cycle of
-        Scientific Enterprise and gives you a <em>falsifiable hypothesis with its
-        test conditions</em>.
-      </p>
-    </header>
+    <a class="skip" href="#main">Skip to content</a>
 
-    <main>
-      <section class="panel" id="cyclePanel">
-        <h2>The Cycle</h2>
-        <p class="state-line">
-          Current step: <span id="stateBadge" class="badge">intake</span>
+    <div class="shell">
+      <header class="side">
+        <a class="brand" href="#/dashboard" aria-label="Falsify, go to the dashboard">
+          <span class="mark" aria-hidden="true">F</span>
+          <span class="brand-text">
+            <strong>Falsify</strong>
+            <small>Follow the data, not the conclusion</small>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="Main">
+          <a href="#/dashboard" data-route="dashboard"><span class="ico" aria-hidden="true">◧</span>Dashboard</a>
+          <a href="#/inquiry" data-route="inquiry"><span class="ico" aria-hidden="true">?</span>Inquiry</a>
+          <a href="#/sessions" data-route="sessions"><span class="ico" aria-hidden="true">≡</span>Sessions</a>
+          <a href="#/knowledge" data-route="knowledge"><span class="ico" aria-hidden="true">▤</span>Knowledge</a>
+          <a href="#/tools" data-route="tools"><span class="ico" aria-hidden="true">⚙</span>Tools</a>
+          <a href="#/outcomes" data-route="outcomes"><span class="ico" aria-hidden="true">✓</span>Outcomes</a>
+          <a href="#/notebook" data-route="notebook"><span class="ico" aria-hidden="true">✎</span>Notebook</a>
+        </nav>
+
+        <p class="side-note">
+          A completed cycle records that the <em>process</em> was followed. It is not proof.
         </p>
+      </header>
 
-        <!-- The single guided step form is rebuilt here as the cycle advances. -->
-        <div id="stepForm"></div>
+      <main id="main" tabindex="-1">
+        <div id="view"></div>
+        <noscript>
+          <p class="callout callout-warn">Falsify's dashboard needs JavaScript. The MCP tools work without it.</p>
+        </noscript>
+      </main>
+    </div>
 
-        <!-- The hypothesis card: the output the user sees at each step. -->
-        <article id="card" class="card hidden" aria-live="polite">
-          <h3 class="card-title">Hypothesis card</h3>
-          <div id="cardBody" class="card-body"></div>
-        </article>
-
-        <p id="errorBox" class="error hidden" role="alert"></p>
-      </section>
-
-      <section class="panel" id="notebookPanel">
-        <h2>Notebook <span class="subtle">— mistakes stay visible</span></h2>
-        <p class="subtle">
-          A refuted hypothesis is struck through and dated, never deleted. This is
-          the falsification loop made visible.
-        </p>
-        <form id="notebookForm" class="inline-form">
-          <input id="notebookText" type="text" placeholder="Record a claim or mistake…" />
-          <button type="submit">Add</button>
-        </form>
-        <ul id="notebookList" class="notebook-list"></ul>
-      </section>
-    </main>
+    <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 
     <script src="/app.js" type="module"></script>
   </body>

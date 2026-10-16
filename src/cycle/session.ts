@@ -9,7 +9,7 @@
  * Theory can only be confirmed after one.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { resolveDataDir } from '../config.js';
@@ -75,6 +75,10 @@ export interface SessionRecord {
   };
   /** The inquiry that is this one's opposite framing; set on both sides when linked. */
   mirrorOf?: string;
+  /** How much weight a confirmed theory deserves; set when the review confirms it. */
+  epistemicStatus?: 'supported' | 'provisional' | 'tentative';
+  /** Why the status was held below what the evidence alone would give, if it was. */
+  statusCap?: string;
   /** True after a review chose "revise": the next hypothesis must justify itself. */
   pendingRevision: boolean;
   history: SessionEvent[];
@@ -134,5 +138,22 @@ export class SessionStore {
       mkdirSync(this.dir, { recursive: true });
       writeFileSync(join(this.dir, `${record.id}.json`), JSON.stringify(record, null, 2), 'utf8');
     }
+  }
+
+  /** Every known session, most recently updated first. Unreadable files are skipped. */
+  list(): SessionRecord[] {
+    if (this.dir !== undefined) {
+      let names: string[];
+      try {
+        names = readdirSync(this.dir);
+      } catch {
+        names = [];
+      }
+      for (const name of names) {
+        const id = name.replace(/\.json$/, '');
+        if (name.endsWith('.json') && !this.cache.has(id)) this.get(id);
+      }
+    }
+    return [...this.cache.values()].reverse().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 }

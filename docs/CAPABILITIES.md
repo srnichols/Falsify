@@ -137,14 +137,29 @@ All are optional. Nothing is sent anywhere unless you set the URL for it.
 
 ## Web UI and API
 
-`npm run web` serves a local UI (default <http://127.0.0.1:4319>, localhost only, no
-authentication) with a guided cycle form and a visible-mistakes notebook. It calls the
-same operations as the MCP tools, so neither can weaken the rules.
+`npm run web` serves a local dashboard (default <http://127.0.0.1:4319>, localhost only, no
+authentication). It calls the same operations as the MCP tools, so neither can weaken the rules.
+Sessions are shared with the MCP server, so an inquiry started in chat shows up here.
 
-Routes: `POST /api/intake`, `/api/hypothesize`, `/api/experiment`, `/api/analyze`,
+| Screen | What it does |
+|---|---|
+| Dashboard | Counts of inquiries, confirmed theories (by epistemic status), refuted attempts and outcomes; corpus by tier and field; which optional features are on; the limits box. |
+| Inquiry | The guided cycle with a stepper: intake (with an opposite-framing link), hypothesis (with revision handling), experiment, analysis (structured evidence, DOI verification, search disclosure, knowledge references), review. |
+| Sessions | Every inquiry with filters and a full record: hypothesis, falsifiers, earlier refuted attempts, evidence with verification flags, score, timeline and the mirror comparison. |
+| Knowledge | Search and filter the 211-entry corpus by tier and field; each entry shows what it rests on, what would falsify it, and its sources. |
+| Tools | Stand-alone Related, Verify source and Dissent. |
+| Outcomes | Record what happened to a confirmed theory; shows the calibration report once there are enough outcomes. |
+| Notebook | The append-only log: entries are struck through with a reason, never deleted. |
+
+The front-end is plain ES modules under `public/` (no framework, no build step). It builds the
+page with text nodes only, and the server sends a strict Content-Security-Policy.
+
+Read routes: `GET /api/status`, `/api/sessions`, `/api/outcomes`, `/api/knowledge`,
+`/api/knowledge/entry`, `/api/notebook`.
+
+Write routes: `POST /api/intake`, `/api/hypothesize`, `/api/experiment`, `/api/analyze`,
 `/api/review`, `/api/related`, `/api/outcome`, `/api/verify-source`, `/api/dissent`,
-`/api/session`, `/api/recall`, `GET /api/notebook`, `POST /api/notebook`,
-`POST /api/notebook/strike`.
+`/api/session`, `/api/recall`, `/api/notebook`, `/api/notebook/strike`.
 
 ## Commands
 

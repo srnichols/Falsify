@@ -37,6 +37,8 @@ import { adviseAnalysis, adviseIntake } from '../cycle/advice.js';
 import { DissentPositionSchema } from '../mcp/tools/dissent.js';
 import type { MemoryReader } from '../memory/openbrainClient.js';
 import { NotebookStore } from '../memory/notebook.js';
+import { defaultKnowledgeFiles, getKnowledgeEntry, listKnowledge } from '../knowledge/browse.js';
+import { getOutcomes, getStatus, listSessionSummaries, sessionDetail } from './dashboard.js';
 
 /** Resources injected into the web handler. All optional; defaulted lazily. */
 export interface WebDeps extends CycleContext {
@@ -164,7 +166,7 @@ function notFound(): ApiResponse {
     json: {
       error: 'No such endpoint.',
       rule: 'request:not-found',
-      guidance: 'Use one of the POST /api/* cycle routes or the /api/notebook routes.',
+      guidance: 'Use one of the POST /api/* cycle routes, or GET /api/status, /api/sessions, /api/knowledge, /api/outcomes or /api/notebook.',
     },
   };
 }
@@ -192,11 +194,47 @@ export async function handleRequest(
   path: string,
   body: unknown,
   deps: WebDeps = {},
+  query: URLSearchParams = new URLSearchParams(),
 ): Promise<ApiResponse> {
   const route = `${method.toUpperCase()} ${path}`;
   const ctx: CycleContext = { ...deps, sessions: deps.sessions ?? fallbackSessions };
 
   switch (route) {
+    case 'GET /api/status':
+      return { status: 200, json: getStatus(ctx, defaultKnowledgeFiles()) };
+    case 'GET /api/sessions':
+      return { status: 200, json: { sessions: listSessionSummaries(ctx) } };
+    case 'GET /api/outcomes':
+      return { status: 200, json: getOutcomes(ctx) };
+    case 'GET /api/knowledge': {
+      const num = (key: string): number | undefined => {
+        const raw = query.get(key);
+        return raw === null || raw === '' || Number.isNaN(Number(raw)) ? undefined : Number(raw);
+      };
+      return {
+        status: 200,
+        json: {
+          ...listKnowledge(defaultKnowledgeFiles(), {
+            tier: query.get('tier') ?? undefined,
+            field: query.get('field') ?? undefined,
+            q: query.get('q') ?? undefined,
+            limit: num('limit'),
+            offset: num('offset'),
+          }),
+        },
+      };
+    }
+    case 'GET /api/knowledge/entry': {
+      const id = query.get('id') ?? '';
+      const found = getKnowledgeEntry(defaultKnowledgeFiles(), id);
+      return found === undefined
+        ? {
+            status: 404,
+            json: { error: `No knowledge entry '${id}'.`, rule: 'request:not-found', guidance: 'Use an id from GET /api/knowledge.' },
+          }
+        : { status: 200, json: { tier: found.tier, entry: found.entry } };
+    }
+
     case 'POST /api/intake': {
       const p = parse(intakeBody, body);
       return 'response' in p ? p.response : fromOp(await adviseIntake(p.value.question, opIntake(p.value, ctx), ctx));
@@ -246,7 +284,7 @@ export async function handleRequest(
               guidance: 'Start a new inquiry with POST /api/intake.',
             },
           }
-        : { status: 200, json: { session } };
+        : { status: 200, json: { ...sessionDetail(ctx, session) } };
     }
     case 'POST /api/recall': {
       const p = parse(recallBody, body);

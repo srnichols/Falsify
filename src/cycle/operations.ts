@@ -1086,6 +1086,9 @@ export function opReview(input: ReviewInput, ctx?: CycleContext): OpResult {
     }
     payload.cycleVerified = true;
     payload.epistemicStatus = status;
+    session.epistemicStatus = status;
+    if (typeof payload.statusCap === 'string') session.statusCap = payload.statusCap;
+    else delete session.statusCap;
     payload.note = PROCESS_NOT_PROOF;
     payload.mirror = mirrorPayload(mirror);
     if (capReason !== undefined) payload.mirrorNote = capReason;
